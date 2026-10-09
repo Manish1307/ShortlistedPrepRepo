@@ -14,6 +14,14 @@ npm run setup:whisper      # one time: speech engine + small.en model (~190 MB)
 npm start
 ```
 
+```
+git clone https://github.com/Manish1307/ShortlistedPrepRepo.git
+cd ShortlistedPrepRepo
+npm install
+npm run setup:whisper
+npm start
+```
+
 Choose an AI service in the Notes window's Settings (⚙):
 
 - **Google Gemini** (default, has a free tier): get a key at https://aistudio.google.com/apikey, or set `GEMINI_API_KEY`.

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{title}} · {{name}}</title>
+  <meta name="description" content="{{description}}">
+  <meta property="og:title" content="{{title}} · {{name}}">
+  <meta property="og:description" content="{{description}}">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  {{demoBar}}
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="index.html"><span class="logo" aria-hidden="true">C</span>{{name}}</a>
+      <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
+      <nav id="menu" class="menu">
+        <a href="features.html" data-page="features">Features</a>
+        <a href="use-cases.html" data-page="use-cases">Use cases</a>
+        <a href="reviews.html" data-page="reviews">Reviews</a>
+        <a href="privacy-visibility.html" data-page="privacy-visibility">Privacy</a>
+        <a href="pricing.html" data-page="pricing">Pricing</a>
+        <a href="blog.html" data-page="blog">Blog</a>
+        <a href="login.html" data-page="login">Sign in</a>
+        <a class="btn btn-primary btn-sm" href="signup.html">Start free trial</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+{{content}}
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-grid">
+      <div>
+        <a class="brand" href="index.html"><span class="logo" aria-hidden="true">C</span>{{name}}</a>
+        <p class="muted small">{{tagline}}.</p>
+        <p class="social small"><a href="#" aria-label="X (Twitter), not connected yet">X</a> · <a href="#" aria-label="LinkedIn, not connected yet">LinkedIn</a> · <a href="#" aria-label="YouTube, not connected yet">YouTube</a></p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <a href="features.html">Features</a>
+        <a href="how-it-works.html">How it works</a>
+        <a href="use-cases.html">Use cases</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="download.html">Download</a>
+      </div>
+      <div>
+        <h4>Learn</h4>
+        <a href="blog.html">Blog</a>
+        <a href="reviews.html">Reviews</a>
+        <a href="faq.html">FAQ</a>
+        <a href="help.html">Help and setup</a>
+        <a href="privacy-visibility.html">Privacy and visibility</a>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <a href="contact.html">Contact</a>
+        <a href="privacy.html">Privacy policy</a>
+        <a href="terms.html">Terms of use</a>
+        <a href="refund.html">Refund policy</a>
+        <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>
+      </div>
+    </div>
+    <div class="wrap footer-bottom small muted">
+      <span>© <span id="year">2026</span> {{company}}. All rights reserved.</span>
+      <span>Microsoft Teams, Google Meet, Zoom, Skype, Webex and other product names belong to their owners. {{name}} is not affiliated with or endorsed by them.</span>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

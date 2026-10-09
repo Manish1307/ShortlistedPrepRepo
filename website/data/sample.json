@@ -1,0 +1,110 @@
+{
+  "_note": "SAMPLE / TEST DATA for the design. Every name, review, number and price here is made up. Replace it before launch (or set demoContent to false in site.config.json to remove the demo bar).",
+
+  "stats": [
+    { "value": "12,400+", "label": "classes assisted (sample)" },
+    { "value": "4.8 / 5", "label": "average rating (sample)" },
+    { "value": "1,900+", "label": "teachers and trainers (sample)" },
+    { "value": "38", "label": "countries (sample)" }
+  ],
+
+  "platforms": ["Microsoft Teams", "Google Meet", "Zoom", "Skype", "Webex", "BlueJeans", "Slack Huddles", "Discord", "Any app with sound"],
+
+  "reviews": [
+    { "name": "Maya R.", "role": "Maths teacher, secondary school", "stars": 5, "text": "A student asked about discriminants halfway through a lesson and I had a clear answer in front of me before I finished my sentence. It reads like something I would say myself." },
+    { "name": "Daniel K.", "role": "Corporate trainer, IT skills", "stars": 5, "text": "I teach Power Platform to groups of twenty. The scenario questions used to catch me out. Now I get the steps one line at a time and I can just read them out." },
+    { "name": "Priya S.", "role": "University tutor, biology", "stars": 4, "text": "Love that the window does not show up when I share my screen. I always do a test call first, as the guide suggests. Answers are short and easy to say aloud." },
+    { "name": "Tomás G.", "role": "Language school teacher", "stars": 5, "text": "Follow-up questions work well. If a student asks 'and why is that?', it remembers what I was just asked." },
+    { "name": "Hannah W.", "role": "Online coding bootcamp mentor", "stars": 5, "text": "I export every session to a spreadsheet and look at the response times afterwards. Great for seeing which topics keep coming up." },
+    { "name": "Omar B.", "role": "Adult-education instructor", "stars": 4, "text": "The speech recognition runs on my own laptop, which my school cares about. I use a free AI key and it is fast enough for a live class." }
+  ],
+
+  "plans": [
+    { "name": "Trial", "price": "Free", "per": "14 days", "features": ["All features", "Bring your own AI key", "No card needed"] },
+    { "name": "Personal", "price": "$9", "per": "per month", "yearly": "$90", "yearlyPer": "per year", "featured": true, "features": ["All features and updates", "Bring your own AI key", "Install on 2 computers", "Email support"] },
+    { "name": "Schools and teams", "price": "Let's talk", "per": "", "features": ["Volume discount per teacher", "Invoice billing", "Rollout help", "Priority support"] }
+  ],
+
+  "compare": [
+    { "feature": "Offline speech recognition", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Automatic question detection", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Several answers at once", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Follow-up memory", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Export to text / Excel / JSON", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Computers per licence", "trial": "1", "personal": "2", "schools": "5 per teacher" },
+    { "feature": "Support", "trial": "Help page", "personal": "Email", "schools": "Priority" },
+    { "feature": "Invoice / purchase order", "trial": "–", "personal": "–", "schools": "Yes" }
+  ],
+
+  "faq": [
+    { "group": "Features", "q": "Which meeting apps does it work with?", "a": "It listens to your computer's sound and your microphone, so it works next to any meeting app: Teams, Meet, Zoom, Skype, Webex and others. It does not connect to them or join your meeting." },
+    { "group": "Features", "q": "Do I have to press anything when a student asks a question?", "a": "No. In auto mode it decides when a question has ended after a short pause. If you prefer, switch to manual mode and press the Question finished button yourself." },
+    { "group": "Features", "q": "How fast are the answers?", "a": "It depends on your AI service and connection. With a fast service such as Groq the first words can appear in about a second; free Gemini is slower, especially at busy times." },
+    { "group": "Features", "q": "Can it answer follow-up questions?", "a": "Yes. It remembers the last few questions and answers of the class, so 'and how do I do that in code?' is understood." },
+    { "group": "Privacy", "q": "Will my students see the assistant window?", "a": "The window is excluded from screen capture by Windows, it draws its own mouse pointer inside the window, and it uses no tooltips or pop-up boxes. Different meeting apps behave differently, so always run a two-minute test call first." },
+    { "group": "Privacy", "q": "Is my audio sent anywhere?", "a": "No. Speech is turned into text on your own computer. Only the text of a detected question, your subject line and a few recent lines are sent to the AI service you chose." },
+    { "group": "Privacy", "q": "Is this for cheating in exams or interviews?", "a": "No. ClassCue is built for teachers and trainers who want a private helper during their own lessons. Using it to cheat or to mislead others is against the Terms of use." },
+    { "group": "Billing", "q": "Do I need my own AI key?", "a": "Today, yes: a Google Gemini key (has a free tier), a Groq key (free plan, very fast) or an Anthropic Claude key. A plan with AI included is planned." },
+    { "group": "Billing", "q": "Can I get a refund?", "a": "Yes. Ask within 14 days of purchase and you get your money back. (Sample policy: edit before launch.)" },
+    { "group": "Billing", "q": "Can I cancel any time?", "a": "Yes. You keep access until the end of the period you paid for." }
+  ],
+
+  "posts": [
+    {
+      "slug": "handle-tough-student-questions",
+      "title": "How to handle tough student questions live (without freezing)",
+      "date": "2026-09-18",
+      "readMinutes": 4,
+      "summary": "Five habits that keep you calm when a question comes out of nowhere.",
+      "body": [
+        "Every teacher has had the moment: a student asks something you did not plan for, the room goes quiet, and you feel every second.",
+        { "h": "1. Buy a few seconds, honestly" },
+        "Repeat the question in your own words. It confirms you understood, it gives the class a moment to think, and it gives you time. 'So you are asking why the graph opens downwards when a is negative?' is a good start.",
+        { "h": "2. Answer the core first" },
+        "Give the one-sentence answer, then explain. People forgive a slow explanation, but not a long wait before any answer.",
+        { "h": "3. Use one small example" },
+        "A real-life comparison does more than three definitions. Prepare one example for each big idea in the lesson.",
+        { "h": "4. Say when you are not sure" },
+        "'I think it is this, let me check and confirm after the break' builds more trust than a confident guess that turns out wrong.",
+        { "h": "5. Keep a private helper" },
+        "A private assistant that shows an answer line by line can help you stay fluent. Use it as a prompt, not a script: check facts you are unsure about before you state them as true."
+      ]
+    },
+    {
+      "slug": "test-your-screen-share",
+      "title": "Staying private while sharing your screen: a two-minute test",
+      "date": "2026-09-25",
+      "readMinutes": 3,
+      "summary": "A simple checklist to run before your first class with any private window.",
+      "body": [
+        "Different meeting apps capture your screen in different ways. Never assume: test.",
+        { "h": "Before the class" },
+        "Start a meeting with a colleague, or join from a second account. Share your screen or the window you will teach from.",
+        { "h": "What to check" },
+        "Ask them to confirm five things: they see your teaching content; they do not see the private window; they do not see a mouse pointer moving over empty space; no small hover text or pop-up box appears; and nothing flashes when you open settings.",
+        { "h": "If something shows" },
+        "Share a single window instead of the whole screen, change the way the meeting app captures, and run the test again. Choose your settings before you start sharing, because some drop-down lists are drawn by Windows.",
+        { "h": "Make it a habit" },
+        "Meeting apps update often. A two-minute test before each new term is cheap insurance."
+      ]
+    },
+    {
+      "slug": "free-vs-paid-ai-keys",
+      "title": "Free vs paid AI keys for teaching: what actually changes?",
+      "date": "2026-10-02",
+      "readMinutes": 5,
+      "summary": "Speed, limits and privacy: how to pick an AI service for live classes.",
+      "body": [
+        "Most private assistants send the text of a question to an AI service. You can use a free plan or a paid one. Here is what changes.",
+        { "h": "Speed" },
+        "Fast services such as Groq return the first words in about a second. Free tiers of larger models can be slower, especially when many people use them.",
+        { "h": "Limits" },
+        "Free plans limit how many requests you can make per minute and per day. In a lively class with many questions you may hit them.",
+        { "h": "Privacy" },
+        "On some free plans, the text you send may be used to improve the provider's products. Paid plans usually do not. Read the provider's current terms before sending anything about students.",
+        { "h": "A sensible approach" },
+        "Start with a free plan to learn the tool. If you use it every week, a paid key usually costs very little for light classroom use and removes the limits."
+      ]
+    }
+  ]
+}

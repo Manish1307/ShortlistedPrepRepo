@@ -1,0 +1,37 @@
+<!-- title: Contact | description: Questions, support, school pricing or feedback: get in touch. -->
+<section class="page-head">
+  <div class="wrap narrow">
+    <span class="eyebrow">Contact</span>
+    <h1>We'd love to hear from you</h1>
+    <p class="lead">Questions, problems, or interested in a plan for your school? Send a message and we'll reply by email.</p>
+  </div>
+</section>
+
+<section style="padding-top:12px">
+  <div class="wrap">
+    <div class="split" style="align-items:start">
+      <form id="contact-form" class="stack card" data-to="{{supportEmail}}">
+        <label>Your name<input type="text" name="name" required autocomplete="name"></label>
+        <label>Your email<input type="email" name="email" required autocomplete="email"></label>
+        <label>Topic
+          <select name="topic">
+            <option>Support</option>
+            <option>Schools and teams</option>
+            <option>AI-included plan</option>
+            <option>Billing</option>
+            <option>Feedback</option>
+          </select>
+        </label>
+        <label>Message<textarea name="message" required placeholder="For support, include your app version and what you saw."></textarea></label>
+        <button class="btn btn-primary" type="submit">Send message</button>
+        <p class="muted small" style="margin:0">This opens your email app with the message ready to send. (Connect a form service before launch if you want a built-in form.)</p>
+      </form>
+
+      <div class="grid">
+        <div class="card"><h3>Email</h3><p><a href="mailto:{{supportEmail}}">{{supportEmail}}</a></p></div>
+        <div class="card"><h3>Check the Help page first</h3><p>Most setup questions, such as AI keys, shortcuts and common errors, are answered on the <a href="help.html">Help page</a>.</p></div>
+        <div class="card"><h3>Reply time</h3><p>We aim to reply within two working days. <em>(Set your real support hours.)</em></p></div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,5 @@
+node_modules/
+admin/data/
+whisper/bin/
+whisper/models/
+website/site/

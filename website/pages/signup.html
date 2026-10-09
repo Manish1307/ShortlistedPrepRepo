@@ -1,0 +1,38 @@
+<!-- title: Start your free trial | description: Create an account and start a free trial of the private teaching assistant (demo page: accounts are not connected yet). -->
+<section class="auth">
+  <div class="wrap">
+    <div class="split" style="align-items:center">
+      <div>
+        <span class="eyebrow">Free for {{trialDays}} days</span>
+        <h1>Start your free trial</h1>
+        <p class="lead">No card needed. Download the app, add an AI key, and try it in your next class.</p>
+        <ul class="check-list">
+          <li>All features included</li>
+          <li>Speech recognition runs on your PC</li>
+          <li>Cancel any time: nothing to cancel, nothing charged</li>
+        </ul>
+      </div>
+      <div class="card auth-card">
+        <h2 style="margin-top:0">Create your account</h2>
+        <div class="note">Demo page. Accounts are not connected yet, so nothing you type here is sent or saved.</div>
+        <form class="stack demo-form" data-demo-message="This is a design preview, so sign-up is not connected yet. Nothing was sent.">
+          <label>Your name<input type="text" name="name" autocomplete="name" required></label>
+          <label>Email<input type="email" name="email" autocomplete="email" required></label>
+          <label>What do you teach?
+            <select name="role">
+              <option>School or college teacher</option>
+              <option>Corporate trainer</option>
+              <option>University tutor</option>
+              <option>Bootcamp mentor</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" name="terms" required> <span>I agree to the <a href="terms.html">Terms of use</a> and the <a href="privacy.html">Privacy policy</a>.</span></label>
+          <button class="btn btn-primary" type="submit">Create account</button>
+          <p class="demo-result" role="status" aria-live="polite"></p>
+        </form>
+        <p class="muted small">Already have an account? <a href="login.html">Sign in</a></p>
+      </div>
+    </div>
+  </div>
+</section>

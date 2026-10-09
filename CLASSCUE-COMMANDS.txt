@@ -1,0 +1,185 @@
+=====================================================================
+ CLASSCUE - COMMAND LIST AND QUICK GUIDE
+ (the desktop tool, the website, and the admin dashboard)
+=====================================================================
+
+PROJECT FOLDER
+  C:\Personal\Projects\teacher-notes-app\teacher-notes-app
+
+Open a terminal in that folder before running any command below.
+
+
+---------------------------------------------------------------------
+ 1. ONE-TIME SETUP
+---------------------------------------------------------------------
+
+  npm install
+      Installs the packages the project needs.
+
+  npm run setup:whisper
+      Downloads the offline speech engine and model (about 190 MB).
+
+  npm run admin:create -- you@example.com owner "Your Name"
+      Creates YOUR admin login for the dashboard.
+      Use your own email. It prints a password ONE time: copy it now.
+      After you sign in, go to "My account" and change the password.
+
+
+---------------------------------------------------------------------
+ 2. RUN EVERYTHING
+---------------------------------------------------------------------
+
+  Terminal 1:
+      npm run web
+          Builds the website and starts:
+            Website          http://localhost:4173
+            Admin dashboard  http://localhost:4180
+          Stop both with Ctrl+C.
+
+  Terminal 2:
+      npm start
+          Starts the desktop tool (the private assistant windows).
+
+
+---------------------------------------------------------------------
+ 3. RUN ONE PART AT A TIME
+---------------------------------------------------------------------
+
+  Desktop tool ................ npm start
+  Website (rebuild first) ..... npm run site:build
+                                npm run site:serve      http://localhost:4173
+  Admin dashboard ............. npm run admin           http://localhost:4180
+
+
+---------------------------------------------------------------------
+ 4. CHECKS AND TOOLS
+---------------------------------------------------------------------
+
+  npm test
+      Runs all automated tests.
+
+  npm run smoke
+      Quick startup check of the desktop tool (opens it, checks, closes).
+
+  npm run test:stt
+      Speech accuracy test using built-in Windows voices.
+
+  npm run test:stt -- --wav my.wav --ref "the exact words spoken" --topic "your subject"
+      Speech accuracy test on YOUR OWN recording (more realistic).
+
+  npm run admin:create -- you@example.com --reset
+      Gives an existing admin account a new password.
+
+
+---------------------------------------------------------------------
+ 5. USING THE DESKTOP TOOL
+---------------------------------------------------------------------
+
+  First time:
+    1. Click the gear icon in the assistant window.
+    2. AI service: Groq (free plan, FASTEST), Google Gemini (free tier) or Anthropic Claude.
+    3. Paste your API key and press Save.
+         Groq key (free plan, fastest): https://console.groq.com/keys
+         Gemini key (free tier): https://aistudio.google.com/apikey
+         Claude key (paid):      https://console.anthropic.com
+       Note: a Claude Pro chat subscription does NOT include an API key.
+    4. Subject: type today's topic, e.g. "Power Platform: Power Pages, Dataverse".
+    5. Audio: "Meeting + my microphone".
+    6. Question end: tick "Auto-detect when a question ends" (the app decides
+       after you pause), OR untick it for manual mode: the app keeps listening
+       and answers only when you press "Question finished".
+    7. Thinking time: Quick is fastest. Thorough also searches the web (Gemini).
+
+  Keyboard shortcuts:
+    Ctrl+Shift+N   show / hide the assistant window
+    Ctrl+Shift+L   start / stop listening
+    Ctrl+Shift+A   "Question finished": answer everything heard so far
+                   (works in manual mode, and in auto mode to skip the wait)
+    Ctrl+Shift+T   put the window back to 100% visible (if you made it too faint)
+
+  If the assistant is stuck (no answers, not listening):
+    1. Click "Restart" (top of the assistant tab). It stops the sound capture and
+       the speech engine, starts them again and carries on listening. Your
+       settings, saved keys, question list and follow-up memory are kept.
+    2. If the window does not react: press Ctrl+Alt+Shift+R.
+    3. Still wrong? Settings > "Reset all settings" (click twice). Every setting
+       goes back to its default and the window returns to its starting place.
+       Saved AI keys are kept.
+    4. The activity log (%APPDATA%\teacher-notes-app\debug.log) shows what the
+       microphone and speech engine were doing.
+
+  The mouse pointer:
+    - Always hidden from screen sharing over the assistant window. You still
+      see a pointer: the app draws its own inside the window, which is left
+      out of the share. Drag the title bar to move the window and the corner
+      mark (bottom right) to resize it. Nothing to switch on.
+
+  Export and transparency:
+    - "Export" menu (top of the assistant tab): saves every question, answer
+      and response time, plus everything that was heard, as a text file
+      (Notepad), a spreadsheet CSV (Excel) or JSON. The file goes straight to
+      Documents\ClassCue (no "Save as" window, which could show in a screen share).
+    - "Clear" starts a fresh list: click it twice. Export first if you want to keep it.
+    - No tooltips and no pop-up boxes are used in the assistant window, because
+      Windows draws those as separate windows that a screen share could capture.
+    - The percentage box in the title bar makes the window see-through:
+      100%, 90% ... 10%. It does not change whether the window is hidden
+      from screen sharing.
+
+  Tips:
+    - Use headphones, or the microphone also picks up the meeting audio.
+    - Before a real class, share your screen in a test call and check the
+      assistant window is not visible to others.
+    - If you see "Rate limit (429)": wait a minute, ask fewer questions at once,
+      or use a paid key.
+
+
+---------------------------------------------------------------------
+ 6. WHERE THINGS ARE
+---------------------------------------------------------------------
+
+  Desktop tool ........ main.js, preload.js, notes-window.html, renderer\, src\
+  Website ............. website\
+        website\site.config.json   name, support email, download link, demoContent
+        website\data\sample.json   TEST DATA: reviews, numbers, plans, FAQ, blog posts
+                                   (all made up: replace before launch; set
+                                   "demoContent": false to remove the demo bar)
+        website\pages\             the pages (edit the text here); blog posts come from sample.json
+        website\site\              the built website (upload this to a host)
+  Admin dashboard ..... admin\
+        admin\README.md            full details and the app's licence API
+        admin\data\                your database + signing key (BACK THIS UP)
+  Activity log (tool) . %APPDATA%\teacher-notes-app\debug.log
+  Tool settings ....... %APPDATA%\teacher-notes-app\settings.json
+
+
+---------------------------------------------------------------------
+ 7. BEFORE YOU LAUNCH (CHECKLIST)
+---------------------------------------------------------------------
+
+  [ ] Choose the real product name (ClassCue is a placeholder) and check
+      the name and domain are free.
+  [ ] Replace the example prices, company name, address and support email
+      in website\site.config.json.
+  [ ] Have a lawyer review the Privacy and Terms pages (they are drafts).
+  [ ] Back up admin\data\ (especially signing-key.pem). Never share it.
+  [ ] Put the admin dashboard behind HTTPS; set SECURE_COOKIES=1; restrict
+      it by IP or VPN. (See admin\README.md.)
+  [ ] Build the licence check inside the desktop tool (trial, key entry,
+      signature check). The server side is ready.
+  [ ] Make an installer, sign it (code-signing certificate), add auto-update.
+  [ ] Connect payments (Paddle or Lemon Squeezy) and a webhook that creates
+      orders and licences automatically.
+  [ ] Connect the website contact form to the admin (POST /api/contact).
+  [ ] Test on a real Teams / Meet / Skype call and on a low-end PC.
+
+
+---------------------------------------------------------------------
+ 8. PORTS
+---------------------------------------------------------------------
+
+  4173  website preview
+  4180  admin dashboard
+  If a port is busy, close the other program using it and try again.
+
+=====================================================================

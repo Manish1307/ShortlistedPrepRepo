@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; worker-src 'self' blob:" />
+  <title>Private Notes</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, Segoe UI, Arial, sans-serif;
+      background: transparent;
+    }
+    .panel {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: rgba(30, 30, 34, 0.94);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      color: #eee;
+      position: relative;
+    }
+    .titlebar {
+      -webkit-app-region: drag;   /* lets you drag this frameless window */
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.06);
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .titlebar .right { display: flex; gap: 4px; align-items: center; }
+    .titlebar button {
+      -webkit-app-region: no-drag; /* buttons must opt out of drag */
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+    }
+    .titlebar button:hover { color: #fff; }
+    .opacity-wrap { position: relative; -webkit-app-region: no-drag; }
+    .titlebar .opacity { background: rgba(255,255,255,.1); color: #e5e7eb; border: 1px solid rgba(255,255,255,.2); border-radius: 6px; font-size: 11px; padding: 2px 8px; }
+    .opmenu { position: absolute; right: 0; top: 28px; z-index: 30; background: #2b2c33; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.5); display: grid; gap: 1px; min-width: 76px; }
+    .opmenu[hidden] { display: none; }
+    .opmenu button { all: unset; box-sizing: border-box; padding: 5px 12px; border-radius: 5px; font-size: 12px; color: #e5e7eb; cursor: pointer; text-align: right; }
+    #exportMenu { top: 40px; min-width: 190px; }
+    #exportMenu button { text-align: left; }
+    .opmenu button:hover, .opmenu button.sel { background: rgba(96,165,250,.35); color: #fff; }
+
+    /* our own pointer, drawn inside the window (and so left out of a screen share together with the window) */
+    #fakePointer { position: fixed; left: 0; top: 0; width: 14px; height: 21px; pointer-events: none; z-index: 1000; display: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,.6)); }
+    body.nocursor #fakePointer.on { display: block; }
+    #grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; z-index: 40; display: none; }
+    #grip::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 9px; height: 9px; border-right: 2px solid rgba(255,255,255,.35); border-bottom: 2px solid rgba(255,255,255,.35); }
+    body.nocursor #grip { display: block; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #777; margin-right: 8px; }
+    .dot.live { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+    .dot.busy { background: #fbbf24; }
+    .dot.bad  { background: #f87171; }
+
+    .tabs { display: flex; gap: 2px; padding: 6px 10px 0; }
+    .tab {
+      background: none; border: none; color: #aaa; cursor: pointer; font-size: 12px;
+      padding: 6px 12px; border-radius: 6px 6px 0 0;
+    }
+    .tab.active { color: #fff; background: rgba(255,255,255,0.08); }
+    .view { flex: 1; min-height: 0; display: none; flex-direction: column; }
+    .view.active { display: flex; }
+
+    .controls { display: flex; gap: 8px; align-items: center; padding: 10px 12px 6px; }
+    .btn {
+      border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: #f2f2f2;
+      border-radius: 7px; padding: 7px 12px; font-size: 12px; cursor: pointer;
+    }
+    .btn:hover { background: rgba(255,255,255,0.15); }
+    .btn.primary { background: #2563eb; border-color: #2563eb; }
+    .btn.primary:hover { background: #1d4ed8; }
+    .btn.stop { background: #b91c1c; border-color: #b91c1c; }
+    .btn[disabled] { opacity: .5; cursor: default; }
+    .meter { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
+    .meter > i { display: block; height: 100%; width: 0%; background: #4ade80; transition: width .08s linear; }
+
+    .banner { margin: 4px 12px; padding: 8px 10px; border-radius: 7px; font-size: 12px; line-height: 1.4; display: none; }
+    .banner.show { display: block; }
+    .banner.info { background: rgba(37,99,235,.25); color: #bfdbfe; }
+    .banner.warn { background: rgba(251,191,36,.18); color: #fde68a; }
+    .banner.error { background: rgba(248,113,113,.2); color: #fecaca; }
+
+    .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 10px; }
+    .card { background: rgba(255,255,255,0.07); border-radius: 9px; padding: 10px 12px; margin-top: 8px; }
+    .card .label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #93c5fd; margin-bottom: 4px; }
+    .card .q { font-size: 13px; color: #e5e7eb; font-style: italic; line-height: 1.4; }
+    .card .a { font-size: 14px; color: #fff; line-height: 1.5; margin-top: 8px; white-space: pre-wrap; }
+    .card .a.pending { color: #9ca3af; }
+    .card.error .a { color: #fca5a5; }
+    .empty { color: #9ca3af; font-size: 12px; line-height: 1.5; padding: 14px 4px; }
+    h4 { margin: 14px 0 4px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; font-weight: 600; }
+    .heard { font-size: 12px; color: #b6bcc6; line-height: 1.45; }
+    .heard div { padding: 2px 0; }
+    details.hist { margin-top: 6px; }
+    details.hist summary { cursor: pointer; font-size: 12px; color: #cbd5e1; padding: 3px 0; }
+    details.hist .a { font-size: 13px; color: #e5e7eb; white-space: pre-wrap; padding: 4px 0 8px; line-height: 1.45; }
+
+
+    .split { flex: 1; min-height: 0; display: flex; margin: 4px 12px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+    .qlist { flex: 0 0 30%; min-width: 0; overflow-y: auto; padding: 8px 8px 8px 0; border-right: 1px solid rgba(255,255,255,0.1); }
+    .answerPane { flex: 1 1 70%; min-width: 0; overflow-y: auto; padding: 10px 4px 10px 14px; }
+    .qitem { display: flex; gap: 8px; align-items: flex-start; padding: 8px 9px; margin-bottom: 5px; border-radius: 8px; cursor: pointer;
+             background: rgba(255,255,255,0.05); font-size: 12px; line-height: 1.35; color: #d1d5db; border: 1px solid transparent; }
+    .qitem:hover { background: rgba(255,255,255,0.1); }
+    .qitem.selected { background: rgba(37,99,235,0.28); border-color: rgba(96,165,250,0.6); color: #fff; }
+    .qitem .qtext { flex: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+    .qitem .qdot { flex: 0 0 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: #fbbf24; }
+    .qitem.done .qdot { background: #4ade80; }
+    .qitem.error .qdot { background: #f87171; }
+    .qitem.thinking .qdot { animation: pulse 1s ease-in-out infinite; }
+    .qitem.unseen .qtext { font-weight: 600; color: #fff; }
+    @keyframes pulse { 50% { opacity: .35; } }
+    .answerPane .label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #93c5fd; margin-bottom: 4px; }
+    .answerPane .q { font-size: 14px; color: #e5e7eb; font-style: italic; line-height: 1.4; }
+    .answerPane .a { font-size: 15px; color: #fff; line-height: 1.6; margin-top: 12px; white-space: pre-wrap; }
+    .answerPane .a.pending { color: #9ca3af; }
+    .answerPane .a.lines { white-space: normal; }
+    .answerPane .a .line { margin: 0 0 14px; }        /* a clear gap between statements: read one, pause, read the next */
+    .answerPane .a .line.item { margin-bottom: 8px; padding-left: 4px; }
+    .answerPane .a.error { color: #fca5a5; }
+    .heardBar { margin: 0 12px; padding: 6px 0 2px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 10px; align-items: baseline; }
+    .heardLabel { flex: 0 0 auto; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; font-weight: 600; }
+    .heardBar .heard { flex: 1; min-width: 0; max-height: 64px; overflow-y: auto; }
+
+    textarea {
+      flex: 1;
+      resize: none;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: #f2f2f2;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 14px;
+      box-sizing: border-box;
+    }
+    .badge {
+      font-size: 10px;
+      color: #7CFC9A;
+      padding: 6px 12px 10px;
+    }
+
+    .settings { position: absolute; inset: 41px 0 0 0; background: #18181c; padding: 12px 14px; overflow-y: auto; display: none; z-index: 5; }
+    .settings.show { display: block; }
+    .settings label { display: block; font-size: 11px; color: #cbd5e1; margin: 12px 0 4px; }
+    .settings input[type=text], .settings input[type=password], .settings select {
+      width: 100%; box-sizing: border-box; background: rgba(255,255,255,.08); color: #fff;
+      border: 1px solid rgba(255,255,255,.18); border-radius: 6px; padding: 7px 9px; font-size: 13px;
+    }
+    .settings select option { color: #111; }
+    .settings .row { display: flex; gap: 8px; }
+    .settings .hint { font-size: 11px; color: #9ca3af; margin-top: 4px; line-height: 1.4; }
+    .settings .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; color: #e5e7eb; }
+    .settings .actions { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
+    .ok { color: #86efac; font-size: 12px; }
+    /* ALWAYS ON: the real pointer is invisible over the whole window; our own pointer (below) is drawn instead */
+    body.nocursor * { cursor: none !important; }
+    /* Windows controls the pointer over a drag area itself, so while the pointer is hidden the title bar is not one */
+    body.nocursor .titlebar { -webkit-app-region: no-drag; }
+    .trouble { margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
+    .trouble h4 { margin: 0 0 6px; }
+    .testout { display: none; white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255,.06); border-radius: 8px; padding: 10px; font: 12px/1.5 ui-monospace, Consolas, monospace; margin: 8px 0 0; color: #e5e7eb; }
+    .testout.show { display: block; }
+  </style>
+</head>
+<body class="nocursor">
+  <div class="panel">
+    <div id="grip" aria-label="Drag to resize"></div>
+    <div class="titlebar">
+      <span><span id="dot" class="dot"></span><span id="statusText">🔒 Private Assistant</span></span>
+      <span class="right">
+        <span class="opacity-wrap">
+          <button id="opacityBtn" class="opacity" aria-label="Window transparency (Ctrl/Cmd+Shift+T = back to 100%)" aria-haspopup="true" aria-expanded="false">100% ▾</button>
+          <div id="opacityMenu" class="opmenu" role="menu" hidden></div>
+        </span>
+        <button id="btnSettings" aria-label="Settings">⚙</button>
+        <button id="btnHide" aria-label="Hide (Ctrl/Cmd+Shift+N to bring back)">✕</button>
+      </span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-view="assistant">Assistant</button>
+      <button class="tab" data-view="notes">My notes</button>
+    </div>
+
+    <div id="view-assistant" class="view active">
+      <div class="controls">
+        <button id="btnListen" class="btn primary" disabled>▶ Start listening</button>
+        <button id="btnAskLast" class="btn primary" aria-label="The question is finished: answer everything heard so far (Ctrl/Cmd+Shift+A)" disabled>✔ Question finished</button>
+        <div class="meter" aria-label="Audio level"><i id="meter"></i></div>
+        <span class="opacity-wrap">
+          <button id="btnExport" class="btn" aria-haspopup="true" aria-expanded="false" aria-label="Save all questions, answers and response times to a file">⬇ Export ▾</button>
+          <div id="exportMenu" class="opmenu" role="menu" hidden>
+            <button data-format="txt" role="menuitem">Text file (Notepad)</button>
+            <button data-format="csv" role="menuitem">Spreadsheet (Excel, CSV)</button>
+            <button data-format="json" role="menuitem">JSON</button>
+          </div>
+        </span>
+        <button id="btnReset" class="btn" aria-label="Restart the assistant if it is stuck (Ctrl+Alt+Shift+R)">↻ Restart</button>
+        <button id="btnClear" class="btn" aria-label="Clear the list and start a fresh session">Clear</button>
+      </div>
+      <div id="banner" class="banner"></div>
+      <div class="split">
+        <div id="qlist" class="qlist">
+          <div id="qEmpty" class="empty">No questions yet.<br>They are listed here as they are asked.</div>
+        </div>
+        <div id="answerPane" class="answerPane">
+          <div class="empty">Questions that are asked appear on the left. Pick one to read its answer here.</div>
+        </div>
+      </div>
+      <div class="heardBar"><span class="heardLabel">Just heard</span><div id="heard" class="heard"></div></div>
+      <div class="badge">Hide: Ctrl/Cmd+Shift+N · Listen: Ctrl/Cmd+Shift+L · Question finished: Ctrl/Cmd+Shift+A</div>
+    </div>
+
+    <div id="view-notes" class="view">
+      <textarea id="notes" placeholder="Write anything here — answer keys, timing cues, reminders...
+This text is NOT visible to students during screen share."></textarea>
+      <div class="badge">🔒 Hidden from screen share · saved on this computer</div>
+    </div>
+
+    <div id="settings" class="settings">
+      <label for="sSubject">Subject / topic of today's class</label>
+      <input id="sSubject" type="text" maxlength="200" placeholder="e.g. Quadratic equations, Grade 10 maths" />
+      <div class="hint">Helps the speech engine spell terms correctly and helps Claude answer in the right context.</div>
+
+      <label for="sSource">Audio to listen to</label>
+      <select id="sSource">
+        <option value="both">Meeting + my microphone (Windows)</option>
+        <option value="system">The meeting only: Teams, Skype, Meet (Windows)</option>
+        <option value="mic">Microphone</option>
+      </select>
+
+      <label for="sProvider">AI service</label>
+      <select id="sProvider">
+        <option value="gemini">Google Gemini (free tier available)</option>
+        <option value="groq">Groq (free plan, very fast)</option>
+        <option value="claude">Anthropic Claude (paid)</option>
+      </select>
+
+      <div id="rowGeminiModel">
+        <label for="sGeminiModel">Gemini model</label>
+        <select id="sGeminiModel">
+          <option value="gemini-3.8-flash">Gemini 3.8 Flash — fast, good answers (default)</option>
+          <option value="gemini-3.5-flash">Gemini 3.5 Flash — fast</option>
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite — fastest, simpler</option>
+          <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (preview) — best, slower</option>
+        </select>
+      </div>
+
+      <div id="rowGroqModel">
+        <label for="sGroqModel">Groq model</label>
+        <select id="sGroqModel">
+          <option value="llama-3.3-70b-versatile">Llama 3.3 70B — fast and good (default)</option>
+          <option value="llama-3.1-8b-instant">Llama 3.1 8B — fastest, simpler answers</option>
+          <option value="openai/gpt-oss-120b">GPT-OSS 120B — most careful, a little slower</option>
+        </select>
+      </div>
+
+      <div id="rowClaudeModel">
+      <label for="sModel">Claude model</label>
+      <select id="sModel">
+        <option value="claude-opus-5-5">Claude Opus 5.5 — best answers (default)</option>
+        <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — faster and cheaper</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 — fastest, simpler answers</option>
+      </select>
+      </div>
+
+      <label for="sEffort">Thinking time</label>
+      <select id="sEffort">
+        <option value="low">Quick (fastest, recommended for live class)</option>
+        <option value="medium">Balanced (thinks a little longer)</option>
+        <option value="high">Thorough (slowest, also searches the web)</option>
+      </select>
+
+      <div class="hint">Lists that open from this screen (service, model, audio, thinking time) are drawn by Windows and could show in a screen share: choose your settings before you start sharing.</div>
+
+      <div class="check"><input id="sAuto" type="checkbox" /><label for="sAuto" style="margin:0">Auto-detect when a question ends</label></div>
+      <div class="hint">Ticked: the app decides after you pause. Unticked (manual): it keeps listening and collects what you say until you press <b>✔ Question finished</b> (or Ctrl/Cmd+Shift+A). That button also works in auto mode to answer straight away.</div>
+
+      <label for="sKey" id="keyLabel">Google Gemini API key</label>
+      <input id="sKey" type="password" autocomplete="off" placeholder="AIza…" />
+      <div class="hint" id="keyHint">The key is stored encrypted on this computer and is never shown again.</div>
+
+      <div class="trouble">
+        <h4>If something is stuck</h4>
+        <div class="actions">
+          <button id="btnResetAssistant" class="btn">↻ Restart assistant</button>
+          <button id="btnResetSettings" class="btn">Reset all settings…</button>
+        </div>
+        <div class="hint">Restart: stops the sound capture and the speech engine and starts them again, keeping your settings, keys and the question list (shortcut: Ctrl+Alt+Shift+R). Reset all settings: puts every setting back to its default and the window back to its starting place; your saved AI keys are kept.</div>
+      </div>
+
+      <div class="actions">
+        <button id="btnTestAI" class="btn" aria-label="Checks that the key and model work, and shows what is wrong if not">Test connection</button>
+      </div>
+      <pre id="testOut" class="testout" aria-live="polite"></pre>
+
+      <div class="actions">
+        <button id="btnSaveSettings" class="btn primary">Save</button>
+        <button id="btnCloseSettings" class="btn">Close</button>
+        <span id="saved" class="ok"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="src/format.js"></script>
+  <script src="renderer/capture.js"></script>
+  <script src="renderer/notes-ui.js"></script>
+</body>
+</html>

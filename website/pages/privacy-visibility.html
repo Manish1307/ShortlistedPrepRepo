@@ -1,0 +1,48 @@
+<!-- title: Privacy and visibility | description: How the assistant window stays out of your screen share, what stays on your computer, and a two-minute test you can run. -->
+<section class="page-head">
+  <div class="wrap narrow">
+    <span class="eyebrow">Privacy and visibility</span>
+    <h1>Private by design, and easy to verify</h1>
+    <p class="lead">What {{name}} does to stay out of your screen share, what never leaves your computer, and how to check it in your own meeting app.</p>
+    <div class="toc"><a href="#hidden">Staying hidden</a><a href="#data">Your data</a><a href="#test">Two-minute test</a><a href="#limits">Honest limits</a></div>
+  </div>
+</section>
+
+<section class="doc" style="padding-top:0">
+  <div class="wrap narrow">
+    <h2 id="hidden">How the window stays out of your share</h2>
+    <ol>
+      <li><strong>Excluded from capture.</strong> Windows is asked to leave the assistant window out of any screen capture, so it is blank or absent in a share.</li>
+      <li><strong>Its own mouse pointer.</strong> The real Windows pointer is invisible over the window, and the app draws its own pointer inside it, so a pointer never floats over empty space in your share.</li>
+      <li><strong>No tooltips.</strong> Hover text is drawn by Windows as a separate window, so the assistant never uses it.</li>
+      <li><strong>No pop-up boxes.</strong> Confirmation and save dialogs are separate windows too, so they are drawn inside the assistant window instead. Export saves straight to a folder.</li>
+      <li><strong>No taskbar button.</strong> The window does not appear in the taskbar or in the Alt+Tab list.</li>
+    </ol>
+
+    <h2 id="data">What stays on your computer</h2>
+    <table class="simple">
+      <tr><th>Stays on your PC</th><th>Sent to the AI service you choose</th></tr>
+      <tr><td>All audio from your meeting and microphone, and the speech-to-text work</td><td>The text of a detected question</td></tr>
+      <tr><td>Your AI keys (encrypted by Windows)</td><td>Your subject line</td></tr>
+      <tr><td>Your private notes and exported sessions</td><td>A few recent lines of class text and the last few answers (for follow-ups)</td></tr>
+    </table>
+    <p class="muted">The AI service is Google, Groq or Anthropic, depending on your choice. Their terms apply to the text they receive. Free plans of some providers may use submitted text to improve their products: use a paid key if that matters.</p>
+
+    <h2 id="test">The two-minute test (do this before your first class)</h2>
+    <ol>
+      <li>Start a meeting with a colleague, or join from a second account.</li>
+      <li>Share your screen, or the window you will teach from, exactly as you normally do.</li>
+      <li>Open the assistant and move the mouse over it. Open and close the settings.</li>
+      <li>Ask your colleague to confirm: they can see your teaching content; they cannot see the assistant; they see no mouse pointer over empty space; no small hover text or box appears.</li>
+      <li>If anything shows, share a single window instead of the whole screen, change how the meeting app captures, and test again.</li>
+    </ol>
+
+    <h2 id="limits">Honest limits</h2>
+    <ul>
+      <li>Meeting apps and remote-desktop tools capture the screen in different ways and update often, so we cannot promise the window is hidden in every one. That is why the test above matters.</li>
+      <li>Drop-down lists inside the settings screen are drawn by Windows and could appear in a share. Choose your settings before you start sharing.</li>
+      <li>Your school, employer or platform may have rules about private helpers, and laws about recording or transcribing calls differ by country. You are responsible for following them, and for telling participants where required. See the <a href="terms.html">Terms of use</a>.</li>
+    </ul>
+    <div class="btn-row" style="margin-top:24px"><a class="btn btn-primary" href="signup.html">Start free trial</a><a class="btn" href="privacy.html">Read the privacy policy</a></div>
+  </div>
+</section>

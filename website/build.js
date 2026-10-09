@@ -48,10 +48,10 @@ const fragments = {
         ? `<span class="monthly">${esc(p.price)}<small> / ${esc(p.per.replace('per ', ''))}</small></span><span class="yearly">${esc(p.yearly)}<small> / ${esc(p.yearlyPer.replace('per ', ''))}</small></span>`
         : `${esc(p.price)}${p.per ? `<small> / ${esc(p.per)}</small>` : ''}`}</div>
       <ul class="check-list">${p.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn${p.featured ? ' btn-primary' : ''}" href="${p.name.startsWith('Schools') ? 'contact.html' : 'signup.html'}">${p.name.startsWith('Schools') ? 'Contact us' : 'Start free trial'}</a>
+      <a class="btn${p.featured ? ' btn-primary' : ''}" href="signup.html">${p.price === 'Free' ? 'Start free' : 'Get early access'}</a>
     </div>`).join('')}</div>`,
 
-  compareTable: `<div class="table-scroll"><table class="simple compare"><thead><tr><th>Feature</th><th>Trial</th><th>Personal</th><th>Schools and teams</th></tr></thead><tbody>${
+  compareTable: `<div class="table-scroll"><table class="simple compare"><thead><tr><th>Feature</th><th>Starter</th><th>Pro</th><th>Career pack</th></tr></thead><tbody>${
     data.compare.map(r => `<tr><td>${esc(r.feature)}</td><td>${esc(r.trial)}</td><td>${esc(r.personal)}</td><td>${esc(r.schools)}</td></tr>`).join('')}</tbody></table></div>`,
 
   blogCards: `<div class="grid grid-3">${data.posts.map(p => `
@@ -64,9 +64,12 @@ const fragments = {
 };
 
 const faqItem = f => `<details class="faq"><summary>${esc(f.q)}</summary><p>${esc(f.a)}</p></details>`;
-fragments.faqHome = data.faq.filter((f, i) => [0, 1, 4, 5, 7, 8].includes(i)).map(faqItem).join('');
-fragments.faqAll = ['Features', 'Privacy', 'Billing'].map(g =>
-  `<h2 class="faq-group" id="${g.toLowerCase()}">${g}</h2>${data.faq.filter(f => f.group === g).map(faqItem).join('')}`).join('');
+fragments.faqHome = data.faq.filter((f, i) => [0, 1, 3, 4, 5, 7].includes(i)).map(faqItem).join('');
+const faqGroups = [...new Set(data.faq.map(f => f.group))];
+const slug = g => g.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+fragments.faqToc = faqGroups.map(g => `<a href="#${slug(g)}">${g}</a>`).join('');
+fragments.faqAll = faqGroups.map(g =>
+  `<h2 class="faq-group" id="${slug(g)}">${g}</h2>${data.faq.filter(f => f.group === g).map(faqItem).join('')}`).join('');
 
 const reviewsHome = fragments.reviewCards(data.reviews.slice(0, 3));
 const reviewsAll = fragments.reviewCards(data.reviews);
@@ -93,6 +96,9 @@ function render(body, title, description) {
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true });
 for (const f of fs.readdirSync(path.join(ROOT, 'assets'))) fs.copyFileSync(path.join(ROOT, 'assets', f), path.join(OUT, 'assets', f));
+
+// the standalone homepage design samples are copied as they are
+if (fs.existsSync(path.join(ROOT, 'designs'))) fs.cpSync(path.join(ROOT, 'designs'), path.join(OUT, 'designs'), { recursive: true, filter: src => !src.includes('previews') });   // the preview images are for you, not for the site
 
 const built = [];
 

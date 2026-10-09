@@ -3,3 +3,5 @@ admin/data/
 whisper/bin/
 whisper/models/
 website/site/
+website/previews/
+website/designs/previews/

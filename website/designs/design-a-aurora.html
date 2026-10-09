@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShortlistedPrep · Design A: Aurora</title>
+<meta name="description" content="Design sample A: a bright gradient homepage for an AI interview preparation product.">
+<style>
+  :root {
+    --ink: #14123b; --muted: #5d5a85; --line: #e7e5fb; --bg: #fbfaff;
+    --indigo: #5b3df5; --fuchsia: #d63af9; --orange: #ff7a45; --teal: #17c3b2; --sun: #ffc533;
+    --grad: linear-gradient(100deg, var(--indigo), var(--fuchsia) 55%, var(--orange));
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.6 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: var(--ink); background: var(--bg); overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 22px; }
+  h1, h2, h3 { line-height: 1.1; margin: 0; letter-spacing: -0.02em; }
+  .grad-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 14px 26px; border-radius: 999px; font-weight: 700; border: 2px solid transparent; cursor: pointer; font-size: 16px; }
+  .btn-grad { background: var(--grad); color: #fff; box-shadow: 0 10px 30px -8px rgba(214,58,249,.55); }
+  .btn-line { background: #fff; border-color: var(--line); color: var(--ink); }
+  .sample { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: #fff3d6; color: #8a5a00; border-radius: 999px; padding: 2px 9px; }
+
+  /* background blobs */
+  .blobs { position: absolute; inset: 0 0 auto 0; height: 900px; z-index: -1; overflow: hidden; }
+  .blobs i { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; }
+  .blobs i:nth-child(1) { width: 520px; height: 520px; background: #8f7bff; left: -120px; top: -140px; }
+  .blobs i:nth-child(2) { width: 460px; height: 460px; background: #ff9bd8; right: -80px; top: -60px; }
+  .blobs i:nth-child(3) { width: 380px; height: 380px; background: #ffd29b; left: 38%; top: 260px; opacity: .45; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; }
+  .brand { font-weight: 800; font-size: 21px; display: flex; align-items: center; gap: 10px; }
+  .brand b { width: 34px; height: 34px; border-radius: 11px; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 18px; }
+  nav ul { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; font-weight: 600; color: var(--muted); }
+  nav .right { display: flex; gap: 12px; align-items: center; }
+  nav .btn { padding: 10px 20px; font-size: 15px; }
+
+  .hero { text-align: center; padding: 56px 0 24px; }
+  .pill { display: inline-flex; gap: 8px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 16px 6px 8px; font-weight: 600; font-size: 14px; color: var(--muted); box-shadow: 0 4px 16px rgba(91,61,245,.08); }
+  .pill span { background: var(--grad); color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  .hero h1 { font-size: clamp(40px, 6.4vw, 78px); max-width: 900px; margin: 22px auto 18px; }
+  .hero p.lead { font-size: 20px; color: var(--muted); max-width: 640px; margin: 0 auto 30px; }
+  .hero .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .hero .fine { margin-top: 18px; color: var(--muted); font-size: 14px; }
+
+  /* product mock */
+  .stage { position: relative; max-width: 980px; margin: 54px auto 0; }
+  .window { background: #fff; border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 40px 90px -30px rgba(91,61,245,.45); overflow: hidden; text-align: left; }
+  .window .bar { display: flex; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #faf9ff; align-items: center; }
+  .window .bar i { width: 11px; height: 11px; border-radius: 50%; background: #ddd8ff; }
+  .window .bar span { margin-left: 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .session { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; }
+  .session .q { padding: 28px 30px; }
+  .session .q small { color: var(--indigo); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+  .session .q h3 { font-size: 24px; margin: 8px 0 18px; }
+  .wave { display: flex; gap: 4px; align-items: center; height: 54px; margin: 6px 0 18px; }
+  .wave i { width: 6px; border-radius: 3px; background: var(--grad); animation: bob 1.2s ease-in-out infinite; }
+  .wave i:nth-child(odd) { animation-delay: .2s; } .wave i:nth-child(3n) { animation-delay: .5s; }
+  @keyframes bob { 0%,100% { height: 12px; } 50% { height: 48px; } }
+  .transcript { background: #f5f3ff; border-radius: 14px; padding: 14px 16px; font-size: 15px; color: #3b3868; }
+  .transcript mark { background: #d9fff7; color: #05695d; border-radius: 4px; padding: 0 3px; }
+  .feedback { padding: 28px 30px; background: linear-gradient(160deg, #f4f1ff, #fff1fa); border-left: 1px solid var(--line); }
+  .score { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+  .ring { width: 86px; height: 86px; border-radius: 50%; background: conic-gradient(var(--fuchsia) 0 82%, #ece9ff 0); display: grid; place-items: center; }
+  .ring b { width: 66px; height: 66px; background: #fff; border-radius: 50%; display: grid; place-items: center; font-size: 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+  .chips span { padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 13px; }
+  .c1 { background: #dcfce7; color: #166534; } .c2 { background: #e0e7ff; color: #3730a3; } .c3 { background: #fef3c7; color: #92400e; } .c4 { background: #ffe4e6; color: #9f1239; }
+  .tip { font-size: 15px; color: #3b3868; }
+  .float { position: absolute; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; box-shadow: 0 18px 40px -16px rgba(20,18,59,.35); font-weight: 700; font-size: 14px; }
+  .f1 { left: -34px; top: 90px; } .f2 { right: -30px; bottom: 70px; }
+  .f1 em, .f2 em { font-style: normal; color: var(--teal); }
+
+  .roles { padding: 54px 0 10px; text-align: center; color: var(--muted); }
+  .roles .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 16px; }
+  .roles .row span { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 8px 18px; font-weight: 600; }
+
+  section { padding: 84px 0; }
+  .head { text-align: center; max-width: 720px; margin: 0 auto 48px; }
+  .head h2 { font-size: clamp(30px, 4.4vw, 48px); margin-bottom: 14px; }
+  .head p { color: var(--muted); font-size: 18px; margin: 0; }
+  .eyebrow { display: inline-block; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; margin-bottom: 12px; }
+
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; transition: transform .2s, box-shadow .2s; }
+  .card:hover { transform: translateY(-5px); box-shadow: 0 24px 50px -24px rgba(91,61,245,.4); }
+  .tile { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 26px; margin-bottom: 18px; color: #fff; }
+  .t1 { background: linear-gradient(135deg, #5b3df5, #8f7bff); } .t2 { background: linear-gradient(135deg, #d63af9, #ff7ad6); } .t3 { background: linear-gradient(135deg, #ff7a45, #ffc533); }
+  .t4 { background: linear-gradient(135deg, #17c3b2, #6ee7b7); } .t5 { background: linear-gradient(135deg, #3b82f6, #67e8f9); } .t6 { background: linear-gradient(135deg, #f43f5e, #fb923c); }
+  .card h3 { font-size: 21px; margin-bottom: 8px; } .card p { margin: 0; color: var(--muted); }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; position: relative; }
+  .steps::before { content: ""; position: absolute; left: 12%; right: 12%; top: 36px; height: 3px; background: var(--grad); opacity: .35; border-radius: 3px; }
+  .step { text-align: center; position: relative; }
+  .step .n { width: 74px; height: 74px; border-radius: 50%; background: #fff; border: 3px solid transparent; background-image: linear-gradient(#fff, #fff), var(--grad); background-origin: border-box; background-clip: padding-box, border-box; display: grid; place-items: center; margin: 0 auto 18px; font-size: 28px; font-weight: 800; }
+  .step h3 { font-size: 22px; margin-bottom: 8px; } .step p { color: var(--muted); margin: 0 auto; max-width: 300px; }
+
+  .band { background: var(--grad); color: #fff; border-radius: 32px; padding: 52px 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; box-shadow: 0 40px 80px -36px rgba(214,58,249,.7); }
+  .band b { display: block; font-size: 46px; line-height: 1.1; } .band span { opacity: .9; }
+
+  .quote { display: flex; flex-direction: column; gap: 16px; }
+  .quote .stars { color: #ffb400; letter-spacing: 3px; }
+  .quote p { margin: 0; font-size: 17px; }
+  .who { display: flex; gap: 12px; align-items: center; }
+  .av { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; }
+
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: stretch; }
+  .plan { background: #fff; border: 1px solid var(--line); border-radius: 26px; padding: 34px 30px; display: flex; flex-direction: column; }
+  .plan.best { background: var(--ink); color: #fff; border: 0; position: relative; transform: translateY(-14px); box-shadow: 0 40px 80px -30px rgba(91,61,245,.8); }
+  .plan.best::before { content: "Most popular"; position: absolute; top: -14px; left: 30px; background: var(--grad); color: #fff; font-weight: 800; font-size: 12px; padding: 5px 14px; border-radius: 999px; }
+  .plan .price { font-size: 50px; font-weight: 800; margin: 12px 0 4px; } .plan .price small { font-size: 16px; font-weight: 600; opacity: .7; }
+  .plan ul { list-style: none; padding: 0; margin: 18px 0 26px; display: grid; gap: 10px; flex: 1; }
+  .plan li::before { content: "✓"; font-weight: 800; color: var(--teal); margin-right: 10px; }
+  .plan .btn { justify-content: center; }
+  .plan.best .btn-line { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
+
+  details { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 4px 22px; }
+  details + details { margin-top: 12px; }
+  summary { cursor: pointer; font-weight: 700; padding: 16px 0; list-style: none; display: flex; justify-content: space-between; }
+  summary::after { content: "+"; font-size: 24px; color: var(--indigo); } details[open] summary::after { content: "–"; }
+  details p { margin: 0 0 16px; color: var(--muted); }
+
+  .final { background: var(--ink); color: #fff; border-radius: 36px; text-align: center; padding: 70px 30px; position: relative; overflow: hidden; }
+  .final::before, .final::after { content: ""; position: absolute; width: 380px; height: 380px; border-radius: 50%; filter: blur(70px); opacity: .6; }
+  .final::before { background: var(--indigo); left: -100px; top: -140px; } .final::after { background: var(--fuchsia); right: -100px; bottom: -160px; }
+  .final > * { position: relative; z-index: 1; } .final h2 { font-size: clamp(32px, 4.6vw, 54px); margin-bottom: 14px; } .final p { opacity: .8; margin: 0 0 28px; font-size: 18px; }
+
+  footer { padding: 54px 0 40px; color: var(--muted); }
+  footer .cols { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 28px; }
+  footer h4 { color: var(--ink); margin: 0 0 12px; } footer a { display: block; padding: 3px 0; }
+  footer .small { margin-top: 36px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 20px; }
+
+  @media (max-width: 900px) {
+    nav ul { display: none; } .session, .grid3, .plans, .steps, .band, footer .cols { grid-template-columns: 1fr; }
+    .steps::before { display: none; } .float { display: none; } .plan.best { transform: none; } .feedback { border-left: 0; border-top: 1px solid var(--line); }
+  }
+  @media (prefers-reduced-motion: reduce) { .wave i { animation: none; height: 28px; } }
+</style>
+</head>
+<body>
+<div class="blobs" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#"><b>S</b>ShortlistedPrep</a>
+    <ul><li>Features</li><li>How it works</li><li>Reviews</li><li>Pricing</li><li>Blog</li></ul>
+    <div class="right"><a class="btn btn-line" href="#">Sign in</a><a class="btn btn-grad" href="#">Start free</a></div>
+  </nav>
+
+  <header class="hero">
+    <span class="pill"><span>New</span> AI mock interviews with instant feedback</span>
+    <h1>Walk into every interview <span class="grad-text">ready to be shortlisted.</span></h1>
+    <p class="lead">Practise with an AI interviewer, learn the questions real companies ask, and polish your answers, résumé and headshot, all in one place.</p>
+    <div class="cta"><a class="btn btn-grad" href="#">Start your free mock interview →</a><a class="btn btn-line" href="#">▶ Watch 60-second demo</a></div>
+    <p class="fine">Free first session · No card needed · Works on Windows and in your browser</p>
+
+    <div class="stage">
+      <div class="float f1">⏱ Answer length <em>just right</em></div>
+      <div class="float f2">🔥 7-day practice streak</div>
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span>Mock interview · Product Manager · Question 3 of 8</span></div>
+        <div class="session">
+          <div class="q">
+            <small>Interviewer asks</small>
+            <h3>Tell me about a time you had to change your plan at the last minute.</h3>
+            <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="transcript">“Our launch date moved up by two weeks, so I <mark>split the work into three parts</mark> and asked the team to…”</div>
+          </div>
+          <div class="feedback">
+            <div class="score"><div class="ring"><b>82</b></div><div><strong>Strong answer</strong><br><span style="color:#5d5a85">Clear structure, add a result</span></div></div>
+            <div class="chips"><span class="c1">Situation ✓</span><span class="c2">Task ✓</span><span class="c3">Action ✓</span><span class="c4">Result missing</span></div>
+            <p class="tip"><b>Tip:</b> Finish with a number, for example "we shipped on time and cut support tickets by 20%".</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="roles">
+    <div>Practise for roles like</div>
+    <div class="row"><span>Software Engineer</span><span>Product Manager</span><span>Data Analyst</span><span>Marketing Lead</span><span>Nurse</span><span>Teacher</span><span>Sales Executive</span><span>Designer</span></div>
+  </div>
+
+  <section>
+    <div class="head"><span class="eyebrow grad-text">Everything you need</span><h2>One place to prepare, from first question to final round</h2><p>Six tools that work together, so every practice session makes the next one better.</p></div>
+    <div class="grid3">
+      <div class="card"><div class="tile t1">🎤</div><h3>AI mock interviews</h3><p>Speak your answers out loud to an AI interviewer and get feedback on structure, clarity and filler words.</p></div>
+      <div class="card"><div class="tile t2">📚</div><h3>Question bank</h3><p>Browse realistic questions by role and company type, with sample answers and what interviewers look for.</p></div>
+      <div class="card"><div class="tile t3">📄</div><h3>Résumé maker</h3><p>Turn your experience into a clean, role-focused résumé and download it as a PDF.</p></div>
+      <div class="card"><div class="tile t4">📸</div><h3>Professional headshots</h3><p>Make a tidy, studio-style profile photo from one picture. Only with your clear consent.</p></div>
+      <div class="card"><div class="tile t5">💡</div><h3>Answer coach</h3><p>Stuck on a tough question? Get a suggested structure and talking points to practise with.</p></div>
+      <div class="card"><div class="tile t6">📈</div><h3>Progress reports</h3><p>See your scores, response times and most-used filler words improve session after session.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="eyebrow grad-text">How it works</span><h2>From nervous to natural in three steps</h2></div>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Pick your role</h3><p>Choose the job, level and interview type. Add your résumé for tailored questions.</p></div>
+      <div class="step"><div class="n">2</div><h3>Practise out loud</h3><p>Answer the AI interviewer by voice, as if it were the real thing.</p></div>
+      <div class="step"><div class="n">3</div><h3>Improve with feedback</h3><p>See what worked, fix what did not, and try the same question again.</p></div>
+    </div>
+  </section>
+
+  <section style="padding-top:20px">
+    <div class="band">
+      <div><b>12,400+</b><span>practice sessions</span></div><div><b>4.8/5</b><span>average rating</span></div>
+      <div><b>500+</b><span>question topics</span></div><div><b>38</b><span>countries</span></div>
+    </div>
+    <p style="text-align:center;margin:14px 0 0"><span class="sample">Sample data</span></p>
+  </section>
+
+  <section>
+    <div class="head"><span class="eyebrow grad-text">Reviews</span><h2>People feel calmer, and it shows</h2><p><span class="sample">Sample reviews</span> written for the design.</p></div>
+    <div class="grid3">
+      <div class="card quote"><div class="stars">★★★★★</div><p>“I practised the same question five times and could hear myself getting clearer. I got the offer.”</p><div class="who"><div class="av" style="background:#5b3df5">AK</div><div><b>Aisha K.</b><br><small style="color:#5d5a85">Data analyst</small></div></div></div>
+      <div class="card quote"><div class="stars">★★★★★</div><p>“The structure tips fixed my rambling. My answers are half as long and twice as good.”</p><div class="who"><div class="av" style="background:#d63af9">JM</div><div><b>Jordan M.</b><br><small style="color:#5d5a85">Marketing lead</small></div></div></div>
+      <div class="card quote"><div class="stars">★★★★☆</div><p>“Great for nerves. The résumé maker saved me an evening, too.”</p><div class="who"><div class="av" style="background:#ff7a45">RS</div><div><b>Rui S.</b><br><small style="color:#5d5a85">Graduate engineer</small></div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head"><span class="eyebrow grad-text">Pricing</span><h2>Start free. Upgrade when you are ready.</h2><p><span class="sample">Sample prices</span></p></div>
+    <div class="plans">
+      <div class="plan"><h3>Starter</h3><div class="price">Free</div><small>one mock interview</small><ul><li>1 AI mock interview</li><li>Question bank preview</li><li>Basic feedback</li></ul><a class="btn btn-line" href="#">Try it free</a></div>
+      <div class="plan best"><h3>Pro</h3><div class="price">$12<small> / month</small></div><small>or $99 a year</small><ul><li>Unlimited mock interviews</li><li>Full question bank</li><li>Résumé maker and PDF export</li><li>Progress reports</li></ul><a class="btn btn-grad" href="#">Get Pro</a></div>
+      <div class="plan"><h3>Career pack</h3><div class="price">$29<small> / month</small></div><small>everything, plus headshots</small><ul><li>Everything in Pro</li><li>Professional headshots</li><li>Priority support</li></ul><a class="btn btn-line" href="#">Get Career pack</a></div>
+    </div>
+  </section>
+
+  <section style="padding-top:10px">
+    <div class="head"><h2>Questions, answered</h2></div>
+    <div style="max-width:780px;margin:0 auto">
+      <details open><summary>Is the first mock interview really free?</summary><p>Yes. Your first session is free and needs no card.</p></details>
+      <details><summary>Do I speak or type my answers?</summary><p>Speak. The app listens, turns your words into text, and gives feedback on what you said and how you said it.</p></details>
+      <details><summary>Is this for cheating in real interviews?</summary><p>No. ShortlistedPrep is for practising and preparing. It does not help you hide anything from an interviewer.</p></details>
+      <details><summary>What happens to my recordings and photos?</summary><p>You choose what to keep, and you can delete everything at any time.</p></details>
+    </div>
+  </section>
+
+  <section style="padding-top:10px">
+    <div class="final"><h2>Your next interview starts with one practice question.</h2><p>Join thousands of job seekers practising calmly, one answer at a time.</p><a class="btn btn-grad" href="#">Start free →</a></div>
+  </section>
+
+  <footer>
+    <div class="cols">
+      <div><a class="brand" href="#" style="color:var(--ink)"><b>S</b>ShortlistedPrep</a><p>Practise with confidence.</p></div>
+      <div><h4>Product</h4><a href="#">Mock interviews</a><a href="#">Question bank</a><a href="#">Résumé maker</a><a href="#">Pricing</a></div>
+      <div><h4>Learn</h4><a href="#">Blog</a><a href="#">Interview guides</a><a href="#">Help centre</a></div>
+      <div><h4>Company</h4><a href="#">About</a><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a></div>
+    </div>
+    <div class="small">© 2026 ShortlistedPrep. Design sample A (Aurora). All names, numbers and reviews are sample data.</div>
+  </footer>
+</div>
+</body>
+</html>

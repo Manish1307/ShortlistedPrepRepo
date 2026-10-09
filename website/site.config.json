@@ -1,15 +1,15 @@
 {
-  "name": "ClassCue",
-  "tagline": "Your private teaching assistant for live online classes",
+  "name": "ShortlistedPrep",
+  "tagline": "Interview preparation with a friendly AI coach",
   "supportEmail": "support@example.com",
   "version": "0.1.0",
   "downloadUrl": "",
   "trialDays": "14",
-  "priceAmount": "9",
+  "priceAmount": "12",
   "priceCurrency": "$",
-  "priceYearly": "90",
+  "priceYearly": "99",
   "company": "Your Company Name",
   "address": "Your registered business address",
-  "lastUpdated": "8 October 2026",
+  "lastUpdated": "10 October 2026",
   "demoContent": true
 }

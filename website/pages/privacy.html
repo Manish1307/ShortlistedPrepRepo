@@ -1,10 +1,10 @@
-<!-- title: Privacy policy | description: What {{name}} keeps on your computer, what it sends to the AI service you choose, and your rights. -->
+<!-- title: Privacy policy | description: What information {{name}} collects, why, how it is protected, and your rights. -->
 <section class="page-head">
   <div class="wrap narrow">
     <span class="eyebrow">Legal</span>
     <h1>Privacy policy</h1>
     <p class="muted">Last updated {{lastUpdated}}</p>
-    <div class="note"><strong>Draft.</strong> This is a starting template that describes how the app works today. Have a lawyer review and complete it (company details, legal bases, regional rights, retention periods) before you launch.</div>
+    <div class="note"><strong>Draft.</strong> This is a starting template. Have a lawyer review and complete it (company details, legal bases, regional rights, retention periods, sub-processors) before you launch.</div>
   </div>
 </section>
 
@@ -13,50 +13,39 @@
     <h2>1. Who we are</h2>
     <p>{{name}} is provided by {{company}}, {{address}}. Contact: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
 
-    <h2>2. The short version</h2>
-    <ul>
-      <li>Speech from your meeting and microphone is turned into text <strong>on your computer</strong>. Audio is not uploaded and is not stored.</li>
-      <li>To write an answer, the app sends the <strong>text of a detected question</strong>, your <strong>subject line</strong> and <strong>a few recent lines of class text</strong> to the AI service you select (Google or Anthropic), using your own key.</li>
-      <li>Your AI keys are stored encrypted on your computer.</li>
-    </ul>
-
-    <h2>3. What stays on your computer</h2>
-    <ul>
-      <li>Meeting and microphone audio (processed in memory only).</li>
-      <li>Your settings, your private notes, and your AI keys (encrypted with Windows).</li>
-      <li>A local activity log with the text that was heard, the questions detected and any errors. It never leaves your computer unless you choose to send it to us for support, and it is cleared each time the app starts.</li>
-    </ul>
-
-    <h2>4. What is sent to the AI service</h2>
-    <p>When a question is detected, the app sends the text described above to the provider you chose. That provider processes it under its own terms and privacy policy, and acts independently of us:</p>
-    <ul>
-      <li>Google (Gemini): <a href="https://policies.google.com/privacy" rel="noopener">policies.google.com/privacy</a></li>
-      <li>Anthropic (Claude): <a href="https://www.anthropic.com/legal/privacy" rel="noopener">anthropic.com/legal/privacy</a></li>
-    </ul>
-    <p>Free plans of some providers may use submitted text to improve their products. If that is a concern, use a paid key. Because class speech can include students' words, do not use the app where this is not permitted.</p>
-
-    <h2>5. Information we collect on this website and for your licence</h2>
+    <h2>2. What we collect</h2>
     <table class="simple">
       <tr><th>Information</th><th>Why</th></tr>
-      <tr><td>Name, email, billing details (handled by our payment provider)</td><td>To sell and deliver the product, issue your licence, send receipts, and give support</td></tr>
-      <tr><td>Licence and device identifiers</td><td>To check your licence and limit the number of installations</td></tr>
+      <tr><td>Account details: name, email, password (stored hashed)</td><td>To create and secure your account</td></tr>
+      <tr><td>Practice answers: your voice recordings and the text made from them</td><td>To score your answers and show your progress</td></tr>
+      <tr><td>Your résumé and the role you choose</td><td>To tailor questions and build your résumé</td></tr>
+      <tr><td>Photos you upload for headshots</td><td>Only to make your headshots, and only with your consent</td></tr>
+      <tr><td>Billing details (handled by our payment provider)</td><td>To take payment and send receipts</td></tr>
       <tr><td>Messages you send us</td><td>To answer you</td></tr>
     </table>
-    <p>We do not collect usage analytics from the app unless you opt in. <em>(If you add analytics, error reporting or a cookie banner, describe it here.)</em></p>
 
-    <h2>6. Recording and students' privacy</h2>
-    <p>Laws about recording or transcribing conversations differ by country and state, and special rules can apply to children's data (for example COPPA, FERPA, GDPR). You are responsible for telling participants and for having any consent or permission your school, employer, platform or local law requires.</p>
+    <h2>3. How we use AI services</h2>
+    <p>To turn speech into text and to score and coach your answers, we send your answers (as audio or text) to AI service providers that act for us. Their terms and privacy policies apply to that processing. <em>(List your providers and confirm they do not train on your data.)</em></p>
 
-    <h2>7. Sharing</h2>
-    <p>We share information only with service providers that help us operate the business (payments, email, hosting), when the law requires it, or with your permission. We do not sell personal information.</p>
+    <h2>4. Photos and biometric data</h2>
+    <p>Some laws treat facial images as sensitive. We ask for your clear consent before using your photo, we use it only for your headshots, and we delete it when you ask. <em>(Check the rules in each country where you sell, for example the EU, UK and parts of the US.)</em></p>
 
-    <h2>8. Your choices and rights</h2>
-    <p>Depending on where you live, you may have the right to access, correct, delete or export your information, and to object to certain processing. Email <a href="mailto:{{supportEmail}}">{{supportEmail}}</a> and we will respond within a reasonable time. You can remove all data held by the app by uninstalling it and deleting its data folder.</p>
+    <h2>5. Sharing</h2>
+    <p>We do not sell your information. We share it only with service providers that help us run the service (hosting, AI processing, payments, email), when the law requires it, or with your permission.</p>
 
-    <h2>9. Security and retention</h2>
-    <p>We use reasonable measures to protect the information we hold. We keep account and billing records as long as needed to provide the service and meet legal obligations.</p>
+    <h2>6. Keeping and deleting</h2>
+    <p>You can delete recordings, résumés, photos or your whole account at any time in your account settings, and we remove them from our systems within a reasonable period. We keep billing records as long as the law requires.</p>
+
+    <h2>7. Your rights</h2>
+    <p>Depending on where you live, you may have the right to access, correct, delete or export your information, and to object to some processing. Email <a href="mailto:{{supportEmail}}">{{supportEmail}}</a> and we will respond within a reasonable time.</p>
+
+    <h2>8. Security</h2>
+    <p>Data is encrypted in transit and at rest, access is limited to people who need it, and passwords are stored hashed. No system is perfectly secure, so please use a strong, unique password.</p>
+
+    <h2>9. Children</h2>
+    <p>{{name}} is not meant for people under 16 (or the age required in your country). <em>(Confirm the right age for your market.)</em></p>
 
     <h2>10. Changes</h2>
-    <p>If we change this policy we will update the date above and, for important changes, tell you by email or in the app.</p>
+    <p>If we change this policy we will update the date above and, for important changes, tell you by email or in the product.</p>
   </div>
 </section>

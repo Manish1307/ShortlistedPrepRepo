@@ -1,109 +1,105 @@
 {
-  "_note": "SAMPLE / TEST DATA for the design. Every name, review, number and price here is made up. Replace it before launch (or set demoContent to false in site.config.json to remove the demo bar).",
+  "_note": "SAMPLE / TEST DATA for the design. Every name, review, number and price here is made up. Replace it before launch (or set demoContent to false in site.config.json to remove the demo bar and the Sample tags).",
 
   "stats": [
-    { "value": "12,400+", "label": "classes assisted (sample)" },
+    { "value": "12,400+", "label": "practice sessions (sample)" },
     { "value": "4.8 / 5", "label": "average rating (sample)" },
-    { "value": "1,900+", "label": "teachers and trainers (sample)" },
+    { "value": "500+", "label": "question topics (sample)" },
     { "value": "38", "label": "countries (sample)" }
   ],
 
-  "platforms": ["Microsoft Teams", "Google Meet", "Zoom", "Skype", "Webex", "BlueJeans", "Slack Huddles", "Discord", "Any app with sound"],
+  "platforms": ["Software Engineer", "Product Manager", "Data Analyst", "UX Designer", "Marketing", "Sales", "Nursing", "Teaching", "Finance", "Customer Success", "Project Manager", "Graduate roles"],
 
   "reviews": [
-    { "name": "Maya R.", "role": "Maths teacher, secondary school", "stars": 5, "text": "A student asked about discriminants halfway through a lesson and I had a clear answer in front of me before I finished my sentence. It reads like something I would say myself." },
-    { "name": "Daniel K.", "role": "Corporate trainer, IT skills", "stars": 5, "text": "I teach Power Platform to groups of twenty. The scenario questions used to catch me out. Now I get the steps one line at a time and I can just read them out." },
-    { "name": "Priya S.", "role": "University tutor, biology", "stars": 4, "text": "Love that the window does not show up when I share my screen. I always do a test call first, as the guide suggests. Answers are short and easy to say aloud." },
-    { "name": "Tomás G.", "role": "Language school teacher", "stars": 5, "text": "Follow-up questions work well. If a student asks 'and why is that?', it remembers what I was just asked." },
-    { "name": "Hannah W.", "role": "Online coding bootcamp mentor", "stars": 5, "text": "I export every session to a spreadsheet and look at the response times afterwards. Great for seeing which topics keep coming up." },
-    { "name": "Omar B.", "role": "Adult-education instructor", "stars": 4, "text": "The speech recognition runs on my own laptop, which my school cares about. I use a free AI key and it is fast enough for a live class." }
+    { "name": "Aisha K.", "role": "Data analyst", "stars": 5, "text": "I practised the same question five times and could hear myself getting clearer. The structure tips fixed my rambling, and I got the offer." },
+    { "name": "Jordan M.", "role": "Marketing lead", "stars": 5, "text": "Great for nerves. Answering out loud to an interviewer that never gets tired made the real thing feel familiar." },
+    { "name": "Rui S.", "role": "Graduate engineer", "stars": 4, "text": "The question bank saved me hours of searching, and the résumé maker gave me a clean PDF in one evening." },
+    { "name": "Hannah W.", "role": "Product designer", "stars": 5, "text": "Honest feedback without the sugar-coating. Seeing my filler words drop week by week was genuinely motivating." },
+    { "name": "Omar B.", "role": "Career changer, finance to tech", "stars": 5, "text": "I needed to tell my story in a new way. The follow-up questions made me think, and my answers got shorter and stronger." },
+    { "name": "Elena P.", "role": "Registered nurse", "stars": 4, "text": "Scenario questions are hard to practise with friends. This let me rehearse calmly, again and again, until it felt natural." }
   ],
 
   "plans": [
-    { "name": "Trial", "price": "Free", "per": "14 days", "features": ["All features", "Bring your own AI key", "No card needed"] },
-    { "name": "Personal", "price": "$9", "per": "per month", "yearly": "$90", "yearlyPer": "per year", "featured": true, "features": ["All features and updates", "Bring your own AI key", "Install on 2 computers", "Email support"] },
-    { "name": "Schools and teams", "price": "Let's talk", "per": "", "features": ["Volume discount per teacher", "Invoice billing", "Rollout help", "Priority support"] }
+    { "name": "Starter", "price": "Free", "per": "", "features": ["1 AI mock interview", "Question bank preview", "Basic feedback"] },
+    { "name": "Pro", "price": "$12", "per": "per month", "yearly": "$99", "yearlyPer": "per year", "featured": true, "features": ["Unlimited mock interviews", "Full question bank", "Résumé maker with PDF export", "Progress reports"] },
+    { "name": "Career pack", "price": "$29", "per": "per month", "yearly": "$249", "yearlyPer": "per year", "features": ["Everything in Pro", "Professional headshots", "Priority support"] }
   ],
 
   "compare": [
-    { "feature": "Offline speech recognition", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
-    { "feature": "Automatic question detection", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
-    { "feature": "Several answers at once", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
-    { "feature": "Follow-up memory", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
-    { "feature": "Export to text / Excel / JSON", "trial": "Yes", "personal": "Yes", "schools": "Yes" },
-    { "feature": "Computers per licence", "trial": "1", "personal": "2", "schools": "5 per teacher" },
-    { "feature": "Support", "trial": "Help page", "personal": "Email", "schools": "Priority" },
-    { "feature": "Invoice / purchase order", "trial": "–", "personal": "–", "schools": "Yes" }
+    { "feature": "AI mock interviews", "trial": "1", "personal": "Unlimited", "schools": "Unlimited" },
+    { "feature": "Question bank", "trial": "Preview", "personal": "Full", "schools": "Full" },
+    { "feature": "Feedback on structure, pace and filler words", "trial": "Basic", "personal": "Full", "schools": "Full" },
+    { "feature": "Résumé maker and PDF export", "trial": "–", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Progress reports", "trial": "–", "personal": "Yes", "schools": "Yes" },
+    { "feature": "Professional headshots", "trial": "–", "personal": "–", "schools": "Yes" },
+    { "feature": "Support", "trial": "Help centre", "personal": "Email", "schools": "Priority" }
   ],
 
   "faq": [
-    { "group": "Features", "q": "Which meeting apps does it work with?", "a": "It listens to your computer's sound and your microphone, so it works next to any meeting app: Teams, Meet, Zoom, Skype, Webex and others. It does not connect to them or join your meeting." },
-    { "group": "Features", "q": "Do I have to press anything when a student asks a question?", "a": "No. In auto mode it decides when a question has ended after a short pause. If you prefer, switch to manual mode and press the Question finished button yourself." },
-    { "group": "Features", "q": "How fast are the answers?", "a": "It depends on your AI service and connection. With a fast service such as Groq the first words can appear in about a second; free Gemini is slower, especially at busy times." },
-    { "group": "Features", "q": "Can it answer follow-up questions?", "a": "Yes. It remembers the last few questions and answers of the class, so 'and how do I do that in code?' is understood." },
-    { "group": "Privacy", "q": "Will my students see the assistant window?", "a": "The window is excluded from screen capture by Windows, it draws its own mouse pointer inside the window, and it uses no tooltips or pop-up boxes. Different meeting apps behave differently, so always run a two-minute test call first." },
-    { "group": "Privacy", "q": "Is my audio sent anywhere?", "a": "No. Speech is turned into text on your own computer. Only the text of a detected question, your subject line and a few recent lines are sent to the AI service you chose." },
-    { "group": "Privacy", "q": "Is this for cheating in exams or interviews?", "a": "No. ClassCue is built for teachers and trainers who want a private helper during their own lessons. Using it to cheat or to mislead others is against the Terms of use." },
-    { "group": "Billing", "q": "Do I need my own AI key?", "a": "Today, yes: a Google Gemini key (has a free tier), a Groq key (free plan, very fast) or an Anthropic Claude key. A plan with AI included is planned." },
-    { "group": "Billing", "q": "Can I get a refund?", "a": "Yes. Ask within 14 days of purchase and you get your money back. (Sample policy: edit before launch.)" },
-    { "group": "Billing", "q": "Can I cancel any time?", "a": "Yes. You keep access until the end of the period you paid for." }
+    { "group": "Product", "q": "Is the first mock interview really free?", "a": "Yes. Your first session is free and needs no card." },
+    { "group": "Product", "q": "Do I speak or type my answers?", "a": "Speak. The app turns your voice into text and gives feedback on what you said and how you said it: structure, clarity, pace and filler words." },
+    { "group": "Product", "q": "What kinds of interviews can I practise?", "a": "Behavioural, technical, case-style and general HR rounds, for a range of roles and levels. You choose the role and add your résumé for tailored questions." },
+    { "group": "Product", "q": "Will it write my answers for me?", "a": "It coaches you. It suggests a structure and talking points, and you practise in your own words, so you sound like you on the day." },
+    { "group": "Honest use", "q": "Can I use it during a real interview?", "a": "No. ShortlistedPrep is a preparation and practice tool. It is not designed to help you during a live interview, and using it to mislead an employer is against the Terms of use." },
+    { "group": "Privacy", "q": "Who can see my recordings, résumé and photos?", "a": "Only you. You choose what to keep and you can delete everything at any time." },
+    { "group": "Privacy", "q": "How are my headshots made?", "a": "Only from a photo you upload, and only with your clear consent. You can delete the original and the results whenever you like." },
+    { "group": "Billing", "q": "Can I cancel any time?", "a": "Yes. You keep access until the end of the period you paid for." },
+    { "group": "Billing", "q": "Can I get a refund?", "a": "Yes. Ask within 14 days of purchase and you get your money back. (Sample policy: edit before launch.)" }
   ],
 
   "posts": [
     {
-      "slug": "handle-tough-student-questions",
-      "title": "How to handle tough student questions live (without freezing)",
+      "slug": "star-method-made-simple",
+      "title": "The STAR method, made simple (with a real example)",
       "date": "2026-09-18",
       "readMinutes": 4,
-      "summary": "Five habits that keep you calm when a question comes out of nowhere.",
+      "summary": "A four-step structure for behavioural questions, so your answers stop rambling.",
       "body": [
-        "Every teacher has had the moment: a student asks something you did not plan for, the room goes quiet, and you feel every second.",
-        { "h": "1. Buy a few seconds, honestly" },
-        "Repeat the question in your own words. It confirms you understood, it gives the class a moment to think, and it gives you time. 'So you are asking why the graph opens downwards when a is negative?' is a good start.",
-        { "h": "2. Answer the core first" },
-        "Give the one-sentence answer, then explain. People forgive a slow explanation, but not a long wait before any answer.",
-        { "h": "3. Use one small example" },
-        "A real-life comparison does more than three definitions. Prepare one example for each big idea in the lesson.",
-        { "h": "4. Say when you are not sure" },
-        "'I think it is this, let me check and confirm after the break' builds more trust than a confident guess that turns out wrong.",
-        { "h": "5. Keep a private helper" },
-        "A private assistant that shows an answer line by line can help you stay fluent. Use it as a prompt, not a script: check facts you are unsure about before you state them as true."
+        "Behavioural questions start with 'Tell me about a time when...'. The easiest way to answer them clearly is STAR: Situation, Task, Action, Result.",
+        { "h": "Situation: set the scene in one or two sentences" },
+        "Say where you were and what was happening. Keep it short. 'Last spring our launch date moved forward by two weeks.'",
+        { "h": "Task: say what you were responsible for" },
+        "'I was leading the release and had to keep quality high with much less time.'",
+        { "h": "Action: explain what you did" },
+        "This is the longest part. Use 'I', not 'we', so the interviewer hears your contribution. 'I split the work into three parts, asked each owner for a daily update, and cut two low-priority features.'",
+        { "h": "Result: finish with an outcome, ideally a number" },
+        "'We shipped on time, and support tickets fell by 20 percent.' Many people forget this step, and it is the one that makes the answer memorable.",
+        { "h": "Practise it out loud" },
+        "Reading a STAR answer is easy. Saying it smoothly under mild pressure is a skill, and it improves fast with a few rounds of practice."
       ]
     },
     {
-      "slug": "test-your-screen-share",
-      "title": "Staying private while sharing your screen: a two-minute test",
+      "slug": "stop-saying-um",
+      "title": "How to stop saying 'um' in interviews",
       "date": "2026-09-25",
       "readMinutes": 3,
-      "summary": "A simple checklist to run before your first class with any private window.",
+      "summary": "Filler words are normal. Here is how to make them less noticeable.",
       "body": [
-        "Different meeting apps capture your screen in different ways. Never assume: test.",
-        { "h": "Before the class" },
-        "Start a meeting with a colleague, or join from a second account. Share your screen or the window you will teach from.",
-        { "h": "What to check" },
-        "Ask them to confirm five things: they see your teaching content; they do not see the private window; they do not see a mouse pointer moving over empty space; no small hover text or pop-up box appears; and nothing flashes when you open settings.",
-        { "h": "If something shows" },
-        "Share a single window instead of the whole screen, change the way the meeting app captures, and run the test again. Choose your settings before you start sharing, because some drop-down lists are drawn by Windows.",
-        { "h": "Make it a habit" },
-        "Meeting apps update often. A two-minute test before each new term is cheap insurance."
+        "Everyone uses filler words. The goal is not zero, it is fewer and calmer.",
+        { "h": "Replace the filler with a pause" },
+        "A short silence feels long to you and almost invisible to the listener. When you feel an 'um' coming, breathe in and say nothing for a second.",
+        { "h": "Slow down at the start of a sentence" },
+        "Most fillers appear when you start speaking before you know where the sentence is going. Take a beat first.",
+        { "h": "Listen to yourself" },
+        "You cannot fix what you cannot hear. Record a practice answer and count the fillers. The number usually drops quickly once you notice it."
       ]
     },
     {
-      "slug": "free-vs-paid-ai-keys",
-      "title": "Free vs paid AI keys for teaching: what actually changes?",
+      "slug": "tell-me-about-yourself",
+      "title": "Answering 'Tell me about yourself' in under two minutes",
       "date": "2026-10-02",
       "readMinutes": 5,
-      "summary": "Speed, limits and privacy: how to pick an AI service for live classes.",
+      "summary": "A simple present-past-future formula for the question every interviewer asks.",
       "body": [
-        "Most private assistants send the text of a question to an AI service. You can use a free plan or a paid one. Here is what changes.",
-        { "h": "Speed" },
-        "Fast services such as Groq return the first words in about a second. Free tiers of larger models can be slower, especially when many people use them.",
-        { "h": "Limits" },
-        "Free plans limit how many requests you can make per minute and per day. In a lively class with many questions you may hit them.",
-        { "h": "Privacy" },
-        "On some free plans, the text you send may be used to improve the provider's products. Paid plans usually do not. Read the provider's current terms before sending anything about students.",
-        { "h": "A sensible approach" },
-        "Start with a free plan to learn the tool. If you use it every week, a paid key usually costs very little for light classroom use and removes the limits."
+        "It sounds easy and trips up almost everyone. The trick is to treat it as a short pitch, not your life story.",
+        { "h": "Present: what you do now" },
+        "One sentence on your current role and your strongest skill.",
+        { "h": "Past: how you got here" },
+        "Two or three highlights that are relevant to this job, with one result you are proud of.",
+        { "h": "Future: why this role" },
+        "End with what you want next and why this company fits. It naturally hands the conversation back to the interviewer.",
+        { "h": "Keep it under two minutes" },
+        "Time yourself. If you run over, cut the oldest, least relevant part first."
       ]
     }
   ]

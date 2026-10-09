@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShortlistedPrep · Design C: Sunrise</title>
+<meta name="description" content="Design sample C: a warm, friendly and colourful homepage for an AI interview preparation product.">
+<style>
+  :root {
+    --cream: #fff8ef; --ink: #2a1f4d; --muted: #6c6488; --line: #f0e3d0;
+    --coral: #ff6b4a; --teal: #10b3a3; --sun: #ffc83d; --violet: #6c4bff; --pink: #ff8fb8; --sky: #4cc3ff;
+    --radius: 28px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 17px/1.65 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: var(--ink); background: var(--cream); overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 22px; }
+  h1, h2, h3 { margin: 0; line-height: 1.08; letter-spacing: -0.02em; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 15px 28px; border-radius: 16px; font-weight: 800; cursor: pointer; font-size: 16px; border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); transition: transform .12s, box-shadow .12s; }
+  .btn:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+  .btn-coral { background: var(--coral); color: #fff; } .btn-sun { background: var(--sun); color: var(--ink); } .btn-white { background: #fff; color: var(--ink); }
+  .sample { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; background: #ffe9b0; color: #7a5200; border-radius: 999px; padding: 2px 9px; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; }
+  .brand { font-weight: 900; font-size: 22px; display: flex; gap: 10px; align-items: center; }
+  .brand b { width: 38px; height: 38px; border-radius: 12px; background: var(--coral); border: 3px solid var(--ink); display: grid; place-items: center; color: #fff; transform: rotate(-6deg); }
+  nav ul { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; font-weight: 700; color: var(--muted); }
+  nav .right { display: flex; gap: 12px; } nav .btn { padding: 10px 20px; font-size: 15px; }
+
+  .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; padding: 44px 0 70px; position: relative; }
+  .sticker { display: inline-block; background: var(--sun); border: 3px solid var(--ink); border-radius: 999px; padding: 6px 18px; font-weight: 800; transform: rotate(-2deg); box-shadow: 3px 3px 0 var(--ink); font-size: 15px; }
+  .hero h1 { font-size: clamp(42px, 6vw, 76px); margin: 22px 0 18px; }
+  .hero h1 u { text-decoration: none; background: linear-gradient(transparent 62%, rgba(255,107,74,.45) 62%); }
+  .hero h1 em { font-style: normal; color: var(--violet); }
+  .hero p { font-size: 20px; color: var(--muted); max-width: 540px; margin: 0 0 28px; }
+  .hero .cta { display: flex; gap: 16px; flex-wrap: wrap; }
+  .proof { display: flex; align-items: center; gap: 14px; margin-top: 30px; color: var(--muted); font-weight: 600; font-size: 15px; }
+  .faces { display: flex; } .faces i { width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--cream); margin-left: -10px; display: grid; place-items: center; color: #fff; font-style: normal; font-weight: 800; font-size: 13px; } .faces i:first-child { margin-left: 0; }
+
+  .collage { position: relative; height: 470px; }
+  .blob { position: absolute; border-radius: 50%; z-index: 0; }
+  .b1 { width: 380px; height: 380px; background: var(--pink); right: 10px; top: 20px; opacity: .55; }
+  .b2 { width: 220px; height: 220px; background: var(--sky); left: 10px; bottom: 10px; opacity: .6; }
+  .b3 { width: 120px; height: 120px; background: var(--sun); right: 0; bottom: 50px; }
+  .card { position: absolute; background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 6px 0 var(--ink); z-index: 1; }
+  .c1 { left: 20px; top: 20px; width: 78%; padding: 20px 22px; transform: rotate(-2.5deg); }
+  .c1 small { font-weight: 800; color: var(--violet); letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+  .c1 h3 { font-size: 22px; margin: 6px 0 14px; }
+  .mic { display: flex; align-items: center; gap: 12px; } .mic span { width: 46px; height: 46px; border-radius: 50%; background: var(--coral); border: 3px solid var(--ink); display: grid; place-items: center; font-size: 20px; }
+  .mic div { flex: 1; height: 12px; background: repeating-linear-gradient(90deg, var(--teal) 0 6px, transparent 6px 11px); border-radius: 6px; }
+  .c2 { right: 6px; top: 190px; width: 58%; padding: 16px 18px; transform: rotate(3deg); }
+  .c2 b { font-size: 40px; color: var(--teal); line-height: 1; } .c2 span { display: block; color: var(--muted); font-weight: 700; font-size: 14px; }
+  .c3 { left: 40px; bottom: 16px; width: 62%; padding: 14px 18px; transform: rotate(-1.5deg); background: var(--sun); }
+  .c3 p { margin: 0; font-weight: 800; font-size: 15px; }
+  .star { position: absolute; z-index: 2; font-size: 34px; } .s1 { right: 40px; top: 0; } .s2 { left: 0; top: 260px; }
+
+  .wave { display: block; width: 100%; height: 60px; }
+  .band { background: var(--ink); color: #fff; padding: 40px 0; }
+  .band .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; text-align: center; } .band b { display: block; font-size: 42px; line-height: 1.1; color: var(--sun); } .band span { opacity: .8; }
+
+  section { padding: 84px 0; }
+  .head { text-align: center; max-width: 700px; margin: 0 auto 48px; } .head h2 { font-size: clamp(32px, 4.6vw, 52px); margin-bottom: 14px; } .head p { color: var(--muted); font-size: 19px; margin: 0; }
+  .feat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .tile { border: 3px solid var(--ink); border-radius: var(--radius); padding: 28px; box-shadow: 6px 6px 0 var(--ink); transition: transform .15s; }
+  .tile:hover { transform: translate(-3px, -3px) rotate(-.5deg); }
+  .tile .ic { font-size: 38px; display: block; margin-bottom: 12px; } .tile h3 { font-size: 24px; margin-bottom: 8px; } .tile p { margin: 0; font-weight: 500; }
+  .k1 { background: #ffd9cf; } .k2 { background: #c8f3ee; } .k3 { background: #fff0b8; } .k4 { background: #ddd5ff; } .k5 { background: #cfeeff; } .k6 { background: #ffd3e4; }
+
+  .how { background: #fff; border-block: 3px solid var(--ink); }
+  .path { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+  .stp { text-align: center; } .stp .n { width: 78px; height: 78px; border-radius: 50%; border: 3px solid var(--ink); background: var(--sun); display: grid; place-items: center; font-weight: 900; font-size: 32px; margin: 0 auto 16px; box-shadow: 4px 4px 0 var(--ink); }
+  .stp:nth-child(2) .n { background: var(--teal); color: #fff; } .stp:nth-child(3) .n { background: var(--coral); color: #fff; }
+  .stp h3 { font-size: 24px; margin-bottom: 8px; } .stp p { margin: 0 auto; color: var(--muted); max-width: 310px; }
+
+  .quotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .q { background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); padding: 28px; box-shadow: 6px 6px 0 var(--ink); }
+  .q:nth-child(2) { transform: translateY(18px); } .q .stars { color: #ff9f1a; letter-spacing: 3px; } .q p { font-size: 18px; margin: 10px 0 16px; font-weight: 600; }
+
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: start; }
+  .plan { background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); padding: 32px 28px; box-shadow: 6px 6px 0 var(--ink); }
+  .plan.pop { background: var(--violet); color: #fff; transform: translateY(-14px); } .plan.pop .btn { background: var(--sun); color: var(--ink); }
+  .plan .price { font-size: 54px; font-weight: 900; margin: 10px 0 0; line-height: 1; } .plan .price small { font-size: 16px; font-weight: 700; opacity: .75; }
+  .plan ul { list-style: none; padding: 0; margin: 20px 0 26px; display: grid; gap: 10px; font-weight: 600; } .plan li::before { content: "★"; color: var(--coral); margin-right: 10px; } .plan.pop li::before { color: var(--sun); }
+  .plan .btn { width: 100%; justify-content: center; background: var(--sun); }
+
+  details { background: #fff; border: 3px solid var(--ink); border-radius: 18px; padding: 4px 22px; }
+  details + details { margin-top: 14px; } summary { cursor: pointer; font-weight: 800; padding: 16px 0; list-style: none; display: flex; justify-content: space-between; font-size: 18px; }
+  summary::after { content: "＋"; color: var(--coral); } details[open] summary::after { content: "－"; } details p { margin: 0 0 16px; color: var(--muted); }
+
+  .final { background: var(--coral); border: 3px solid var(--ink); border-radius: 40px; box-shadow: 8px 8px 0 var(--ink); text-align: center; padding: 64px 28px; color: #fff; position: relative; overflow: hidden; }
+  .final h2 { font-size: clamp(32px, 4.8vw, 56px); margin-bottom: 14px; } .final p { font-size: 20px; margin: 0 0 28px; opacity: .95; }
+  .final::before, .final::after { content: "✦"; position: absolute; font-size: 90px; color: var(--sun); opacity: .9; } .final::before { left: 28px; top: 8px; } .final::after { right: 34px; bottom: 0; color: #fff; opacity: .5; }
+  footer { padding: 56px 0 40px; color: var(--muted); font-weight: 500; } footer .cols { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 26px; } footer h4 { color: var(--ink); margin: 0 0 10px; } footer a { display: block; padding: 3px 0; }
+  footer .small { margin-top: 34px; border-top: 2px dashed var(--line); padding-top: 18px; font-size: 13px; }
+
+  @media (max-width: 900px) {
+    nav ul { display: none; } .hero, .feat, .path, .quotes, .plans, .band .row, footer .cols { grid-template-columns: 1fr; }
+    .collage { height: 420px; } .q:nth-child(2), .plan.pop { transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .btn, .tile { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="#"><b>S</b>ShortlistedPrep</a>
+    <ul><li>Features</li><li>How it works</li><li>Reviews</li><li>Pricing</li><li>Blog</li></ul>
+    <div class="right"><a class="btn btn-white" href="#">Sign in</a><a class="btn btn-coral" href="#">Start free</a></div>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <span class="sticker">🎯 Your friendly interview coach</span>
+      <h1>Nervous about interviews? <u>Practise</u> until you're <em>unstoppable.</em></h1>
+      <p>Chat with an AI interviewer, learn what real hiring managers ask, and fix your answers before the big day. Friendly, fast and always available.</p>
+      <div class="cta"><a class="btn btn-coral" href="#">Try a free mock interview</a><a class="btn btn-white" href="#">▶ See it in action</a></div>
+      <div class="proof"><div class="faces"><i style="background:#6c4bff">A</i><i style="background:#10b3a3">J</i><i style="background:#ff6b4a">R</i><i style="background:#ffc83d;color:#2a1f4d">M</i></div><span>Loved by job seekers in 38 countries <span class="sample">sample</span></span></div>
+    </div>
+    <div class="collage" role="img" aria-label="Illustration: an interview question, a score card and a tip">
+      <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+      <div class="star s1">⭐</div><div class="star s2">✨</div>
+      <div class="card c1"><small>Question 4 of 8</small><h3>Why should we hire you for this role?</h3><div class="mic"><span>🎤</span><div></div></div></div>
+      <div class="card c2"><b>86</b><span>Answer score · great structure!</span></div>
+      <div class="card c3"><p>💡 Tip: open with your strongest result.</p></div>
+    </div>
+  </header>
+</div>
+
+<svg class="wave" viewBox="0 0 1440 60" preserveAspectRatio="none" aria-hidden="true"><path d="M0 30 C 240 70 480 -10 720 28 C 960 66 1200 0 1440 30 L1440 60 L0 60 Z" fill="#2a1f4d"/></svg>
+<div class="band"><div class="wrap"><div class="row">
+  <div><b>12,400+</b><span>practice sessions</span></div><div><b>4.8 / 5</b><span>average rating</span></div><div><b>500+</b><span>question topics</span></div><div><b>38</b><span>countries</span></div>
+</div><p style="text-align:center;margin:18px 0 0"><span class="sample">sample numbers</span></p></div></div>
+
+<div class="wrap">
+  <section>
+    <div class="head"><h2>Everything you need to feel ready</h2><p>Six friendly tools, one simple plan.</p></div>
+    <div class="feat">
+      <div class="tile k1"><span class="ic">🎤</span><h3>AI mock interviews</h3><p>Answer out loud and get kind, clear feedback on every response.</p></div>
+      <div class="tile k2"><span class="ic">📚</span><h3>Question bank</h3><p>Real-world questions by role, with tips on what great answers include.</p></div>
+      <div class="tile k3"><span class="ic">📄</span><h3>Résumé maker</h3><p>A tidy, role-focused résumé in minutes. Download as PDF.</p></div>
+      <div class="tile k4"><span class="ic">📸</span><h3>Pro headshots</h3><p>A polished profile photo from one picture. Only with your consent.</p></div>
+      <div class="tile k5"><span class="ic">💡</span><h3>Answer coach</h3><p>Not sure how to start? Get a simple structure to follow.</p></div>
+      <div class="tile k6"><span class="ic">📈</span><h3>Progress tracker</h3><p>Watch your score, pace and filler words improve week by week.</p></div>
+    </div>
+  </section>
+</div>
+
+<div class="how"><div class="wrap"><section>
+  <div class="head"><h2>Three easy steps</h2><p>It takes about ten minutes to feel the difference.</p></div>
+  <div class="path">
+    <div class="stp"><div class="n">1</div><h3>Pick your role</h3><p>Tell us the job you want. We pick the right questions.</p></div>
+    <div class="stp"><div class="n">2</div><h3>Practise out loud</h3><p>Talk to your AI interviewer like it is the real thing.</p></div>
+    <div class="stp"><div class="n">3</div><h3>Level up</h3><p>Read your feedback, try again, and watch your confidence grow.</p></div>
+  </div>
+</section></div></div>
+
+<div class="wrap">
+  <section>
+    <div class="head"><h2>Happy practisers <span class="sample">sample reviews</span></h2></div>
+    <div class="quotes">
+      <div class="q"><div class="stars">★★★★★</div><p>“I stopped saying 'um' after three sessions. Got the job last week!”</p><b>Priya N.</b> · Analyst</div>
+      <div class="q"><div class="stars">★★★★★</div><p>“Felt like talking to a real interviewer, minus the sweaty palms.”</p><b>Chris D.</b> · Designer</div>
+      <div class="q"><div class="stars">★★★★☆</div><p>“The structure tips turned my rambling into clear stories.”</p><b>Ana L.</b> · Sales rep</div>
+    </div>
+  </section>
+
+  <section style="padding-top:30px">
+    <div class="head"><h2>Pick your plan <span class="sample">sample prices</span></h2><p>Start free, upgrade only if you love it.</p></div>
+    <div class="plans">
+      <div class="plan"><h3>Starter</h3><div class="price">Free</div><ul><li>1 mock interview</li><li>Question bank preview</li><li>Basic feedback</li></ul><a class="btn" href="#">Start free</a></div>
+      <div class="plan pop"><h3>Pro</h3><div class="price">$12<small> / month</small></div><ul><li>Unlimited mock interviews</li><li>Full question bank</li><li>Résumé maker + PDF</li><li>Progress reports</li></ul><a class="btn" href="#">Get Pro</a></div>
+      <div class="plan"><h3>Career pack</h3><div class="price">$29<small> / month</small></div><ul><li>Everything in Pro</li><li>Pro headshots</li><li>Priority support</li></ul><a class="btn" href="#">Get Career pack</a></div>
+    </div>
+  </section>
+
+  <section style="padding-top:40px">
+    <div class="head"><h2>Quick answers</h2></div>
+    <div style="max-width:800px;margin:0 auto">
+      <details open><summary>Is it really free to start?</summary><p>Yes! Your first mock interview is free, no card needed.</p></details>
+      <details><summary>Will it write my answers for me?</summary><p>It coaches you. You practise in your own words so you sound like you in the real interview.</p></details>
+      <details><summary>Is this for cheating in real interviews?</summary><p>No. It is a practice tool and does not hide anything from an interviewer.</p></details>
+      <details><summary>Can I delete my data?</summary><p>Anytime. Recordings and photos are yours.</p></details>
+    </div>
+  </section>
+
+  <section style="padding-top:20px"><div class="final"><h2>Your shortlist moment is closer than you think.</h2><p>Start your first mock interview today. It is free.</p><a class="btn btn-sun" href="#">Let's practise →</a></div></section>
+
+  <footer>
+    <div class="cols">
+      <div><a class="brand" href="#"><b>S</b>ShortlistedPrep</a><p>Practise with confidence.</p></div>
+      <div><h4>Product</h4><a href="#">Mock interviews</a><a href="#">Question bank</a><a href="#">Résumé maker</a></div>
+      <div><h4>Learn</h4><a href="#">Blog</a><a href="#">Guides</a><a href="#">Help</a></div>
+      <div><h4>Company</h4><a href="#">About</a><a href="#">Privacy</a><a href="#">Terms</a></div>
+    </div>
+    <div class="small">© 2026 ShortlistedPrep. Design sample C (Sunrise). All names, numbers and reviews are sample data.</div>
+  </footer>
+</div>
+</body>
+</html>

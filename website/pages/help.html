@@ -1,100 +1,42 @@
-<!-- title: Help and setup | description: Set up {{name}}, get your AI key, learn the shortcuts and fix common problems. -->
+<!-- title: Help centre | description: Get started, practise well, and fix common microphone and sound problems. -->
 <section class="page-head">
   <div class="wrap narrow">
-    <span class="eyebrow">Help</span>
-    <h1>Setup and troubleshooting</h1>
-    <div class="toc">
-      <a href="#start">Quick start</a><a href="#keys">Get an AI key</a><a href="#shortcuts">Shortcuts</a><a href="#test">Test your screen share</a><a href="#accuracy">Check accuracy</a><a href="#problems">Fixing problems</a>
-    </div>
+    <span class="eyebrow">Help centre</span>
+    <h1>Get started and get unstuck</h1>
+    <div class="toc"><a href="#start">Getting started</a><a href="#practise">Practise well</a><a href="#problems">Fixing problems</a></div>
   </div>
 </section>
 
 <section class="doc" style="padding-top:0">
   <div class="wrap narrow">
-
-    <h2 id="start">Quick start</h2>
+    <h2 id="start">Getting started</h2>
     <ol>
-      <li>Install the app and start it. Wait for "Loading the speech model" to finish the first time.</li>
-      <li>Click <strong>⚙</strong> in the assistant window.</li>
-      <li>Choose your <strong>AI service</strong> and paste your <strong>API key</strong> (see below).</li>
-      <li>Type your <strong>subject</strong>, for example "Algebra, Grade 10". The more specific, the better the answers.</li>
-      <li>Set <strong>Audio to listen to</strong> to "Meeting + my microphone", choose how a question ends: tick <strong>Auto-detect when a question ends</strong> (the app decides after you pause), or untick it to press <strong>✔ Question finished</strong> yourself, and press <strong>Save</strong>.</li>
-      <li>Press <strong>Start listening</strong>, then teach as usual.</li>
+      <li>Create your account and choose the role you are preparing for.</li>
+      <li>Optional: add your résumé so the questions fit your background.</li>
+      <li>Allow microphone access when your browser or computer asks.</li>
+      <li>Press <strong>Start</strong> and answer the first question out loud.</li>
+      <li>Read your feedback, then press <strong>Try again</strong>.</li>
     </ol>
-    <div class="note info">Tip: use headphones. If the meeting plays through speakers, your microphone also picks it up and you may see repeated lines.</div>
 
-    <h2 id="keys">Get an AI key</h2>
-    <h3>Google Gemini (has a free tier)</h3>
-    <ol>
-      <li>Go to <a href="https://aistudio.google.com/apikey" rel="noopener">aistudio.google.com/apikey</a> and sign in with a Google account.</li>
-      <li>Click <strong>Create API key</strong> and copy it (it starts with <code>AIza</code>).</li>
-      <li>Paste it into {{name}} under ⚙ → Google Gemini API key.</li>
-    </ol>
-    <p class="muted">School Google accounts sometimes block this page. Use a personal account if so. Free-plan limits apply and prompts on free plans may be used by Google to improve its products.</p>
-    <h3>Groq (free plan, very fast)</h3>
-    <ol>
-      <li>Go to <a href="https://console.groq.com/keys" rel="noopener">console.groq.com/keys</a> and sign in.</li>
-      <li>Click <strong>Create API Key</strong> and copy it (it starts with <code>gsk_</code>).</li>
-      <li>In {{name}}, choose "Groq" as the AI service and paste the key.</li>
-    </ol>
-    <p class="muted">Groq runs open models at very high speed, so answers start in about a second. Free-plan limits apply. For the quickest answers in a live class, choose Groq with Thinking time set to Quick.</p>
-    <h3>Anthropic Claude (paid)</h3>
-    <ol>
-      <li>Go to <a href="https://console.anthropic.com" rel="noopener">console.anthropic.com</a>, sign in and add billing.</li>
-      <li>Open <strong>Settings → API Keys → Create Key</strong>, and copy it (it starts with <code>sk-ant-</code>).</li>
-      <li>In {{name}}, choose "Anthropic Claude" as the AI service and paste the key.</li>
-    </ol>
-    <p class="muted">A Claude Pro chat subscription does not include an API key; the API is billed separately.</p>
-
-    <h2 id="shortcuts">Keyboard shortcuts</h2>
-    <table class="simple">
-      <tr><th>Action</th><th>Shortcut</th></tr>
-      <tr><td>Show or hide the assistant window</td><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">N</span></td></tr>
-      <tr><td>Start or stop listening</td><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">L</span></td></tr>
-      <tr><td>✔ Question finished: answer everything heard so far</td><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">A</span></td></tr>
-      <tr><td>Put the window back to fully visible</td><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">T</span></td></tr>
-    </table>
-    <p>Over the assistant window the real mouse pointer is always invisible, so it cannot show in a screen share. You still see a pointer: the app draws its own inside the window, and that is left out of the share with the window. Drag the title bar to move the window and the corner mark at the bottom right to resize it.</p>
-    <p>Other controls: the <strong>Export</strong> menu saves all questions, answers and response times (text, CSV for Excel, or JSON) into the Documents\ClassCue folder. The assistant window shows no tooltips or pop-up boxes, because Windows draws those as separate windows that a screen share could capture. The percentage box in the title bar makes the window see-through, from 100% down to 10%.</p>
-
-    <h2 id="test">Test that your share stays private</h2>
-    <p>Always do this once before a real class:</p>
-    <ol>
-      <li>Start a meeting with a colleague or a second account of your own.</li>
-      <li>Share your screen (or the window you plan to share) as you normally would.</li>
-      <li>Ask them to confirm they can see your content but <strong>not</strong> the assistant window.</li>
-    </ol>
-    <p class="muted">The window is excluded from screen capture using the operating system's feature. Some capture tools, remote-desktop setups and older systems may behave differently.</p>
-
-    <h2 id="accuracy">Check speech accuracy on your own audio</h2>
-    <p>Record a short clip of a real class, write down exactly what was said, and run the built-in test (Windows, in the app folder):</p>
-    <p><code>npm run test:stt -- --wav my.wav --ref "the exact words that were spoken" --topic "your subject"</code></p>
-    <p>It prints the percentage of words recognised correctly and how fast it ran.</p>
+    <h2 id="practise">Practise well</h2>
+    <ul>
+      <li><strong>Use a headset.</strong> It gives clearer sound and fewer mistakes in the text.</li>
+      <li><strong>Answer out loud, in full.</strong> Saying it is a different skill from thinking it.</li>
+      <li><strong>Use STAR for behavioural questions:</strong> Situation, Task, Action, Result. Read <a href="blog-star-method-made-simple.html">the STAR guide</a>.</li>
+      <li><strong>Repeat the same question.</strong> The second and third attempts are where you improve most.</li>
+      <li><strong>Put your own words in.</strong> Use suggestions as a structure, not a script.</li>
+    </ul>
 
     <h2 id="problems">Fixing problems</h2>
-    <details class="faq" open><summary>The assistant is stuck: no answers, or it stopped listening</summary>
-      <ol>
-        <li>Click <strong>↻ Restart</strong> at the top of the assistant tab. It restarts the sound capture and the speech engine and carries on listening. Your settings, saved keys and question list are kept.</li>
-        <li>If the window does not react, press <span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">Shift</span> + <span class="kbd">R</span>.</li>
-        <li>Still wrong? Open ⚙ Settings, scroll to <strong>If something is stuck</strong> and click <strong>Reset all settings</strong> twice. Every setting returns to its default and the window goes back to its starting place. Saved AI keys are kept.</li>
-      </ol></details>
-    <details class="faq"><summary>Nothing appears under "Just heard"</summary>
-      <ul>
-        <li>Check that the level bar moves when you speak. If it does not, check your Windows default microphone and that microphone access is allowed for desktop apps.</li>
-        <li>If you chose "The meeting only", your own voice is not captured. Choose "Meeting + my microphone".</li>
-        <li>Speak a full sentence and pause for a second or two.</li>
-      </ul></details>
-    <details class="faq"><summary>It hears the question but no answer comes</summary>
-      <ul>
-        <li>If <strong>Auto-detect when a question ends</strong> is unticked, the app waits for you: press <strong>✔ Question finished</strong> or <span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">A</span>.</li>
-        <li>Check that an API key is saved for the selected AI service.</li>
-        <li>Read the message on the question card; it says what went wrong.</li>
-      </ul></details>
-    <details class="faq"><summary>"Rate limit reached (429)"</summary><p>You have used up your AI provider's quota for the moment. Wait about a minute, ask fewer questions at once, set Thinking time to Quick, or use a paid key. Free plans have the tightest limits.</p></details>
-    <details class="faq"><summary>"The AI service is having trouble (503)"</summary><p>The provider is busy. The app retries and tries other models automatically; if it still fails, wait a minute and press the ✔ Question finished button.</p></details>
-    <details class="faq"><summary>The answer is about the wrong thing</summary><p>Set a more specific subject in the settings, for example "Power Platform: Power Pages, Dataverse Web API". Words with several meanings are resolved using it.</p></details>
-    <details class="faq"><summary>Answers are slow</summary><p>Set Thinking time to Quick, choose a "Flash-Lite" model, and close other heavy programs. Speech recognition uses your processor, so a slow PC is slower.</p></details>
+    <details class="faq"><summary>It does not hear me</summary>
+      <ul><li>Check that the right microphone is selected in your computer's sound settings and is not muted.</li><li>Allow microphone access for the site or app.</li><li>Close other programs that may be using the microphone, such as a meeting app.</li></ul></details>
+    <details class="faq"><summary>The text does not match what I said</summary>
+      <p>Background noise and distance from the microphone cause most mistakes. Use a headset, a quiet room, and speak at a steady pace.</p></details>
+    <details class="faq"><summary>Feedback seems too harsh or too soft</summary>
+      <p>Feedback is a guide, not a verdict. Use the single priority tip, practise again, and compare your attempts over time.</p></details>
+    <details class="faq"><summary>How do I delete my recordings, résumé or photos?</summary>
+      <p>Open your account settings and choose Delete. Deleted items are removed from your account.</p></details>
 
-    <p style="margin-top:36px">Still stuck? <a href="contact.html">Contact support</a> and include your app version ({{version}}) and what you saw.</p>
+    <p style="margin-top:36px">Still stuck? <a href="contact.html">Contact support</a> and tell us what you saw.</p>
   </div>
 </section>

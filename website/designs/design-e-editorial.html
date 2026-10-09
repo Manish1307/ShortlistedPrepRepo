@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShortlistedPrep · Design E: Editorial</title>
+<meta name="description" content="Design sample E: a premium, editorial-style homepage for an AI interview preparation product.">
+<style>
+  :root {
+    --paper: #fbf8f2; --paper2: #f3eee3; --ink: #14201c; --body: #4a5650; --muted: #7d887f; --line: #e3dccd;
+    --green: #0f3d33; --green2: #1b5a4a; --gold: #c4912f; --gold-l: #f6ead0; --rust: #b9532e; --sage: #dfe9e2;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    --sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 17px/1.7 var(--sans); color: var(--body); background: var(--paper); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+  h1, h2, h3, h4 { font-family: var(--serif); color: var(--ink); margin: 0; font-weight: 600; letter-spacing: -0.015em; line-height: 1.12; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 28px; font-weight: 600; font-size: 15.5px; border: 1px solid var(--green); border-radius: 4px; cursor: pointer; letter-spacing: .01em; }
+  .btn-green { background: var(--green); color: #fff; } .btn-green:hover { background: var(--green2); }
+  .btn-line { background: transparent; color: var(--green); } .btn-line:hover { background: var(--sage); }
+  .btn-gold { background: var(--gold); border-color: var(--gold); color: #1c1403; }
+  .sample { font: 700 10.5px var(--sans); letter-spacing: .08em; text-transform: uppercase; background: var(--gold-l); color: #7a5410; padding: 2px 8px; border-radius: 3px; vertical-align: middle; }
+  .kicker { font: 700 12.5px var(--sans); letter-spacing: .18em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 16px; }
+
+  .top { border-bottom: 1px solid var(--line); }
+  .top .in { display: flex; justify-content: space-between; align-items: center; height: 78px; }
+  .brand { font: 600 25px var(--serif); color: var(--green); letter-spacing: -.02em; display: flex; align-items: baseline; gap: 2px; } .brand em { color: var(--gold); font-style: italic; }
+  .top ul { display: flex; gap: 34px; list-style: none; margin: 0; padding: 0; font-weight: 500; font-size: 15px; color: var(--body); } .top .r { display: flex; gap: 14px; align-items: center; } .top .r a.t { font-weight: 600; color: var(--green); font-size: 15px; }
+
+  .hero { padding: 90px 0 70px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 70px; align-items: center; }
+  .hero h1 { font-size: clamp(44px, 5.6vw, 76px); margin-bottom: 26px; font-weight: 500; } .hero h1 em { color: var(--green2); font-style: italic; }
+  .hero p.lead { font-size: 20px; max-width: 540px; margin: 0 0 34px; } .hero .cta { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero .note { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); display: flex; gap: 32px; flex-wrap: wrap; font-size: 15px; } .hero .note b { font: 600 30px var(--serif); color: var(--green); display: block; line-height: 1.1; }
+
+  .folio { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 30px 30px 26px; box-shadow: 0 30px 70px -40px rgba(15,61,51,.5), 12px 12px 0 -1px var(--sage); position: relative; }
+  .folio .tag { font: 700 11px var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--rust); }
+  .folio h3 { font-size: 26px; margin: 10px 0 16px; font-weight: 500; line-height: 1.25; }
+  .folio .bar { display: flex; gap: 3px; align-items: center; height: 30px; margin-bottom: 18px; } .folio .bar i { width: 4px; border-radius: 2px; background: var(--green2); opacity: .8; }
+  .folio .ans { font: italic 17px/1.55 var(--serif); color: #33413b; border-left: 3px solid var(--gold); padding-left: 16px; margin-bottom: 20px; }
+  .folio .scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--line); padding-top: 16px; } .folio .scores div { padding-right: 10px; } .folio .scores b { font: 600 28px var(--serif); color: var(--green); display: block; line-height: 1.1; } .folio .scores span { font-size: 12.5px; color: var(--muted); letter-spacing: .03em; }
+
+  .press { border-block: 1px solid var(--line); background: var(--paper2); padding: 26px 0; } .press .in { display: flex; justify-content: center; gap: 12px 40px; flex-wrap: wrap; font: italic 600 19px var(--serif); color: #8a948b; align-items: center; } .press small { font: 600 12px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-style: normal; }
+
+  section { padding: 100px 0; }
+  .intro { max-width: 760px; margin-bottom: 64px; } .intro h2 { font-size: clamp(34px, 4.4vw, 52px); font-weight: 500; margin-bottom: 18px; } .intro p { font-size: 19px; margin: 0; }
+  .list { border-top: 1px solid var(--ink); }
+  .item { display: grid; grid-template-columns: 90px 1fr 1.1fr; gap: 36px; padding: 36px 0; border-bottom: 1px solid var(--line); align-items: start; }
+  .item .no { font: italic 500 34px var(--serif); color: var(--gold); } .item h3 { font-size: 28px; font-weight: 500; } .item p { margin: 0 0 10px; } .item ul { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 15.5px; } .item li::before { content: "—"; color: var(--gold); margin-right: 10px; }
+
+  .dark { background: var(--green); color: #cfe0d8; } .dark h2, .dark h3 { color: #fff; } .dark .kicker { color: #e2bd6f; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 36px; counter-reset: s; border-top: 1px solid rgba(255,255,255,.25); padding-top: 36px; }
+  .steps div::before { counter-increment: s; content: "0" counter(s); font: italic 500 40px var(--serif); color: #e2bd6f; display: block; margin-bottom: 14px; } .steps h3 { font-size: 24px; margin-bottom: 8px; font-weight: 500; } .steps p { margin: 0; font-size: 15.5px; color: #b5cdc3; }
+
+  .quote { display: grid; grid-template-columns: 1fr 1.4fr; gap: 60px; align-items: center; }
+  .quote .mark { font: 500 190px/0.7 var(--serif); color: var(--gold); } .quote blockquote { margin: 0; font: 500 clamp(26px, 3vw, 36px)/1.35 var(--serif); color: var(--ink); } .quote cite { display: block; margin-top: 22px; font: 600 15px var(--sans); color: var(--muted); font-style: normal; } .quote cite b { color: var(--ink); }
+  .triple { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 70px; border-top: 1px solid var(--line); } .triple div { padding: 28px 28px 0 0; } .triple div + div { padding-left: 28px; border-left: 1px solid var(--line); } .triple p { font: 500 19px/1.5 var(--serif); color: var(--ink); margin: 0 0 12px; } .triple small { color: var(--muted); }
+
+  .table { border: 1px solid var(--line); background: #fff; border-radius: 6px; overflow: hidden; }
+  .table .row { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; border-bottom: 1px solid var(--line); } .table .row:last-child { border: 0; } .table .row > div { padding: 18px 22px; } .table .row > div + div { border-left: 1px solid var(--line); text-align: center; }
+  .table .hd { background: var(--paper2); } .table .hd b { font: 600 22px var(--serif); color: var(--ink); display: block; } .table .hd span { font-size: 14px; color: var(--muted); } .table .pop { background: var(--gold-l); } .table .price { font: 600 34px var(--serif); color: var(--green); line-height: 1.1; } .table .price small { font: 500 14px var(--sans); color: var(--muted); }
+  .table .y { color: var(--green2); font-weight: 700; } .table .n { color: #b8b3a5; }
+  .pbtn { padding: 18px 22px; display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; background: var(--paper2); border-top: 1px solid var(--line); } .pbtn .btn { justify-content: center; margin: 0 8px; padding: 12px 10px; font-size: 14.5px; }
+
+  details { border-bottom: 1px solid var(--line); } summary { font: 500 24px var(--serif); color: var(--ink); padding: 24px 0; cursor: pointer; list-style: none; display: flex; justify-content: space-between; } summary::after { content: "+"; color: var(--gold); font-family: var(--sans); } details[open] summary::after { content: "–"; } details p { margin: 0 0 24px; max-width: 700px; }
+
+  .letter { background: var(--paper2); border: 1px solid var(--line); border-radius: 6px; padding: 70px 40px; text-align: center; } .letter h2 { font-size: clamp(34px, 4.4vw, 54px); font-weight: 500; margin-bottom: 16px; } .letter p { font-size: 19px; margin: 0 auto 30px; max-width: 560px; }
+  footer { background: var(--green); color: #b5cdc3; padding: 70px 0 40px; } footer .cols { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); gap: 36px; } footer .brand { color: #fff; } footer h4 { font: 700 12px var(--sans); letter-spacing: .16em; text-transform: uppercase; color: #e2bd6f; margin-bottom: 14px; } footer a { display: block; padding: 4px 0; font-size: 15.5px; } footer a:hover { color: #fff; }
+  footer .small { margin-top: 48px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.18); font-size: 13px; color: #8fb0a3; display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+
+  @media (max-width: 960px) {
+    .top ul { display: none; } .hero, .item, .steps, .quote, .triple, footer .cols { grid-template-columns: 1fr; } .triple div + div { border-left: 0; padding-left: 0; } .quote .mark { font-size: 120px; } .table .row, .pbtn { grid-template-columns: 1.2fr 1fr 1fr 1fr; font-size: 14px; } .table .row > div { padding: 12px 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="top"><div class="wrap in">
+  <a class="brand" href="#">Shortlisted<em>Prep</em></a>
+  <ul><li>Mock interviews</li><li>Question bank</li><li>Résumé</li><li>Pricing</li><li>Journal</li></ul>
+  <div class="r"><a class="t" href="#">Sign in</a><a class="btn btn-green" href="#">Begin free</a></div>
+</div></div>
+
+<div class="wrap hero">
+  <div>
+    <span class="kicker">Interview preparation, considered</span>
+    <h1>Prepare with <em>poise.</em> Be remembered for the right reasons.</h1>
+    <p class="lead">A private practice room with an AI interviewer. Rehearse your answers aloud, learn what makes them land, and arrive composed.</p>
+    <div class="cta"><a class="btn btn-green" href="#">Begin your first mock interview</a><a class="btn btn-line" href="#">Read how it works</a></div>
+    <div class="note"><div><b>12,400+</b>sessions <span class="sample">sample</span></div><div><b>4.8 / 5</b>average rating <span class="sample">sample</span></div><div><b>500+</b>question topics</div></div>
+  </div>
+  <div class="folio" role="img" aria-label="Illustration of a mock interview question with a transcript and scores">
+    <span class="tag">Question 4 of 8 · Leadership</span>
+    <h3>Describe a time you led a team through a difficult change.</h3>
+    <div class="bar"><i style="height:10px"></i><i style="height:18px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:22px"></i><i style="height:28px"></i><i style="height:12px"></i><i style="height:20px"></i><i style="height:26px"></i><i style="height:10px"></i><i style="height:18px"></i><i style="height:24px"></i><i style="height:14px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:16px"></i><i style="height:26px"></i><i style="height:12px"></i><i style="height:20px"></i><i style="height:14px"></i><i style="height:24px"></i><i style="height:10px"></i></div>
+    <div class="ans">“When our launch moved forward by two weeks, I split the work into three clear parts and…”</div>
+    <div class="scores"><div><b>86</b><span>Structure</span></div><div><b>132</b><span>Words a minute</span></div><div><b>2</b><span>Filler words</span></div></div>
+  </div>
+</div>
+
+<div class="press"><div class="wrap in"><small>Prepare for roles in</small><span>Engineering</span><span>Product</span><span>Finance</span><span>Healthcare</span><span>Education</span><span>Consulting</span></div></div>
+
+<section>
+  <div class="wrap">
+    <div class="intro"><span class="kicker">The toolkit</span><h2>Four disciplines. One calm routine.</h2><p>Great preparation is deliberate. Each part of ShortlistedPrep supports the next, from the first practice question to the final round.</p></div>
+    <div class="list">
+      <div class="item"><div class="no">01</div><div><h3>Mock interviews</h3></div><div><p>Speak your answers to an AI interviewer that listens, asks follow-ups, and responds like a thoughtful professional.</p><ul><li>Behavioural, technical and case rounds</li><li>Feedback on structure, clarity and pace</li></ul></div></div>
+      <div class="item"><div class="no">02</div><div><h3>The question bank</h3></div><div><p>Realistic questions by role and level, each with what interviewers listen for and a model structure to follow.</p><ul><li>Filter by role, level and interview type</li><li>Keep a personal practice list</li></ul></div></div>
+      <div class="item"><div class="no">03</div><div><h3>Résumé &amp; headshot</h3></div><div><p>A clean, role-focused résumé in minutes, and a tidy professional portrait, made only with your explicit consent.</p><ul><li>Elegant templates, instant PDF</li><li>Your photos are yours to delete</li></ul></div></div>
+      <div class="item"><div class="no">04</div><div><h3>Progress you can see</h3></div><div><p>Track scores, pace and filler words session by session, and know precisely where to focus next.</p><ul><li>Weekly summaries</li><li>Compare any two attempts</li></ul></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="dark">
+  <div class="wrap">
+    <div class="intro"><span class="kicker">The method</span><h2>Practise. Reflect. Refine.</h2></div>
+    <div class="steps">
+      <div><h3>Choose the role</h3><p>Tell us the position and level. Add your résumé for tailored questions.</p></div>
+      <div><h3>Answer aloud</h3><p>Speak naturally, exactly as you would on the day.</p></div>
+      <div><h3>Review the feedback</h3><p>Clear notes on structure and delivery, with one priority to fix.</p></div>
+      <div><h3>Try once more</h3><p>Repeat the question and watch your answer sharpen.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="quote"><div class="mark">“</div><div><blockquote>The feedback was specific, honest and kind. By the third session I stopped rambling and started telling stories that landed.</blockquote><cite><b>Aisha K.</b>, Data analyst · <span class="sample">sample review</span></cite></div></div>
+    <div class="triple">
+      <div><p>“A calm, private way to rehearse. Exactly what I needed.”</p><small><b>Jordan M.</b> · Marketing lead</small></div>
+      <div><p>“The question bank saved me days of searching.”</p><small><b>Rui S.</b> · Graduate engineer</small></div>
+      <div><p>“I felt prepared, not rehearsed.”</p><small><b>Hannah W.</b> · Product designer</small></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:20px">
+  <div class="wrap">
+    <div class="intro"><span class="kicker">Membership</span><h2>Choose how deeply you prepare. <span class="sample">sample prices</span></h2></div>
+    <div class="table">
+      <div class="row hd"><div></div><div><b>Starter</b><span>Try it</span><div class="price">$0</div></div><div class="pop"><b>Pro</b><span>Most popular</span><div class="price">$12<small> / mo</small></div></div><div><b>Career pack</b><span>Everything</span><div class="price">$29<small> / mo</small></div></div></div>
+      <div class="row"><div>AI mock interviews</div><div>1</div><div class="pop y">Unlimited</div><div class="y">Unlimited</div></div>
+      <div class="row"><div>Question bank</div><div>Preview</div><div class="pop y">Full</div><div class="y">Full</div></div>
+      <div class="row"><div>Résumé maker &amp; PDF</div><div class="n">—</div><div class="pop y">✓</div><div class="y">✓</div></div>
+      <div class="row"><div>Progress reports</div><div class="n">—</div><div class="pop y">✓</div><div class="y">✓</div></div>
+      <div class="row"><div>Professional headshots</div><div class="n">—</div><div class="pop n">—</div><div class="y">✓</div></div>
+      <div class="pbtn"><div></div><a class="btn btn-line" href="#">Start free</a><a class="btn btn-green" href="#">Get Pro</a><a class="btn btn-line" href="#">Get Career pack</a></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:20px">
+  <div class="wrap" style="max-width:860px">
+    <div class="intro"><span class="kicker">Questions</span><h2>Good to know</h2></div>
+    <details open><summary>Is the first mock interview free?</summary><p>Yes. Your first session is free and needs no payment details.</p></details>
+    <details><summary>Can it be used during a real interview?</summary><p>No. ShortlistedPrep is a preparation tool. It is not designed to assist during a live interview.</p></details>
+    <details><summary>Who can see my recordings?</summary><p>Only you. Delete them whenever you wish.</p></details>
+  </div>
+</section>
+
+<div class="wrap" style="padding-bottom:100px"><div class="letter"><span class="kicker">Begin</span><h2>Walk in composed. Walk out shortlisted.</h2><p>Your first mock interview is on us.</p><a class="btn btn-green" href="#">Begin free</a></div></div>
+
+<footer><div class="wrap">
+  <div class="cols">
+    <div><a class="brand" href="#">Shortlisted<em>Prep</em></a><p style="margin:14px 0 0;max-width:280px">Honest, structured interview preparation.</p></div>
+    <div><h4>Product</h4><a href="#">Mock interviews</a><a href="#">Question bank</a><a href="#">Résumé maker</a></div>
+    <div><h4>Journal</h4><a href="#">Interview guides</a><a href="#">Career advice</a><a href="#">Help centre</a></div>
+    <div><h4>Company</h4><a href="#">About</a><a href="#">Privacy</a><a href="#">Terms</a></div>
+  </div>
+  <div class="small"><span>© 2026 ShortlistedPrep. Design sample E (Editorial).</span><span>All names, numbers and reviews are sample data.</span></div>
+</div></footer>
+</body>
+</html>

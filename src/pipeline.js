@@ -16,6 +16,7 @@ const MEMORY_MINUTES = 45;               // older ones are forgotten (a new topi
 const FRAME_TIMEOUT_MS = 6000;
 const STT_TIMEOUT_MS = 25000;    // a speech request that takes longer than this is stuck   // longest we wait for the AI to tidy up a question before using the words as heard
 const MAX_PARALLEL_ANSWERS = 3; // questions answered at the same time; beyond this the oldest is cancelled
+const SCREEN_TIMEOUT_MS = 45000; // longest we wait for the AI to read a captured picture
 
 class Pipeline extends EventEmitter {
   /**
@@ -55,6 +56,44 @@ class Pipeline extends EventEmitter {
   resume() { this.paused = false; this._status(); }
   setSubject(s) { this.subject = s || ''; this.answerer.setSubject(this.subject); }
   setAutoAnswer(on) { this.autoAnswer = !!on; }
+
+  /**
+   * Screen capture: the AI copies the question(s) out of the captured picture, then each one is answered like a
+   * spoken question (same list, same follow-up memory). Works without the speech engine.
+   * @param {{image: string, mimeType?: string}} shot  base64 picture
+   */
+  async askFromScreen({ image, mimeType = 'image/png' }) {
+    const canRead = 'screenReady' in this.answerer ? this.answerer.screenReady : this.answerer.ready;   // may be another AI
+    if (!canRead) {
+      this.emit('error', { code: 'no-key', message: 'No API key is set for the AI that reads captured questions. Open Settings and add it under "Screen capture AI".' });
+      return [];
+    }
+    this.emit('screen', { state: 'reading' });
+    const controller = new AbortController();
+    const timer = this.setTimer(() => controller.abort(), SCREEN_TIMEOUT_MS);
+    let questions;
+    try {
+      questions = await this.answerer.readScreen({ image, mimeType, previous: this._previous(), signal: controller.signal });
+    } catch (err) {
+      const message = controller.signal.aborted ? 'Reading the screen took too long. Try again, or capture a smaller area.' : friendlyError(err);
+      this.emit('screen', { state: 'error', message });
+      return [];
+    } finally {
+      this.clearTimer(timer);
+    }
+    if (!questions || !questions.length) {
+      this.emit('screen', { state: 'none', message: 'No question was found in the captured area. Capture again and draw the box around the question.' });
+      return [];
+    }
+    if (questions.length > MAX_PARALLEL_ANSWERS) {               // more would cancel each other: answer the first ones
+      this.emit('warning', { code: 'screen-many', message: `${questions.length} questions were found; the first ${MAX_PARALLEL_ANSWERS} are answered. Capture the others separately.` });
+      questions = questions.slice(0, MAX_PARALLEL_ANSWERS);
+    }
+    this.emit('screen', { state: 'found', count: questions.length, text: questions.join(' | ') });
+    const context = this._context('');
+    for (const q of questions) this._answer(q, context, 'screen');
+    return questions;
+  }
 
   /** Ask for an answer to arbitrary text (used by the "answer last question" hotkey / button). */
   askNow(text) {
@@ -268,7 +307,27 @@ class Pipeline extends EventEmitter {
       .slice(-CONTEXT_LINES);
   }
 
-  async _answer(question, givenContext) {
+  /**
+   * "Ask selected": the teacher selected some text in an answer; it becomes the next question. The answer it came
+   * from is always given to the AI as background, even when it is older than the usual follow-up memory.
+   * @param {string} text  the selected text
+   * @param {{question: string, answer: string}} [from]  the question and answer the text was selected in
+   */
+  askSelection(text, from) {
+    const q = String(text || '').trim().slice(0, 2000);
+    if (!q) return;
+    const parent = from && from.question ? { question: String(from.question).slice(0, 2000), answer: String(from.answer || '').slice(0, 4000) } : null;
+    this._answer(q, this._context(''), 'selection', parent);
+  }
+
+  /** The "Ask" box (a question or a few keywords the teacher typed), or a question the teacher corrected and re-asked. */
+  askTyped(text, { corrected = false } = {}) {
+    const q = String(text || '').trim().slice(0, 2000);
+    if (!q) return;
+    this._answer(q, this._context(''), corrected ? 'corrected' : 'typed');
+  }
+
+  async _answer(question, givenContext, source = 'speech', parent = null) {
     this.lastQuestion = question;
     const context = givenContext || this._context(question);
     for (const h of this.history) if (question.indexOf(h.text) !== -1) h.used = true;
@@ -286,12 +345,13 @@ class Pipeline extends EventEmitter {
     }
 
     const previous = this._previous();   // taken now, so answers finishing meanwhile do not change this one
+    if (parent && !previous.some(p => p.question === parent.question)) previous.push(parent);
     const startedAt = Date.now();
     let firstWordAt = 0;
     const id = this.nextId++;
     const controller = new AbortController();
     this.active.set(id, controller);
-    this.emit('answer-start', { id, question });
+    this.emit('answer-start', { id, question, source });
     this._status();
 
     try {
@@ -299,6 +359,7 @@ class Pipeline extends EventEmitter {
         question,
         context,
         previous,
+        source,
         signal: controller.signal,
         onDelta: delta => {
           if (!firstWordAt) firstWordAt = Date.now();

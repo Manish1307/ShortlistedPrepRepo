@@ -47,4 +47,28 @@ function buildExtractMessage({ subject, context, text, previous }) {
   ].join('\n');
 }
 
-module.exports = { EXTRACT_PROMPT, parseQuestionList, buildExtractMessage, formatPrevious };
+// Screen capture: the teacher captured part of the screen where a student's question is shown (an image the student
+// sent, Notepad, the meeting chat, a document). The AI copies the question(s) out of the picture; they are then
+// answered exactly like spoken questions.
+const SCREEN_PROMPT = `You help a teacher who is running a live online class. The teacher captured part of the screen that shows a question a student shared: a picture, a Notepad file, a chat message, a document or a slide.
+
+Read the screenshot and copy out every question, exercise or task in it, each as one complete, standalone question.
+Rules:
+- Copy the wording faithfully. Keep everything needed to answer it: given values, conditions, answer options (A, B, C, D), table data, and any code exactly as written, line breaks and indentation included.
+- If code or an error message is shown with a request ("fix this", "why does this fail", "what is the output"), make that the question and include the code or the error in it. If only code or an error is shown, ask what a student would want: what is wrong with it and how to fix it, or what it does.
+- Fix only obvious reading mistakes. Do not answer anything.
+- Ignore everything around the question: menus, toolbars, window titles, the taskbar, names, times, emojis, and chat messages that are not questions.
+- If there are several separate questions, list each one, in the order shown.
+
+Reply with ONLY a JSON array of strings, for example ["What is the output of this Python code?\\nfor i in range(3):\\n    print(i)"]. Reply [] if there is no question in the picture.`;
+
+function buildScreenMessage({ subject, previous }) {
+  return [
+    `Subject of this class: ${subject || '(not specified)'}`,
+    ...((previous && previous.length) ? ['', 'Earlier questions in this class (the new one may follow on from these):', formatPrevious(previous, 200)] : []),
+    '',
+    'Copy out the question(s) shown in the screenshot.',
+  ].join('\n');
+}
+
+module.exports = { EXTRACT_PROMPT, SCREEN_PROMPT, parseQuestionList, buildExtractMessage, buildScreenMessage, formatPrevious };

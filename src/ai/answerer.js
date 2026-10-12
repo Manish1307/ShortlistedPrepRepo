@@ -3,7 +3,7 @@
 // Runs in the Electron main process only: the API key never reaches the web pages.
 
 const Anthropic = require('@anthropic-ai/sdk');
-const { EXTRACT_PROMPT, parseQuestionList, buildExtractMessage, formatPrevious } = require('./framing');
+const { EXTRACT_PROMPT, SCREEN_PROMPT, parseQuestionList, buildExtractMessage, buildScreenMessage, formatPrevious } = require('./framing');
 
 const DEFAULT_MODEL = 'claude-opus-5-5';
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
@@ -20,6 +20,21 @@ Answer ONLY the question under "Question just asked". It can be a scenario sprea
 
 Otherwise write the answer exactly as a person would say it out loud, so the teacher can read it straight to the class:
 - Speak in the first person, like a real teacher or colleague explaining to a friend: natural, warm, confident. Never mention that you are an AI, never use phrases like "Certainly!", "Great question", "As an AI".
+- Sound like an experienced human teacher talking live, not like a textbook or a chatbot. Use contractions (it's, you'll, don't, we're). Talk to the students directly with "you" and "we". Use the small connecting words people use when they explain out loud: "so", "now", "basically", "here's the thing", "think of it like", "the trick is", "notice that". Vary how you begin: often go straight to the point, sometimes start with "So," or "Okay, so". Never sound scripted, never use the same opening twice in a row, and never use formal written phrases like "In conclusion", "It is important to note", "Furthermore" or "Additionally".
+- When the question is about code or a worked problem, walk through it the way you would at the whiteboard: "first we...", "then this line...", "and that's why the output is...". Say why each step is done, not just what it does. Never reply with only the result.
+
+Example of the tone (question: "What does a for loop do in Python?"):
+So, a for loop just repeats something for you.
+You give it a list, and it goes through it one item at a time.
+Think of it like calling the register: same action, one name after another.
+Here's a tiny one:
+\`\`\`python
+for name in ["Asha", "Ravi"]:
+    print(name)
+\`\`\`
+First it takes "Asha" and prints it, then it moves on to "Ravi".
+That's it: the loop stops by itself when the list runs out.
+(Match this tone, not these words or this length.)
 - Use easy, everyday words and short sentences. Explain it so a beginner understands on the first hearing. If you must use a technical term, say what it means in plain words straight away.
 - Start with the direct answer in the first sentence, then explain it step by step in simple language. Use a small real-life example or comparison whenever the idea is abstract or technical.
 - Usually 80 to 160 words; go longer only when the question asks for several steps or code. Write ONE short statement per line, at most about 18 words each, so the teacher can read a line, pause, then read the next. Never write a paragraph, and never a long sentence with several clauses: split it into separate lines. A few "-" bullet points or numbered steps are fine for a sequence of steps, but never headings, bold or other markdown. Write maths simply (x^2, sqrt(x), a/b); keep code short and plain.
@@ -60,7 +75,7 @@ function cleanAnswer(text) {
   return out;
 }
 
-function buildUserMessage({ subject, context, question, previous }) {
+function buildUserMessage({ subject, context, question, previous, source }) {
   const lines = (context || []).map(l => `- ${l}`).join('\n') || '- (nothing yet)';
   return [
     `Subject of this class: ${subject || '(not specified)'}`,
@@ -69,7 +84,15 @@ function buildUserMessage({ subject, context, question, previous }) {
     lines,
     '',
     ...((previous && previous.length) ? ['Earlier questions in this class and the answers you gave (oldest first):', formatPrevious(previous, 700), ''] : []),
-    'Question just asked:',
+    source === 'screen'
+      ? 'Question just asked (copied from the teacher\'s screen, where a student shared it as a picture or text; it may contain code, data or answer options. Walk the class through it like a teacher: what it does step by step and why, then the final answer, output or fixed code. Never reply with only the result. Put any code between ``` lines):'
+      : source === 'selection'
+        ? 'Question just asked (the teacher selected this text in one of your earlier answers, listed above, and wants it as the next question. If it is a statement or a term rather than a question, explain it in more depth, with an example. It is always a real question: never reply SKIP):'
+        : source === 'typed'
+          ? 'Question just asked (the teacher typed it; it may be only a few keywords. Work out what they most likely want to know about those keywords in this class and answer that. It is always a real question: never reply SKIP):'
+          : source === 'corrected'
+            ? 'Question just asked (the teacher corrected the wording of a question that was heard or read wrongly. This corrected text is exactly what was meant: answer it. It is always a real question: never reply SKIP):'
+            : 'Question just asked:',
     question,
   ].join('\n');
 }
@@ -112,12 +135,25 @@ class Answerer {
     return parseQuestionList(message.content.filter(b => b.type === 'text').map(b => b.text).join(''));
   }
 
-  _params(question, context, previous) {
+  /** Screen capture: copy the question(s) out of a screenshot (base64). Returns a list (may be empty), or null. */
+  async readScreen({ image, mimeType = 'image/png', previous = [], signal } = {}) {
+    if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
+    const message = await this.client.messages.create({
+      model: this.model, max_tokens: 2000, system: SCREEN_PROMPT,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: image } },
+        { type: 'text', text: buildScreenMessage({ subject: this.subject, previous }) },
+      ] }],
+    }, { signal });
+    return parseQuestionList(message.content.filter(b => b.type === 'text').map(b => b.text).join(''));
+  }
+
+  _params(question, context, previous, source) {
     const params = {
       model: this.model,
       max_tokens: 4096, // thinking tokens count towards this, so leave plenty of room
       system: systemPromptFor(this.effort),
-      messages: [{ role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous }) }],
+      messages: [{ role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous, source }) }],
     };
     if (supportsEffort(this.model)) params.output_config = { effort: this.effort };
     return params;
@@ -137,9 +173,9 @@ class Answerer {
    * @returns {Promise<{text: string, skipped: boolean, refused: boolean}>}
    * Text is delivered through onDelta as it is generated. A reply of "SKIP" is never shown.
    */
-  async answer({ question, context = [], previous = [], onDelta = () => {}, signal } = {}) {
+  async answer({ question, context = [], previous = [], source, onDelta = () => {}, signal } = {}) {
     if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
-    const params = this._params(question, context, previous);
+    const params = this._params(question, context, previous, source);
 
     let text = '';
     let held = '';       // first few characters are held back until we know the reply is not "SKIP"

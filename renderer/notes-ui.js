@@ -133,23 +133,87 @@
     q.item.className = `qitem ${q.status}${q.id === selectedId ? ' selected' : ''}${q.unseen ? ' unseen' : ''}`;
   }
 
+  // The right side: the question (always editable: fix it and press Enter to ask again) and its answer.
+  // While an answer streams in, only the answer part is redrawn, so typing in the question box is never lost.
+  let paintedId = null;      // the question currently drawn on the right
+  let answerHost = null;     // where the answer goes
+  let questionBox = null;    // the editable question
+
   function paintAnswer() {
     const q = selected();
     els.answerPane.textContent = '';
+    paintedId = q ? q.id : null;
+    answerHost = null; questionBox = null;
     if (!q) { els.answerPane.appendChild(el('div', 'empty', 'Questions that are asked appear on the left. Pick one to read its answer here.')); return; }
-    els.answerPane.appendChild(el('div', 'label', 'Question heard'));
-    els.answerPane.appendChild(el('div', 'q', `“${q.question}”`));
+    els.answerPane.appendChild(el('div', 'label', q.source === 'screen' ? 'Question from the screen' : q.source === 'selection' ? 'Asked about the selected text'
+      : q.source === 'typed' ? 'Typed question' : q.source === 'corrected' ? 'Corrected question' : 'Question heard'));
+    els.answerPane.appendChild(questionEditor(q));
+    els.answerPane.appendChild(el('div', 'label answerLabel', '💬 Answer'));
+    answerHost = el('div');
+    els.answerPane.appendChild(answerHost);
+    paintAnswerBody(q);
+  }
+
+  function paintAnswerBody(q) {
+    answerHost.textContent = '';
     const text = q.status === 'thinking' && !q.text ? 'Thinking…' : q.text;
     if (q.status === 'error' || (q.status === 'thinking' && !q.text)) {
       answerEl = el('div', 'a' + (q.status === 'error' ? ' error' : ' pending'), text);
     } else {
-      // one statement per line, each as its own block, so there is a pause between them
+      // one statement per line, each as its own block, so there is a pause between them; code stays as one block
       answerEl = el('div', 'a lines');
-      window.ReadFormat.toLines(q.text).forEach(line => answerEl.appendChild(el('div', /^([-•*–]|\d{1,2}[.)])\s/.test(line) ? 'line item' : 'line', line)));
+      let code = null;
+      window.ReadFormat.toLines(q.text).forEach(line => {
+        if (window.ReadFormat.isCodeFence(line)) {
+          if (code) code = null;
+          else { code = el('pre', 'code'); answerEl.appendChild(code); }
+        } else if (code) code.textContent += (code.textContent ? '\n' : '') + line;
+        else answerEl.appendChild(el('div', /^([-•*–]|\d{1,2}[.)])\s/.test(line) ? 'line item' : 'line', line));
+      });
     }
-    els.answerPane.appendChild(answerEl);
+    answerHost.appendChild(answerEl);
   }
   let answerEl = null;
+
+  /** Redraw the selected question's answer: only the answer part when that question is already on screen. */
+  function repaintSelected() {
+    const q = selected();
+    if (q && paintedId === q.id && answerHost) paintAnswerBody(q); else paintAnswer();
+  }
+
+  // ---- the question box: always editable; Enter asks again with the new wording ------------------------
+  let selectNextNew = false;   // the re-asked question is shown as soon as it arrives
+
+  function questionEditor(q) {
+    const wrap = el('div', 'qeditWrap');
+    const box = el('textarea', 'qedit');
+    box.value = q.question;
+    box.rows = Math.min(10, Math.max(2, Math.ceil(q.question.length / 70) + q.question.split('\n').length - 1));
+    box.spellcheck = false;
+    box.setAttribute('aria-label', 'The question: edit it and press Enter to get the answer again');
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); reask(); }
+      else if (e.key === 'Escape') { e.preventDefault(); box.value = q.question; box.blur(); }   // back to the original wording
+    });
+    wrap.appendChild(box);
+    wrap.appendChild(el('span', 'qeditHint', 'Edit the question and press Enter to answer it again · Shift+Enter: new line · Esc: undo changes'));
+    questionBox = box;
+
+    function reask() {
+      const text = box.value.trim();
+      if (!text) return;
+      selectNextNew = true;
+      api.askTyped(text, true);
+      removeQuestion(q.id);   // the old question and its answer leave the list; the new one replaces it
+    }
+    return wrap;
+  }
+
+  /** True while the teacher is changing the question text (a new question must not pull them away). */
+  function isTyping() {
+    const q = selected();
+    return !!(q && questionBox && document.activeElement === questionBox && questionBox.value !== q.question);
+  }
 
   function select(id) {
     selectedId = id;
@@ -159,18 +223,23 @@
     paintAnswer();
   }
 
-  function newQuestion(id, question) {
+  function newQuestion(id, question, source) {
     els.qEmpty.style.display = 'none';
     const item = el('div', 'qitem thinking');
     item.appendChild(el('span', 'qdot'));
+    if (source === 'screen') item.appendChild(el('span', 'qsrc', '📷'));
+    if (source === 'selection') item.appendChild(el('span', 'qsrc', '❓'));
+    if (source === 'typed') item.appendChild(el('span', 'qsrc', '⌨'));
+    if (source === 'corrected') item.appendChild(el('span', 'qsrc', '✎'));
     item.appendChild(el('span', 'qtext', question));
     item.addEventListener('click', () => select(id));
     els.qlist.insertBefore(item, els.qlist.firstChild);
-    const q = { id, question, text: '', status: 'thinking', item, unseen: false };
+    const q = { id, question, source, text: '', status: 'thinking', item, unseen: false };
     questions.set(id, q);
 
     const current = selected();
-    if (!current || current.status !== 'thinking') select(id);   // do not pull the teacher away from an answer still being written
+    if (selectNextNew && source === 'corrected') { selectNextNew = false; select(id); }   // the question just corrected
+    else if (!current || (current.status !== 'thinking' && !isTyping())) select(id);   // do not pull the teacher away from an answer still being written, or from typing
     else { q.unseen = true; paintItem(q); }
 
     while (questions.size > MAX_QUESTIONS) {                      // forget the oldest finished one
@@ -197,17 +266,22 @@
     switch (m.type) {
       case 'transcript': addHeard(m.text); break;
       case 'status': refreshStatus(m); break;
-      case 'answer-start': newQuestion(m.id, m.question); break;
+      case 'answer-start': newQuestion(m.id, m.question, m.source); break;
+      case 'screen':                                            // screen capture: reading the picture
+        if (m.state === 'reading') banner('info', '📷 Reading the question from the screen…');
+        else if (m.state === 'found') applyEngine();
+        else banner(m.state === 'error' ? 'error' : 'warn', m.message);
+        break;
       case 'answer-delta':
         if (q) {
           q.text += m.delta;
-          if (q.id === selectedId) paintAnswer(); else if (!q.unseen) { q.unseen = true; paintItem(q); }
+          if (q.id === selectedId) repaintSelected(); else if (!q.unseen) { q.unseen = true; paintItem(q); }
         }
         break;
       case 'answer-done':
         if (q) {
           q.text = m.text; q.status = 'done';
-          if (q.id === selectedId) paintAnswer(); else q.unseen = true;
+          if (q.id === selectedId) repaintSelected(); else q.unseen = true;
           paintItem(q);
         }
         break;
@@ -216,13 +290,56 @@
       case 'answer-error':
         if (q) {
           q.status = 'error'; q.text = m.message;
-          if (q.id === selectedId) paintAnswer(); else q.unseen = true;
+          if (q.id === selectedId) repaintSelected(); else q.unseen = true;
           paintItem(q);
         } else banner('error', m.message);
         break;
       case 'error': banner('error', m.message); break;
       case 'warning': banner('warn', m.message); break;
     }
+  }
+
+  // ---- "Ask selected": text selected in the answer area becomes the next question ----------------------
+  // The button is enabled only while some text inside the answer area is selected.
+  function selectedAnswerText() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return '';
+    const range = sel.getRangeAt(0);
+    if (!els.answerPane.contains(range.commonAncestorContainer)) return '';
+    return sel.toString().trim();
+  }
+
+  function setupAskSelected() {
+    const btn = $('btnAskSel');
+    let picked = null;   // { text, from } kept from the last selection: the click itself must not lose it
+    document.addEventListener('selectionchange', () => {
+      const text = selectedAnswerText();
+      const q = selected();
+      picked = text ? { text, from: q ? { question: q.question, answer: q.text } : null } : null;
+      btn.disabled = !picked;
+    });
+    btn.addEventListener('mousedown', e => e.preventDefault());   // keep the selection while clicking
+    btn.addEventListener('click', () => {
+      if (!picked) return;
+      api.askSelection(picked.text, picked.from);
+      window.getSelection().removeAllRanges();
+      picked = null; btn.disabled = true;
+    });
+  }
+
+  // ---- the "Ask" box: type a question or a few keywords, press Enter or Ask ----------------------------
+  function setupAskBox() {
+    const input = $('askInput'), btn = $('btnAsk');
+    const refresh = () => { btn.disabled = !input.value.trim(); };
+    const ask = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      api.askTyped(text);
+      input.value = ''; refresh();
+    };
+    input.addEventListener('input', refresh);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+    btn.addEventListener('click', ask);
   }
 
   // ---- settings ------------------------------------------------------------------------------------
@@ -245,6 +362,28 @@
         : gemini ? 'No key yet. Get a free one at aistudio.google.com/apikey. It is stored encrypted on this computer.'
           : groq ? 'No key yet. Get a free one at console.groq.com/keys. It is stored encrypted on this computer.'
             : 'No key yet. It is stored encrypted on this computer and is never shown again.';
+    showScreenKey();
+  }
+
+  const PROVIDER_NAMES = { gemini: 'Google Gemini', groq: 'Groq', claude: 'Anthropic' };
+  const KEY_PLACEHOLDERS = { gemini: 'AIza…', groq: 'gsk_…', claude: 'sk-ant-…' };
+  const KEY_SITES = { gemini: 'aistudio.google.com/apikey', groq: 'console.groq.com/keys', claude: 'console.anthropic.com' };
+
+  /** A second key box, only when screen capture uses a different AI from the one that answers. */
+  function screenProviderChosen() {
+    const p = $('sScreenProvider').value;
+    return p === 'same' || p === $('sProvider').value ? null : p;
+  }
+  function showScreenKey() {
+    const p = screenProviderChosen();
+    $('rowScreenKey').style.display = p ? '' : 'none';
+    if (!p) return;
+    const key = (settings && settings.keys && settings.keys[p]) || {};
+    $('screenKeyLabel').textContent = `${PROVIDER_NAMES[p]} API key (for screen capture)`;
+    $('sScreenKey').placeholder = KEY_PLACEHOLDERS[p];
+    $('screenKeyHint').textContent = key.source === 'environment' ? 'Using the key from the environment variable.'
+      : key.has ? 'A key is saved (encrypted). Paste a new one to replace it.'
+        : `No key yet. Get one at ${KEY_SITES[p]}. It is stored encrypted on this computer.`;
   }
 
   function fillSettings() {
@@ -257,7 +396,9 @@
     $('sModel').value = settings.model;
     $('sEffort').value = settings.effort;
     $('sAuto').checked = !!settings.autoAnswer;
+    $('sScreenProvider').value = settings.screenProvider || 'same';
     $('sKey').value = '';
+    $('sScreenKey').value = '';
     showProvider();
   }
 
@@ -271,6 +412,7 @@
       model: $('sModel').value,
       effort: $('sEffort').value,
       autoAnswer: $('sAuto').checked,
+      screenProvider: $('sScreenProvider').value,
     };
     const sourceChanged = settings && patch.audioSource !== settings.audioSource;
     settings = await api.saveSettings(patch);
@@ -280,6 +422,13 @@
       const res = await api.setApiKey($('sProvider').value, key);
       if (res && res.ok) settings = res; else message = 'Could not store the key securely on this computer.';
       $('sKey').value = '';
+    }
+    const screenKey = $('sScreenKey').value.trim();
+    const screenProvider = screenProviderChosen();
+    if (screenKey && screenProvider) {
+      const res = await api.setApiKey(screenProvider, screenKey);
+      if (res && res.ok) settings = res; else message = 'Could not store the screen capture key securely on this computer.';
+      $('sScreenKey').value = '';
     }
     fillSettings();
     $('saved').textContent = message;
@@ -461,6 +610,7 @@
     $('btnCloseSettings').addEventListener('click', () => showSettings(false));
     $('btnSaveSettings').addEventListener('click', saveSettings);
     $('sProvider').addEventListener('change', showProvider);
+    $('sScreenProvider').addEventListener('change', showScreenKey);
     setupOpacityMenu();
     setupSoftPointer();
     setupReset();
@@ -475,6 +625,9 @@
     });
     els.btnListen.addEventListener('click', toggleListening);
     els.btnAskLast.addEventListener('click', () => api.askLast());
+    $('btnCapture').addEventListener('click', () => api.captureScreen('area'));
+    setupAskSelected();
+    setupAskBox();
 
     api.onPipeline(onPipeline);
     api.onEngine(applyEngine);

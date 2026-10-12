@@ -134,6 +134,22 @@
     .answerPane .a .line { margin: 0 0 14px; }        /* a clear gap between statements: read one, pause, read the next */
     .answerPane .a .line.item { margin-bottom: 8px; padding-left: 4px; }
     .answerPane .a.error { color: #fca5a5; }
+    .answerPane .a pre.code { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1);
+                              font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre; overflow-x: auto; color: #e5e7eb; }
+    .qitem .qsrc { flex: 0 0 auto; font-size: 11px; }
+    .qeditWrap { display: flex; flex-direction: column; gap: 4px; }
+    textarea.qedit { flex: none; width: 100%; box-sizing: border-box; resize: vertical; background: rgba(255,255,255,.06); color: #e5e7eb;
+                     border: 1px solid rgba(255,255,255,.14); border-radius: 7px; padding: 8px 10px; font: 14px/1.45 -apple-system, Segoe UI, Arial, sans-serif; outline: none; }
+    textarea.qedit:focus { border-color: #60a5fa; background: rgba(255,255,255,.1); color: #fff; }
+    .qeditHint { font-size: 11px; color: #9ca3af; }
+    .askRow { display: flex; gap: 8px; padding: 2px 12px 6px; }
+    .askRow input { flex: 1; min-width: 0; box-sizing: border-box; background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,255,255,.18);
+                    border-radius: 7px; padding: 7px 10px; font-size: 13px; outline: none; }
+    .askRow input:focus { border-color: #60a5fa; }
+    .askRow input::placeholder { color: #9ca3af; }
+    .answerPane .answerLabel { margin-top: 16px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.1); color: #86efac; }
+    .answerPane .answerLabel + .a { margin-top: 6px; }
+    .answerPane pre.q { white-space: pre-wrap; word-break: break-word; font-family: inherit; margin: 0; max-height: 220px; overflow-y: auto; }
     .heardBar { margin: 0 12px; padding: 6px 0 2px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 10px; align-items: baseline; }
     .heardLabel { flex: 0 0 auto; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; font-weight: 600; }
     .heardBar .heard { flex: 1; min-width: 0; max-height: 64px; overflow-y: auto; }
@@ -203,6 +219,8 @@
       <div class="controls">
         <button id="btnListen" class="btn primary" disabled>▶ Start listening</button>
         <button id="btnAskLast" class="btn primary" aria-label="The question is finished: answer everything heard so far (Ctrl/Cmd+Shift+A)" disabled>✔ Question finished</button>
+        <button id="btnCapture" class="btn primary" aria-label="Draw a box around a question on the screen and get the solution (Ctrl/Cmd+Shift+Q; whole screen: Ctrl/Cmd+Alt+Shift+Q)">📷 Capture</button>
+        <button id="btnAskSel" class="btn primary" aria-label="Select some text in the answer, then press this to get it answered as a new question" disabled>❓ Ask selected</button>
         <div class="meter" aria-label="Audio level"><i id="meter"></i></div>
         <span class="opacity-wrap">
           <button id="btnExport" class="btn" aria-haspopup="true" aria-expanded="false" aria-label="Save all questions, answers and response times to a file">⬇ Export ▾</button>
@@ -215,6 +233,11 @@
         <button id="btnReset" class="btn" aria-label="Restart the assistant if it is stuck (Ctrl+Alt+Shift+R)">↻ Restart</button>
         <button id="btnClear" class="btn" aria-label="Clear the list and start a fresh session">Clear</button>
       </div>
+      <div class="askRow">
+        <input id="askInput" type="text" maxlength="2000" autocomplete="off" spellcheck="false"
+               placeholder="Type a question or keywords, e.g. React useEffect cleanup — then press Enter" aria-label="Type a question or keywords" />
+        <button id="btnAsk" class="btn primary" disabled>Ask</button>
+      </div>
       <div id="banner" class="banner"></div>
       <div class="split">
         <div id="qlist" class="qlist">
@@ -225,7 +248,7 @@
         </div>
       </div>
       <div class="heardBar"><span class="heardLabel">Just heard</span><div id="heard" class="heard"></div></div>
-      <div class="badge">Hide: Ctrl/Cmd+Shift+N · Listen: Ctrl/Cmd+Shift+L · Question finished: Ctrl/Cmd+Shift+A</div>
+      <div class="badge">Hide: Ctrl/Cmd+Shift+N · Listen: Ctrl/Cmd+Shift+L · Question finished: Ctrl/Cmd+Shift+A · Capture: Ctrl/Cmd+Shift+Q</div>
     </div>
 
     <div id="view-notes" class="view">
@@ -296,6 +319,19 @@ This text is NOT visible to students during screen share."></textarea>
       <label for="sKey" id="keyLabel">Google Gemini API key</label>
       <input id="sKey" type="password" autocomplete="off" placeholder="AIza…" />
       <div class="hint" id="keyHint">The key is stored encrypted on this computer and is never shown again.</div>
+      <label for="sScreenProvider">Screen capture AI (reads questions captured with 📷)</label>
+      <select id="sScreenProvider">
+        <option value="same">Same as the AI service above</option>
+        <option value="claude">Anthropic Claude (reads code and pictures best)</option>
+        <option value="gemini">Google Gemini</option>
+        <option value="groq">Groq (needs a Llama 4 picture model on your key)</option>
+      </select>
+      <div class="hint">Only reads the question from the picture; the answer still comes from the AI service above.</div>
+      <div id="rowScreenKey">
+        <label for="sScreenKey" id="screenKeyLabel">Anthropic API key (for screen capture)</label>
+        <input id="sScreenKey" type="password" autocomplete="off" placeholder="sk-ant-…" />
+        <div class="hint" id="screenKeyHint"></div>
+      </div>
 
       <div class="trouble">
         <h4>If something is stuck</h4>

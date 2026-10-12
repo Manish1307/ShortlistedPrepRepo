@@ -13,6 +13,7 @@
   // end of a sentence (. ! ? …, maybe followed by a closing quote or bracket), a space, then a new sentence starting
   const BOUNDARY = /(?<=[.!?…]["”')\]]*)\s+(?=["“‘(]?[A-Z0-9])/;
   const LONG_WORDS = 26;
+  const CODE_FENCE = /^\s*```/;
 
   function splitSentences(line) {
     const pieces = line.split(BOUNDARY);
@@ -37,8 +38,12 @@
   /** The lines to show, one statement each. List items (- ..., 1. ...) stay as they are. Safe to apply twice. */
   function toLines(text) {
     const lines = [];
+    let inCode = false;   // code between ``` fences is kept exactly: indentation and blank lines matter there
     for (const raw of String(text || '').split(/\r?\n/)) {
-      const line = raw.trim();
+      if (CODE_FENCE.test(raw)) { inCode = !inCode; lines.push(raw.trim()); continue; }
+      if (inCode) { lines.push(raw.replace(/\s+$/, '')); continue; }
+      // markdown the AI sometimes adds anyway (**bold**, __bold__, # headings) would show as raw symbols
+      const line = raw.trim().replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_m, a, b) => a || b).replace(/^#{1,6}\s+/, '');
       if (!line) continue;
       if (LIST_ITEM.test(line)) lines.push(line);
       else lines.push(...splitSentences(line));
@@ -49,5 +54,5 @@
   /** The same, as text: one line per statement. */
   function toReadingText(text) { return toLines(text).join('\n'); }
 
-  return { toLines, toReadingText, splitSentences };
+  return { toLines, toReadingText, splitSentences, isCodeFence: line => CODE_FENCE.test(line) };
 });

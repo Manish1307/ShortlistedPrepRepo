@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src data:; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Capture a question</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; user-select: none; }
+    /* the real pointer is invisible (a screen share would show it); a crosshair is drawn inside this hidden window instead */
+    * { cursor: none !important; }
+    #shot { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #shade { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); }
+    #box { position: fixed; display: none; border: 2px solid #60a5fa; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45); }
+    body.drawing #shade { display: none; }
+    body.drawing #box { display: block; }
+    .line { position: fixed; background: rgba(96, 165, 250, .9); pointer-events: none; }
+    #lx { left: 0; right: 0; height: 1px; }
+    #ly { top: 0; bottom: 0; width: 1px; }
+    #hint {
+      position: fixed; top: 18px; left: 50%; transform: translateX(-50%); padding: 9px 16px; border-radius: 9px;
+      background: rgba(30, 30, 34, .94); color: #f2f2f2; font: 14px -apple-system, Segoe UI, Arial, sans-serif;
+      border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 8px 24px rgba(0, 0, 0, .4); white-space: nowrap;
+    }
+    #hint b { color: #93c5fd; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <img id="shot" alt="" />
+  <div id="shade"></div>
+  <div id="box"></div>
+  <div id="lx" class="line"></div>
+  <div id="ly" class="line"></div>
+  <div id="hint">Drag a box around the question · <b>Enter</b> whole screen · <b>Esc</b> cancel</div>
+  <script src="renderer/select-area.js"></script>
+</body>
+</html>

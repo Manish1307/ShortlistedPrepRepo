@@ -18,7 +18,8 @@ const DEFAULTS = {
   whisperModel: 'ggml-small.en-q5_1.bin',
   language: 'en',
   autoAnswer: true,
-  opacity: 100,                        // window see-through level in percent: 10, 20 ... 100
+  screenProvider: 'same',              // the AI that reads captured screen questions: 'same' = the AI service above
+  opacity: 100,                       // window see-through level in percent: 10, 20 ... 100
 };
 
 const ALLOWED_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5'];
@@ -49,6 +50,7 @@ function sanitize(s) {
   const out = { ...DEFAULTS, ...s };
   if (!['system', 'mic', 'both'].includes(out.audioSource)) out.audioSource = DEFAULTS.audioSource;
   if (!PROVIDERS[out.provider]) out.provider = DEFAULTS.provider;
+  if (out.screenProvider !== 'same' && !PROVIDERS[out.screenProvider]) out.screenProvider = DEFAULTS.screenProvider;
   if (!ALLOWED_GEMINI_MODELS.includes(out.geminiModel)) out.geminiModel = DEFAULTS.geminiModel;
   if (!ALLOWED_GROQ_MODELS.includes(out.groqModel)) out.groqModel = DEFAULTS.groqModel;
   if (!ALLOWED_MODELS.includes(out.model)) out.model = DEFAULTS.model;

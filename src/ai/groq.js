@@ -4,9 +4,12 @@
 // Main process only; the key never reaches a web page.
 
 const { systemPromptFor, buildUserMessage, cleanAnswer } = require('./answerer');
-const { EXTRACT_PROMPT, parseQuestionList, buildExtractMessage } = require('./framing');
+const { EXTRACT_PROMPT, SCREEN_PROMPT, parseQuestionList, buildExtractMessage, buildScreenMessage } = require('./framing');
 
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
+// The text models cannot see pictures: screen capture uses one of these (names change often, so the list is also
+// looked up from Groq when none of them works).
+const VISION_MODELS = ['meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct'];
 const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const MODELS_ENDPOINT = 'https://api.groq.com/openai/v1/models';
 const FALLBACK_MODELS = ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'];
@@ -144,13 +147,50 @@ class GroqAnswerer {
     return parseQuestionList(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
   }
 
-  /** @returns {Promise<{text: string, skipped: boolean, refused: boolean}>} same contract as the other answerers */
-  async answer({ question, context = [], previous = [], onDelta = () => {}, signal } = {}) {
+  /** Screen capture: copy the question(s) out of a screenshot (base64). Returns a list (may be empty), or null. */
+  async readScreen({ image, mimeType = 'image/png', previous = [], signal } = {}) {
     if (!this.apiKey) throw Object.assign(new Error('No Groq API key set'), { code: 'no-key' });
+    const body = model => ({
+      model, stream: false, temperature: 0, max_tokens: 1500,
+      messages: [{ role: 'system', content: SCREEN_PROMPT }, { role: 'user', content: [
+        { type: 'text', text: buildScreenMessage({ subject: this.subject, previous }) },
+        { type: 'image_url', image_url: { url: `data:${mimeType};base64,${image}` } },
+      ] }],
+    });
+    const tryModels = async models => {
+      let lastError;
+      for (const model of models) {
+        try {
+          const data = await (await this._post(body(model), signal)).json();
+          this.visionModel = model;                              // remember what works for the next capture
+          return { list: parseQuestionList(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) };
+        } catch (err) {
+          lastError = err;
+          if (!GroqAnswerer.modelMissing(err) && ![429, 500, 502, 503, 504].includes(err.status)) throw err;
+        }
+      }
+      return { error: lastError };
+    };
+    let out = await tryModels([this.visionModel, ...VISION_MODELS].filter((m, i, a) => m && a.indexOf(m) === i));
+    if ('list' in out) return out.list;
+    if (GroqAnswerer.modelMissing(out.error)) {                  // ask Groq which picture models this key has now
+      const ids = await this._availableModels(signal).catch(() => []);
+      const vision = ids.filter(id => /llama-4|scout|maverick|vision|-vl/i.test(id) && !VISION_MODELS.includes(id));
+      if (vision.length) { out = await tryModels(vision.slice(0, 3)); if ('list' in out) return out.list; }
+      throw Object.assign(new Error('Groq has no model that can read pictures for this key. In Settings, set "Screen capture AI" to Claude or Gemini.'), { status: 400 });
+    }
+    throw out.error;
+  }
+
+  /** @returns {Promise<{text: string, skipped: boolean, refused: boolean}>} same contract as the other answerers */
+  async answer({ question, context = [], previous = [], source, onDelta = () => {}, signal } = {}) {
+    if (!this.apiKey) throw Object.assign(new Error('No Groq API key set'), { code: 'no-key' });
+    // a question from the screen often needs code: give it room
+    const maxTokens = source === 'screen' ? 1500 : this.effort === 'low' ? 500 : 900;
     const res = await this._open(model => ({
-      model, stream: true, temperature: 0.4, max_tokens: this.effort === 'low' ? 500 : 900, ...this._reasoning(model),
+      model, stream: true, temperature: 0.4, max_tokens: maxTokens, ...this._reasoning(model),
       messages: [{ role: 'system', content: systemPromptFor(this.effort) },
-        { role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous }) }],
+        { role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous, source }) }],
     }), signal);
 
     let text = '', held = '', decided = false, skipped = false;

@@ -13,7 +13,8 @@
     "site:serve": "node website/serve.js",
     "admin": "node admin/server.js",
     "admin:create": "node admin/create-admin.js",
-    "web": "node scripts/dev-web.js"
+    "web": "node scripts/dev-web.js",
+    "liveclass": "electron liveclass-main.js"
   },
   "devDependencies": {
     "electron": "^31.0.0"

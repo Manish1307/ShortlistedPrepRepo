@@ -212,7 +212,24 @@ The same file runs in Node and in the browser (a UMD module).
 - Change them in the Private Assistant (`npm start`) under Settings.
 - Auto Answer changed inside Live Class lasts for that session only.
 
-**Keys.** API keys are encrypted with Electron's `safeStorage`, which uses Windows DPAPI, and are never written in plain text.
+**Licence.**
+- Live Class needs an active ClassCue licence: the same one as the Private Assistant (`licence.json` in the same folder).
+- At start-up and every 30 minutes it calls the licence server's `POST /api/app/config`. The licence part of the answer is signed (Ed25519) and checked against `src/licence/public-key.pem`, as in the assistant.
+- Without an active licence, a panel in the card asks for the licence key, and listening, Answer, Chat and Screenshot are locked. The ⋮ menu shows the plan and the days left.
+- While developing, `TNA_LICENCE=off` skips the check.
+
+**AI keys from the licence server.**
+- The same `/api/app/config` answer carries the AI keys for this licence: Groq for answers and Gemini for screenshots.
+- Managed in the admin dashboard, **AI keys** page:
+  - Keys are stored encrypted (AES-256-GCM) with `api-keys.secret` in the server's data folder; the dashboard only shows the last 4 characters.
+  - Each service has one default key.
+  - In a licence's window, **AI keys** gives that licence its own key per service, or "Default".
+  - A key that is turned off falls back to the default.
+- Only an active licence on an activated computer receives keys.
+- Live Class keeps them in memory only. A key from the server is used before the key saved on the computer; without one, the saved key is used.
+- The keys still reach the teacher's computer. Keeping them on the server, with AI calls sent through it, is the safer next step.
+
+**Keys saved on the computer.** API keys entered in the assistant's Settings are encrypted with Electron's `safeStorage`, which uses Windows DPAPI, and are never written in plain text.
 
 ## Making it real time
 
@@ -246,7 +263,9 @@ Windows voices are cleaner than real classroom speech, so real accuracy will be 
 
 | File | Role |
 |---|---|
-| [liveclass-main.js](../liveclass-main.js) | Main process: window, media permissions, speech engine (Live Class tuning), AI router, screen capture, IPC |
+| [liveclass-main.js](../liveclass-main.js) | Main process: window, media permissions, licence and AI keys from the server, speech engine (Live Class tuning), AI router, screen capture, IPC |
+| [src/licence/client.js](../src/licence/client.js) | Licence on this computer: activation, signed answers, offline grace period, `appConfig()` for the AI keys |
+| [admin/lib/aikeys.js](../admin/lib/aikeys.js) | Server: AI keys table, encryption, default and per-licence keys |
 | [liveclass-preload.js](../liveclass-preload.js) | `window.liveClassAPI`, the only bridge between page and main process |
 | [liveclass-window.html](../liveclass-window.html) | Page structure and styles (dark and light themes) |
 | [renderer/liveclass-ui.js](../renderer/liveclass-ui.js) | UI behaviour, shortcuts, settings menu, event handling, demo mode |
@@ -262,7 +281,8 @@ A good order for reading the code is `capture.js` → `vad.js` → `pipeline.js`
 ## Known limits and next steps
 
 - **Screenshot** captures the whole screen. Drawing a box around one question is not supported yet.
-- **No licence check**, the same as the mock interview window. It is also not part of the installer (`build.files` in `package.json`).
+- **Not part of the installer** yet (`build.files` in `package.json`).
+- **The live licence server must run the new admin code** for the AI keys. An older server answers `/api/app/config` with 404: the licence keeps working through its grace period, and the keys saved on the computer are used.
 - **Language** follows the speech model, which is English-only. The selector is locked in the app.
 - **Ideas:**
   - a GPU build of whisper.cpp, for `small.en` accuracy at `base.en` speed;

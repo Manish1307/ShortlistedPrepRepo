@@ -100,6 +100,12 @@
     .body p.line { margin: 8px 0; }
     .body pre.code { margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line);
                      font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre; overflow-x: auto; }
+    .gate { margin: 10px 12px 0; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--raise); font-size: 13px; display: grid; gap: 8px; }
+    .gate p { margin: 0; line-height: 1.45; }
+    .gate .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .gate input { flex: 1; min-width: 180px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; outline: none; font: 13px ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+    .gate input:focus { border-color: var(--accent); }
+    .gate .err { font-size: 12px; }
     .notice { margin: 8px 12px 0; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
     .notice.warn { background: rgba(251,191,36,.18); color: #fde68a; }
     .notice.error { background: rgba(248,113,113,.2); color: #fecaca; }
@@ -201,6 +207,9 @@
       <div class="srow">
         <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span id="account"></span></div>
       </div>
+      <div class="srow" id="licenceRowWrap">
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg><span id="licenceRow">Licence: checking…</span></div>
+      </div>
       <div class="srow link" id="btnDashboard" title="Open the dashboard">
         <div class="lbl"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span>Dashboard</span></div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M9 7h8v8"/></svg>
@@ -241,6 +250,15 @@
         <span class="pos" id="pos"></span>
       </div>
       <div class="notice" id="notice" hidden></div>
+      <div class="gate" id="gate" hidden>
+        <p id="gateMsg"></p>
+        <div class="row">
+          <input id="gateKey" placeholder="CC-XXXX-XXXX-XXXX" maxlength="17" autocomplete="off" spellcheck="false" aria-label="Licence key" />
+          <button class="sbtn primary" id="gateActivate">Activate</button>
+          <button class="sbtn" id="gateCheck">Check again</button>
+        </div>
+        <span class="err" id="gateErr"></span>
+      </div>
       <div class="body" id="body"></div>
       <div class="chatrow" id="chatRow" hidden>
         <input id="chatInput" placeholder="Type a question and press Enter…" autocomplete="off" />

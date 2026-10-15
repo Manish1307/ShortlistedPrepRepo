@@ -61,10 +61,10 @@
   const moneyList = list => (list && list.length ? list.map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'USD'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
-    'releases.write': ['owner', 'admin'], 'team': ['owner'],
+    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
 
-  const STATUS_PILL = { active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '' };
+  const STATUS_PILL = { default: 'good', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '' };
   const pill = text => h('span', { class: 'pill ' + (STATUS_PILL[text] || '') }, text);
 
   // ---------- dialogs and forms ----------
@@ -141,7 +141,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview'], ['customers', 'Customers'], ['licences', 'Licences'], ['orders', 'Orders'],
+    ['overview', 'Overview'], ['customers', 'Customers'], ['licences', 'Licences'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
     ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
   ];
 
@@ -277,6 +277,7 @@
   async function licenceDetail(id, done) {
     const d = await get(`/admin/api/licences/${id}`);
     const l = d.licence;
+    const aiSection = await licenceAiKeys(l, d.aiKeys);
     const act = (action, extra, message) => guard(async () => { await patch(`/admin/api/licences/${id}`, { action, ...extra }); toast(message || 'Done'); done(); });
     const body = h('div', {},
       h('dl', { class: 'kv' }, h('dt', {}, 'Key'), h('dd', { class: 'mono' }, l.key), h('dt', {}, 'Customer'), h('dd', {}, l.customer_email),
@@ -286,7 +287,8 @@
       h('h3', {}, `Activated computers (${d.devices.length})`),
       d.devices.length ? d.devices.map(dev => h('div', { class: 'list-item' },
         h('span', {}, `${dev.name || 'Computer'} · v${dev.app_version || '?'} · last seen ${dateTime(dev.last_seen)}`),
-        h('button', { class: 'btn sm', onclick: async () => { await act('removeDevice', { deviceId: dev.device_id }, 'Computer removed'); close(); } }, 'Remove'))) : h('p', { class: 'muted' }, 'Not activated on any computer yet.'));
+        h('button', { class: 'btn sm', onclick: async () => { await act('removeDevice', { deviceId: dev.device_id }, 'Computer removed'); close(); } }, 'Remove'))) : h('p', { class: 'muted' }, 'Not activated on any computer yet.'),
+      aiSection);
     const buttons = [];
     if (l.expires_at) buttons.push({ label: 'Extend…', run: () => extendPrompt(act), closes: false });
     buttons.push({ label: 'Reset computers', run: async () => { await act('resetDevices', {}, 'All computers removed'); } });
@@ -298,6 +300,82 @@
     }
     buttons.push({ label: 'Close', run: () => {} });
     const { close } = dialog('Licence', body, buttons);
+  }
+
+  /** Which AI key this licence uses for each service: its own, or the default. Changes save straight away. */
+  async function licenceAiKeys(l, aiKeys) {
+    const { keys, providers } = await get('/admin/api/ai-keys');
+    const describe = r => (r.source === 'none' ? 'no key: the app uses the computer\'s own key, if any'
+      : `${r.key.label} (${r.key.masked})${r.source === 'default' ? ', the default' : ''}${r.assignedDisabled ? '. Its own key is turned off, so the default is used' : ''}`);
+    const rows = providers.map(p => {
+      const r = aiKeys[p.id];
+      const now = h('span', { class: 'muted small' }, 'Uses ' + describe(r));
+      const def = keys.find(k => k.provider === p.id && k.is_default);
+      const select = h('select', { 'aria-label': p.label + ' key', disabled: !can('aikeys.write') },
+        h('option', { value: '' }, `Default${def ? ' · ' + def.label + ' ' + def.masked : ' (none set)'}`),
+        keys.filter(k => k.provider === p.id).map(k => h('option', { value: k.id }, `${k.label} ${k.masked}${k.disabled ? ' (off)' : ''}`)));
+      select.value = r.assignedId ? String(r.assignedId) : '';
+      select.addEventListener('change', () => guard(async () => {
+        const res = await post(`/admin/api/licences/${l.id}/ai-keys`, { provider: p.id, apiKeyId: select.value ? Number(select.value) : null });
+        now.textContent = 'Uses ' + describe(res.aiKeys[p.id]);
+        toast(`${p.label} key saved`);
+      }));
+      return h('div', { class: 'list-item' }, h('span', {}, h('b', {}, p.label), ` · ${p.use}`, h('br'), now), select);
+    });
+    return h('div', {}, h('h3', { style: 'margin-top:14px' }, 'AI keys'), rows,
+      h('p', { class: 'muted small' }, 'The app receives these keys at start-up and every 30 minutes while it runs.'));
+  }
+
+  // ---------- AI keys ----------
+  async function aikeys(el) {
+    const { keys, providers } = await get('/admin/api/ai-keys');
+    const write = can('aikeys.write');
+    const act = (k, action, extra, message) => guard(async () => { await patch(`/admin/api/ai-keys/${k.id}`, { action, ...extra }); toast(message); aikeys(el); });
+    const tools = k => (write ? h('span', { class: 'tools' },
+      !k.is_default && !k.disabled ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(k, 'default', {}, `${k.label} is now the default ${k.provider_label} key`); } }, 'Make default') : null,
+      h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); replaceKey(k, () => aikeys(el)); } }, 'Replace'),
+      h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(k, k.disabled ? 'enable' : 'disable', {}, k.disabled ? 'Key turned on' : 'Key turned off'); } }, k.disabled ? 'Turn on' : 'Turn off'),
+      h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Delete "${k.label}"? Licences using it go back to the default ${k.provider_label} key.`)) guard(async () => { await del(`/admin/api/ai-keys/${k.id}`); toast('Key deleted'); aikeys(el); }); } }, 'Delete')) : '');
+    const missing = providers.filter(p => !keys.some(k => k.provider === p.id && k.is_default && !k.disabled));
+    el.replaceChildren(
+      head('AI keys', write ? h('button', { class: 'btn primary', onclick: () => keyForm(providers, () => aikeys(el)) }, '+ Add key') : null),
+      h('p', { class: 'muted' }, 'Keys the app uses: Groq writes the answers, Gemini reads screenshots. Each licence uses the default key of each service unless you give it its own key (open the licence, then "AI keys").'),
+      missing.length ? h('div', { class: 'card', style: 'margin-bottom:14px' }, h('b', {}, 'No default key yet for: '), missing.map(p => p.label).join(', '),
+        h('span', { class: 'muted' }, '. Licences without their own key get no key for that service.')) : '',
+      table([
+        { label: 'Service', render: r => `${r.provider_label} · ${providers.find(p => p.id === r.provider).use}` },
+        { label: 'Name', render: r => r.label },
+        { label: 'Key', render: r => h('span', { class: 'mono' }, r.masked) },
+        { label: 'Default', render: r => (r.is_default ? pill('default') : '—') },
+        { label: 'Status', render: r => (r.disabled ? pill('off') : pill('on')) },
+        { label: 'Licences', render: r => r.licence_count },
+        { label: 'Last used', render: r => dateTime(r.last_used_at) },
+        { label: '', render: tools },
+      ], keys, null, 'No AI keys yet. Add a Groq key for answers and a Gemini key for screenshots.'),
+      h('p', { class: 'muted small' }, 'Keys are stored encrypted and only the last 4 characters are shown here.'));
+  }
+
+  function keyForm(providers, done) {
+    const f = h('div', {},
+      h('div', { class: 'row2' },
+        field('Service', { name: 'provider', type: 'select', options: providers.map(p => ({ value: p.id, label: `${p.label} · ${p.use}` })) }),
+        field('Name', { name: 'label', required: true, maxlength: 80, placeholder: 'e.g. Groq main account' })),
+      field('Key', { name: 'key', type: 'password', required: true, maxlength: 300 }, 'Shown only as the last 4 characters after saving.'),
+      h('label', { class: 'field' }, h('span', {}, h('input', { type: 'checkbox', name: 'makeDefault' }), ' Make this the default key for the service')));
+    dialog('Add AI key', f, [{ label: 'Save key', kind: 'primary', run: async () => {
+      const ok = await guard(async () => { await post('/admin/api/ai-keys', values(f)); return true; });
+      if (!ok) return true;
+      toast('Key saved'); done();
+    } }]);
+  }
+
+  function replaceKey(k, done) {
+    const f = field(`New ${k.provider_label} key`, { name: 'key', type: 'password', maxlength: 300 }, 'Licences using this key get the new one on their next check.');
+    dialog(`Replace "${k.label}"`, f, [{ label: 'Replace', kind: 'primary', run: async () => {
+      const ok = await guard(async () => { await patch(`/admin/api/ai-keys/${k.id}`, { action: 'replace', key: values(f).key }); return true; });
+      if (!ok) return true;
+      toast('Key replaced'); done();
+    } }]);
   }
 
   function extendPrompt(act) {
@@ -437,7 +515,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, customers, licences, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, customers, licences, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

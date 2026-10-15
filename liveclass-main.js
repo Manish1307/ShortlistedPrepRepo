@@ -1,10 +1,15 @@
 'use strict';
 // Live Class overlay: a floating toolbar, live transcript strip and question/answer card for use while teaching.
 // It hears questions with the same offline speech engine and answers them with the same AI service, model, subject
-// and prompts as the teacher assistant (saved Settings and keys are shared; change them in the assistant's Settings).
+// and prompts as the teacher assistant (saved Settings are shared; change them in the assistant's Settings).
+// It needs an active ClassCue licence (the same one as the assistant), checked with the licence server, which also
+// sends the AI keys to use: Groq for answers and Gemini for screenshots, chosen per licence in the admin dashboard
+// (AI keys). Keys from the server are kept in memory only; without one, the key saved on this computer is used.
+// While developing, TNA_LICENCE=off skips the licence check (local keys only).
 // It is a normal window: it is NOT hidden from screen sharing or recording.   npm run liveclass
 
 const { app, BrowserWindow, ipcMain, session, desktopCapturer, screen, shell } = require('electron');
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
@@ -15,6 +20,8 @@ const { GroqAnswerer } = require('./src/ai/groq');
 const { AnswerRouter } = require('./src/ai/router');
 const { Pipeline } = require('./src/pipeline');
 const { WhisperServer } = require('./src/stt/whisperServer');
+const { LicenceClient, computerId } = require('./src/licence/client');
+const licenceSettings = require('./src/licence/settings');
 
 // Tuned for a live class (the teacher assistant keeps its own, more patient settings), measured on this PC:
 // - a phrase ends after a 0.6 s pause (0.8 s in the assistant) and long speech is cut into pieces of at most 8 s;
@@ -28,6 +35,8 @@ const LIVE_QUIET_MS = 500;
 // (98.5% -> 95.5% on Power Platform test questions). The teacher assistant keeps the model from its Settings.
 // If base.en is not downloaded (npm run setup:whisper -- --model base.en-q5_1 --model-only), that model is used instead.
 const LIVE_MODEL = 'ggml-base.en-q5_1.bin';
+// How often the licence and the AI keys are fetched again while Live Class runs.
+const CONFIG_REFRESH_MS = 30 * 60 * 1000;
 
 // started as "electron liveclass-main.js": use the same name, settings and keys as the teacher assistant
 app.setName('teacher-notes-app');
@@ -43,6 +52,9 @@ let whisper = null;
 let pipeline = null;
 let engine = { state: 'starting', message: '' };
 let speechModel = '';
+let licence = null;
+let serverKeys = {};                       // { groq?: {apiKey, source, label}, gemini?: {...} } from the licence server
+let keySources = { groq: 'none', gemini: 'none' };
 
 function send(channel, payload) { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); }
 const fromWin = event => !!(win && !win.isDestroyed() && event.sender === win.webContents);
@@ -82,6 +94,53 @@ function setupMediaPermissions() {
   });
 }
 
+// ---- licence and AI keys from the licence server -------------------------------------------------------------
+
+const licenceSkipped = () => !app.isPackaged && process.env.TNA_LICENCE === 'off';
+
+function setupLicence() {
+  const dir = app.getPath('userData');
+  licence = new LicenceClient({
+    serverUrl: licenceSettings.SERVER_URL,
+    publicKeyPem: fs.readFileSync(licenceSettings.PUBLIC_KEY_FILE, 'utf8'),
+    dir, deviceId: computerId(dir), deviceName: os.hostname(), appVersion: app.getVersion(),
+    graceDays: licenceSettings.GRACE_DAYS,
+  });
+}
+
+function licenceStatus() {
+  if (licenceSkipped()) return { state: 'active', kind: 'development', plan: 'development', dev: true };
+  return licence ? licence.status() : { state: 'none' };
+}
+const licensed = () => licenceStatus().state === 'active';
+
+/** Puts the right key into each AI client: the server's key for this licence first, else the one saved here. */
+function applyKeys() {
+  if (!answerer) return;
+  const s = config.load();
+  for (const provider of ['groq', 'gemini']) {
+    const fromServer = serverKeys[provider] && serverKeys[provider].apiKey;
+    const local = config.getApiKey(provider);
+    answerer.providers[provider].setApiKey(fromServer || local);
+    keySources[provider] = fromServer ? 'server' : local ? 'local' : 'none';
+  }
+  // the server's keys decide the services: Groq writes the answers, Gemini reads screenshots
+  answerer.setProvider(serverKeys.groq ? 'groq' : s.provider);
+  answerer.setScreenProvider(serverKeys.gemini ? 'gemini' : s.screenProvider);
+}
+
+/** Re-check the licence and fetch this licence's AI keys. Tells the page what changed. */
+async function syncLicence() {
+  if (licenceSkipped()) { serverKeys = {}; applyKeys(); send('licence', licenceStatus()); return; }
+  if (!licence) return;
+  const { ai } = await licence.appConfig();
+  serverKeys = licensed() ? ai : {};
+  applyKeys();
+  if (!licensed() && pipeline) pipeline.pause();
+  send('licence', licenceStatus());
+  send('info', info());
+}
+
 // ---- speech + AI engine: built exactly like the teacher assistant's, from the same saved settings ----------
 
 async function startEngine() {
@@ -93,6 +152,7 @@ async function startEngine() {
     groq: new GroqAnswerer({ apiKey: config.getApiKey('groq'), model: s.groqModel, effort: s.effort, subject: s.subject }),
     claude: new Answerer({ apiKey: config.getApiKey('claude'), model: s.model, effort: s.effort, subject: s.subject }),
   });
+  applyKeys();
   pipeline = new Pipeline({ whisper: null, answerer, subject: s.subject, autoAnswer: s.autoAnswer, vad: LIVE_VAD, quietMs: LIVE_QUIET_MS });
   pipeline.pause();   // listening starts when the teacher presses the mic button
   for (const type of ['transcript', 'status', 'warning', 'error', 'screen',
@@ -129,9 +189,12 @@ async function startEngine() {
 
 function info() {
   const s = config.load();
+  const provider = answerer ? answerer.provider : s.provider;
+  const screenProvider = answerer ? answerer.screenProvider : s.screenProvider;
   return {
-    engine, speechModel, subject: s.subject, provider: s.provider, model: activeModel(s), screenProvider: s.screenProvider,
-    hasKey: !!config.getApiKey(s.provider), audioSource: s.audioSource, autoAnswer: s.autoAnswer, language: s.language,
+    engine, speechModel, subject: s.subject, provider, model: activeModel({ ...s, provider }), screenProvider,
+    hasKey: answerer ? answerer.ready : !!config.getApiKey(s.provider), audioSource: s.audioSource, autoAnswer: s.autoAnswer, language: s.language,
+    keySources, licence: licenceStatus(),
   };
 }
 
@@ -170,17 +233,30 @@ async function captureScreen() {
 // ---- messages from the page ----------------------------------------------------------------------------
 
 ipcMain.handle('lc:info', event => (fromWin(event) ? info() : null));
+// licence: everything that hears or answers is locked without an active licence
+const allowed = event => fromWin(event) && licensed();
+ipcMain.handle('lc:licence-activate', async (event, key) => {
+  if (!fromWin(event) || !licence || licenceSkipped()) return null;
+  const res = await licence.activate(String(key || ''));
+  if (res.ok) await syncLicence();
+  return { ok: res.ok, message: res.message || '', licence: licenceStatus() };
+});
+ipcMain.handle('lc:licence-check', async event => {
+  if (!fromWin(event)) return null;
+  await syncLicence();
+  return licenceStatus();
+});
 ipcMain.on('lc:audio', (event, data) => {
   if (!fromWin(event) || !pipeline || !pipeline.whisper) return;
   const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   pipeline.feed(new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength - (bytes.byteLength % 2))));
 });
-ipcMain.on('lc:listening', (event, on) => { if (fromWin(event) && pipeline) { if (on) pipeline.resume(); else pipeline.pause(); } });
-ipcMain.on('lc:ask-last', event => { if (fromWin(event) && pipeline) pipeline.completeQuestion(); });
+ipcMain.on('lc:listening', (event, on) => { if (fromWin(event) && pipeline) { if (on && licensed()) pipeline.resume(); else pipeline.pause(); } });
+ipcMain.on('lc:ask-last', event => { if (allowed(event) && pipeline) pipeline.completeQuestion(); });
 ipcMain.on('lc:ask-typed', (event, text, corrected) => {
-  if (fromWin(event) && pipeline && typeof text === 'string') pipeline.askTyped(text, { corrected: corrected === true });
+  if (allowed(event) && pipeline && typeof text === 'string') pipeline.askTyped(text, { corrected: corrected === true });
 });
-ipcMain.on('lc:capture', event => { if (fromWin(event)) captureScreen(); });
+ipcMain.on('lc:capture', event => { if (allowed(event)) captureScreen(); });
 // Auto Answer here applies to this Live Class session only; the assistant's saved setting is left as it is
 ipcMain.on('lc:auto-answer', (event, on) => { if (fromWin(event) && pipeline) pipeline.setAutoAnswer(!!on); });
 ipcMain.on('lc:close', event => { if (fromWin(event)) app.quit(); });   // Quit: closes the window and stops the speech engine
@@ -189,8 +265,13 @@ ipcMain.on('lc:close', event => { if (fromWin(event)) app.quit(); });   // Quit:
 
 app.whenReady().then(() => {
   setupMediaPermissions();
+  setupLicence();
   createWindow();
-  win.webContents.once('did-finish-load', () => { startEngine(); });
+  win.webContents.once('did-finish-load', async () => {
+    startEngine();          // builds the AI clients straight away, then loads the speech model
+    await syncLicence();
+  });
+  setInterval(() => { syncLicence(); }, CONFIG_REFRESH_MS).unref();
 });
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => { if (pipeline) pipeline.stop(); if (whisper) whisper.stop(); });

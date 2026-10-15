@@ -4,6 +4,7 @@
 const { now, transaction } = require('./db');
 const auth = require('./auth');
 const licences = require('./licence');
+const aikeys = require('./aikeys');
 const { ApiError, text, email, integer, likeTerm } = require('./http');
 
 const TOPICS = ['Support', 'Schools and teams', 'AI-included plan', 'Billing', 'Feedback'];
@@ -37,6 +38,16 @@ function buildRoutes(ctx) {
   };
   add('POST', '/api/licence/activate', { public: true }, licenceCall(true));
   add('POST', '/api/licence/validate', { public: true }, licenceCall(false));
+  // The app's start-up call: the licence check (signed, as for /validate) plus the AI keys this licence should use
+  // (its own key per service, or the service's default). Only an active licence on an activated computer gets keys.
+  add('POST', '/api/app/config', { public: true }, (req, res, { body, ip }) => {
+    ctx.limiters.licence.hit(ip);
+    if (ctx.limiters.licence.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');
+    const result = licences.checkLicence(db, signer, body, { register: false });
+    if (!result.ok) return { status: 403, body: result };
+    const lic = one('SELECT id FROM licences WHERE key = ?', String(body.key || '').trim().toUpperCase());
+    return { body: { ...result, ai: aikeys.keysForApp(db, ctx.vault, lic.id) } };
+  });
   add('POST', '/api/licence/deactivate', { public: true }, (req, res, { body, ip }) => {
     ctx.limiters.licence.hit(ip);
     if (ctx.limiters.licence.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');
@@ -192,7 +203,7 @@ function buildRoutes(ctx) {
   add('GET', '/admin/api/licences/:id', { admin: true }, (req, res, { params }) => {
     const l = one('SELECT l.*, c.email AS customer_email, c.name AS customer_name FROM licences l JOIN customers c ON c.id = l.customer_id WHERE l.id = ?', params.id);
     if (!l) throw new ApiError(404, 'Licence not found');
-    return { licence: present(l), devices: all('SELECT * FROM devices WHERE licence_id = ? ORDER BY last_seen DESC', l.id) };
+    return { licence: present(l), devices: all('SELECT * FROM devices WHERE licence_id = ? ORDER BY last_seen DESC', l.id), aiKeys: aiKeysOf(l.id) };
   });
 
   add('POST', '/admin/api/licences', { admin: true, perm: 'licence.major' }, (req, res, { body, admin }) => {
@@ -231,6 +242,78 @@ function buildRoutes(ctx) {
 
     audit(admin, `licence.${action}`, lic.key, body.days ? `${body.days} days` : '');
     return { licence: present(one('SELECT * FROM licences WHERE id = ?', lic.id)) };
+  });
+
+  // ===================== admin: AI keys (Groq for answers, Gemini for screenshots) =====================
+
+  const aiKeysOf = licenceId => {
+    const assigned = Object.fromEntries(all('SELECT provider, api_key_id FROM licence_api_keys WHERE licence_id = ?', licenceId).map(r => [r.provider, r.api_key_id]));
+    return Object.fromEntries(Object.entries(aikeys.resolveForLicence(db, licenceId)).map(([provider, r]) =>
+      [provider, { source: r.source, assignedId: assigned[provider] || null, assignedDisabled: !!r.assignedDisabled, key: r.row ? aikeys.present(r.row) : null }]));
+  };
+  const providerOf = value => {
+    if (!aikeys.PROVIDERS[value]) throw new ApiError(400, 'Choose a service: groq or gemini');
+    return value;
+  };
+  const keyText = (provider, value) => {
+    const key = String(value || '').trim();
+    if (!aikeys.PROVIDERS[provider].pattern.test(key) || key.length > 300) throw new ApiError(400, `That does not look like a ${aikeys.PROVIDERS[provider].label} key. ${aikeys.PROVIDERS[provider].hint}.`);
+    return key;
+  };
+
+  add('GET', '/admin/api/ai-keys', { admin: true }, () => ({
+    keys: aikeys.listKeys(db),
+    providers: Object.entries(aikeys.PROVIDERS).map(([id, p]) => ({ id, label: p.label, use: p.use })),
+  }));
+
+  add('POST', '/admin/api/ai-keys', { admin: true, perm: 'aikeys.write' }, (req, res, { body, admin }) => {
+    const provider = providerOf(body.provider);
+    const label = text(body.label, 80, { required: true, field: 'Name' });
+    const row = aikeys.addKey(db, ctx.vault, { provider, label, key: keyText(provider, body.key), makeDefault: !!body.makeDefault, by: admin.email });
+    audit(admin, 'aikey.added', `${provider}: ${label}`, '••••' + row.key_last4);
+    return { status: 201, body: { key: aikeys.present(one('SELECT * FROM api_keys WHERE id = ?', row.id)) } };
+  });
+
+  add('PATCH', '/admin/api/ai-keys/:id', { admin: true, perm: 'aikeys.write' }, (req, res, { params, body, admin }) => {
+    const row = one('SELECT * FROM api_keys WHERE id = ?', params.id);
+    if (!row) throw new ApiError(404, 'Key not found');
+    const action = String(body.action || '');
+    if (action === 'default') {
+      if (row.disabled) throw new ApiError(400, 'Turn the key on before making it the default');
+      transaction(db, () => aikeys.setDefault(db, row.id));
+    } else if (action === 'disable') db.prepare('UPDATE api_keys SET disabled = 1, is_default = 0 WHERE id = ?').run(row.id);
+    else if (action === 'enable') db.prepare('UPDATE api_keys SET disabled = 0 WHERE id = ?').run(row.id);
+    else if (action === 'rename') db.prepare('UPDATE api_keys SET label = ? WHERE id = ?').run(text(body.label, 80, { required: true, field: 'Name' }), row.id);
+    else if (action === 'replace') {
+      const key = keyText(row.provider, body.key);
+      db.prepare('UPDATE api_keys SET key_enc = ?, key_last4 = ? WHERE id = ?').run(ctx.vault.encrypt(key), key.slice(-4), row.id);
+    } else throw new ApiError(400, 'Unknown action');
+    audit(admin, `aikey.${action}`, `${row.provider}: ${row.label}`);
+    return { key: aikeys.present(one('SELECT * FROM api_keys WHERE id = ?', row.id)) };
+  });
+
+  // Licences that used this key go back to the service's default.
+  add('DELETE', '/admin/api/ai-keys/:id', { admin: true, perm: 'aikeys.write' }, (req, res, { params, admin }) => {
+    const row = one('SELECT * FROM api_keys WHERE id = ?', params.id);
+    if (!row) throw new ApiError(404, 'Key not found');
+    db.prepare('DELETE FROM api_keys WHERE id = ?').run(row.id);
+    audit(admin, 'aikey.deleted', `${row.provider}: ${row.label}`);
+    return { ok: true };
+  });
+
+  // Give a licence its own key for one service, or apiKeyId null to use the default again.
+  add('POST', '/admin/api/licences/:id/ai-keys', { admin: true, perm: 'aikeys.write' }, (req, res, { params, body, admin }) => {
+    const lic = one('SELECT * FROM licences WHERE id = ?', params.id);
+    if (!lic) throw new ApiError(404, 'Licence not found');
+    const provider = providerOf(body.provider);
+    const apiKeyId = body.apiKeyId === null || body.apiKeyId === '' || body.apiKeyId === undefined ? null : integer(body.apiKeyId, { min: 1, field: 'Key' });
+    if (apiKeyId !== null) {
+      const k = one('SELECT * FROM api_keys WHERE id = ?', apiKeyId);
+      if (!k || k.provider !== provider) throw new ApiError(400, `Choose a ${aikeys.PROVIDERS[provider].label} key`);
+    }
+    aikeys.assign(db, { licenceId: lic.id, provider, apiKeyId });
+    audit(admin, 'licence.aikey', lic.key, `${provider}: ${apiKeyId === null ? 'default' : 'key #' + apiKeyId}`);
+    return { aiKeys: aiKeysOf(lic.id) };
   });
 
   // ===================== admin: orders =====================

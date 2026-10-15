@@ -68,6 +68,7 @@ const PERMISSIONS = {
   'customers.write': ['owner', 'admin'],
   'orders.write': ['owner', 'admin'],
   'releases.write': ['owner', 'admin'],
+  'aikeys.write': ['owner', 'admin'],               // add, replace, set default, assign AI keys to licences
   'team.read': ['owner'],
   'team.write': ['owner'],
 };

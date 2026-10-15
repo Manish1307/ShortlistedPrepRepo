@@ -44,6 +44,7 @@
     listening: false, starting: false, source: 'both', theme: 'dark', zoom: DEFAULTS.zoom, opacity: DEFAULTS.opacity, font: DEFAULTS.font,
     language: 'en', autoAnswer: false, editing: false,
     engine: { state: 'starting', message: '' }, info: null, notice: null,
+    licence: { state: live ? 'checking' : 'active', dev: !live },
     heard: [],         // { text, isQuestion }
     partial: '',       // the words of the phrase still being spoken
     speaking: false, transcribing: false,
@@ -186,9 +187,60 @@
     renderCard();
   }
 
+  // ---- licence ------------------------------------------------------------------------------------
+  const isLicensed = () => state.licence.state === 'active';
+  const LICENCE_TEXT = {
+    checking: 'Checking your ClassCue licence…',
+    none: 'Live Class needs a ClassCue licence. Enter your licence key to activate this computer.',
+    expired: 'Your licence has expired. Renew it, or enter a new licence key.',
+    revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
+    removed: 'This computer was removed from the licence. Enter the key again to activate it.',
+    'check-needed': 'The licence could not be checked for a while. Connect to the internet and press "Check again".',
+  };
+  function needLicence() {
+    if (isLicensed()) return false;
+    toast(state.licence.state === 'checking' ? 'Checking the licence…' : 'Activate a licence first');
+    return true;
+  }
+  function applyLicence(l) {
+    if (l) state.licence = l;
+    const l2 = state.licence;
+    const gate = $('gate');
+    gate.hidden = isLicensed();
+    if (!gate.hidden) {
+      $('gateMsg').textContent = l2.message || LICENCE_TEXT[l2.state] || 'Live Class needs an active licence.';
+      $('gateKey').parentElement.hidden = l2.state === 'checking';
+      $('gateActivate').hidden = l2.state === 'check-needed';
+      if (state.listening) stopListening();
+    }
+    $('licenceRow').textContent = l2.dev ? (live ? 'Licence: not checked (development)' : 'Licence: demo')
+      : l2.state === 'active' ? `Licence: ${l2.plan}${l2.kind === 'trial' ? ' trial' : ''}${l2.daysLeft !== null && l2.daysLeft !== undefined ? ` · ${l2.daysLeft} days left` : ' · lifetime'}`
+        : 'Licence: ' + (l2.state === 'checking' ? 'checking…' : l2.state.replace('-', ' '));
+    $('licenceRow').parentElement.title = l2.maskedKey ? 'Key ' + l2.maskedKey : '';
+  }
+  async function activate() {
+    const key = $('gateKey').value.trim();
+    $('gateErr').textContent = '';
+    if (!/^CC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(key)) { $('gateErr').textContent = 'A licence key looks like CC-XXXX-XXXX-XXXX.'; return; }
+    $('gateActivate').disabled = true;
+    try {
+      const res = await api.activateLicence(key);
+      if (!res) return;
+      if (!res.ok) $('gateErr').textContent = res.message || 'The key was not accepted.';
+      else { $('gateKey').value = ''; toast('Licence activated'); }
+      applyLicence(res.licence);
+    } finally { $('gateActivate').disabled = false; }
+  }
+  async function checkAgain() {
+    $('gateErr').textContent = '';
+    applyLicence(await api.checkLicence());
+    if (!isLicensed()) $('gateErr').textContent = 'Still not active.';
+  }
+
   // ---- listening -----------------------------------------------------------------------------------
   async function startListening() {
     if (state.listening || state.starting || state.ended) return;
+    if (needLicence()) return;
     if (state.engine.state !== 'ready') { toast(state.engine.state === 'starting' ? 'The speech engine is still loading…' : 'The speech engine is not available'); return; }
     state.starting = true; renderPhrases();
     try {
@@ -233,7 +285,8 @@
   function applyEngine(e) {
     state.engine = e || state.engine;
     if (state.engine.state === 'setup-needed' || state.engine.state === 'error') notice('error', state.engine.message);
-    else if (state.engine.state === 'ready' && state.info && !state.info.hasKey) notice('warn', `No API key is saved for ${PROVIDERS[state.info.provider] || state.info.provider}. Add it in the teacher assistant's Settings (npm start).`);
+    else if (state.info && !state.info.hasKey && isLicensed()) notice('warn', `No ${PROVIDERS[state.info.provider] || state.info.provider} key for answers. Ask your administrator to give your licence one (admin dashboard, AI keys), or add it in the teacher assistant's Settings (npm start).`);
+    else if (state.notice && state.notice.kind === 'warn' && state.info && state.info.hasKey) notice();
     renderPhrases();
   }
 
@@ -289,18 +342,18 @@
   // ---- actions -------------------------------------------------------------------------------------
   function ask(question, corrected) {
     question = String(question || '').trim();
-    if (!question || state.ended) return;
+    if (!question || state.ended || needLicence()) return;
     if (state.notice && state.notice.kind === 'warn') notice();
     api.askTyped(question, corrected);
   }
 
   function answerLatest() {   // "question finished": answer what was said since the last answer
-    if (state.ended) return;
+    if (state.ended || needLicence()) return;
     api.askLast();
   }
 
   function screenshot() {
-    if (state.ended) return;
+    if (state.ended || needLicence()) return;
     toast('Capturing the screen…');
     api.captureScreen();
   }
@@ -454,23 +507,36 @@
   });
 
   // ---- start ---------------------------------------------------------------------------------------
+  const SOURCE_TEXT = { server: 'key from your licence', local: 'key saved on this computer', none: 'no key' };
+  function applyInfo(info) {
+    state.info = info;
+    const ai = `${PROVIDERS[info.provider] || info.provider} · ${info.model}`;
+    const ks = info.keySources || {};
+    $('account').textContent = ai;
+    $('account').parentElement.title = (info.subject ? 'Subject: ' + info.subject + '\n' : '') + 'AI: ' + ai +
+      (ks.groq ? `\nGroq: ${SOURCE_TEXT[ks.groq]}\nGemini (screenshots): ${SOURCE_TEXT[ks.gemini]}` : '');
+    if (info.licence) applyLicence(info.licence);
+  }
+
+  $('gateActivate').addEventListener('click', activate);
+  $('gateCheck').addEventListener('click', checkAgain);
+  $('gateKey').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); activate(); } });
   api.onEngine(applyEngine);
   api.onPipeline(onPipeline);
+  if (api.onLicence) api.onLicence(l => { applyLicence(l); applyEngine(); });
+  if (api.onInfo) api.onInfo(info => { if (info) { applyInfo(info); applyEngine(); } });
   api.info().then(info => {
     if (!info) return;
-    state.info = info;
     state.source = info.audioSource || state.source;
     state.autoAnswer = !!info.autoAnswer;
     state.language = info.language || 'en';
     $('language').disabled = live;   // the speech model's language comes from the assistant's settings
     if (live) $('language').title = 'Set by the speech model in the assistant settings';
-    const ai = `${PROVIDERS[info.provider] || info.provider} · ${info.model}`;
-    $('account').textContent = ai;
-    $('account').parentElement.title = (info.subject ? 'Subject: ' + info.subject + '\n' : '') + 'AI: ' + ai;
+    applyInfo(info);
     applyEngine(info.engine);
     applyView();
   });
-  renderPhrases(); renderCard(); applyView();
+  renderPhrases(); renderCard(); applyView(); applyLicence();
 
   // ---- demo: a stand-in for the app's engine when the page is opened in a plain browser ----------------
   function demoAPI() {

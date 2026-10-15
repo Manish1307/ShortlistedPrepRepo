@@ -11,6 +11,7 @@ const path = require('path');
 const { open } = require('./lib/db');
 const auth = require('./lib/auth');
 const { Signer } = require('./lib/licence');
+const aikeys = require('./lib/aikeys');
 const { buildRoutes } = require('./lib/routes');
 const { ApiError, readJson, sendJson, parseCookies, SECURITY_HEADERS } = require('./lib/http');
 
@@ -20,12 +21,14 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=
 function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false } = {}) {
   const db = open(path.join(dataDir, 'admin.db'));
   const signer = new Signer(dataDir);
+  aikeys.setup(db);
+  const vault = new aikeys.KeyVault(dataDir);
   const limiters = {
     login: new auth.Limiter({ max: 5, windowMs: 15 * 60 * 1000 }),
     licence: new auth.Limiter({ max: 60, windowMs: 60 * 1000 }),
     contact: new auth.Limiter({ max: 5, windowMs: 60 * 60 * 1000 }),
   };
-  const routes = buildRoutes({ db, signer, limiters });
+  const routes = buildRoutes({ db, signer, vault, limiters });
   const compiled = routes.map(r => ({
     ...r,
     regex: new RegExp('^' + r.pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'),
@@ -103,7 +106,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
     });
   });
 
-  return { server, db, signer, limiters, close: () => new Promise(resolve => server.close(() => { db.close(); resolve(); })) };
+  return { server, db, signer, vault, limiters, close: () => new Promise(resolve => server.close(() => { db.close(); resolve(); })) };
 }
 
 if (require.main === module) {

@@ -20,6 +20,52 @@
     if (a.getAttribute('data-page') === page) a.classList.add('current');
   });
 
+  // signed in (see the script in <head>): calls to action go straight into the toolkit
+  if (document.documentElement.getAttribute('data-auth') === 'member') {
+    document.querySelectorAll('[data-member-href]').forEach(function (a) {
+      a.setAttribute('href', a.getAttribute('data-member-href'));
+      if (a.getAttribute('data-member-text')) a.textContent = a.getAttribute('data-member-text');
+    });
+  }
+
+  // tabs with a breadcrumb, previous / next and a progress bar (home page: the candidate journey)
+  document.querySelectorAll('[data-tabs]').forEach(function (box) {
+    var tabs = [].slice.call(box.querySelectorAll('[role=tab]'));
+    var crumbPhase = box.querySelector('[data-crumb-phase]'), crumbStep = box.querySelector('[data-crumb-step]');
+    var bar = box.querySelector('[data-progress]'), prev = box.querySelector('[data-tab-prev]'), next = box.querySelector('[data-tab-next]');
+    var current = 0;
+    box.classList.add('js');
+    function show(i, focus) {
+      current = Math.max(0, Math.min(tabs.length - 1, i));
+      tabs.forEach(function (t, n) {
+        var on = n === current;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute('aria-controls'));
+        if (panel) panel.classList.toggle('on', on);
+      });
+      var tab = tabs[current];
+      if (crumbPhase) crumbPhase.textContent = tab.getAttribute('data-phase') || '';
+      if (crumbStep) crumbStep.textContent = (current + 1) + '. ' + tab.textContent.replace(/^\d+/, '').trim();
+      if (bar) bar.style.width = ((current + 1) / tabs.length * 100) + '%';
+      if (prev) prev.disabled = current === 0;
+      if (next) next.textContent = current === tabs.length - 1 ? 'Start again ↺' : 'Next step →';
+      var strip = tab.parentNode;   // on phones the steps scroll sideways: keep the current one in view
+      if (strip.scrollWidth > strip.clientWidth) strip.scrollLeft = tab.offsetLeft - strip.offsetLeft - 16;
+      if (focus) tab.focus();
+    }
+    tabs.forEach(function (t, n) {
+      t.addEventListener('click', function () { show(n); });
+      t.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight') { e.preventDefault(); show(current + 1, true); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); show(current - 1, true); }
+      });
+    });
+    if (prev) prev.addEventListener('click', function () { show(current - 1); });
+    if (next) next.addEventListener('click', function () { show(current === tabs.length - 1 ? 0 : current + 1); });
+    show(0);
+  });
+
   // close the Resources menu when clicking elsewhere
   document.addEventListener('click', function (e) {
     document.querySelectorAll('.dropdown[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });

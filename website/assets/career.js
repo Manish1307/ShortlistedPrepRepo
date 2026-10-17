@@ -199,7 +199,7 @@
   // ---------- state ----------
   var state = null;
   /** Scroll to a step (also when the address already ends with its #id). */
-  function goTo(id) { var el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  var goTo = function (id) { var el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };   // replaced by the step tabs below
   function showError(text) { errorBox.hidden = !text; errorBox.textContent = text || ''; if (text) errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   function setUsage(u) {
     if (!u) return;
@@ -559,11 +559,58 @@
         hint, status, result, history));
   }
 
+  // ---------- one tab per step (the address keeps the step: career.html#cr-jobs) ----------
+  var STEPS = [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match & cover letter'], ['cr-jobs', 'AI Job search']];
+  var activeStep = null;
+  function stepIndex(id) { for (var i = 0; i < STEPS.length; i++) if (STEPS[i][0] === id) return i; return -1; }
+  /** Where to start: the step in the address, else the first one not done yet. */
+  function startStep() {
+    var fromHash = location.hash.slice(1) || new URLSearchParams(location.search).get('step');   // career.html#cr-jobs or ?step=cr-jobs
+    if (stepIndex(fromHash) !== -1) return fromHash;
+    if (!state.resume) return 'cr-resume';
+    if (!state.resume.ats) return 'cr-ats';
+    return 'cr-jobs';
+  }
+  function stepDone(id) {
+    var r = state.resume;
+    return id === 'cr-resume' ? !!r : id === 'cr-ats' ? !!(r && r.ats) : id === 'cr-versions' ? state.versions.length > 0 : id === 'cr-match' ? state.matches.length > 0 : false;
+  }
+  function showStep(id, scroll) {
+    if (stepIndex(id) === -1) id = 'cr-resume';
+    activeStep = id;
+    STEPS.forEach(function (s) { var el = document.getElementById(s[0]); if (el) el.hidden = s[0] !== id; });
+    document.querySelectorAll('.cr-steps a').forEach(function (a) {
+      var target = a.getAttribute('href').slice(1);
+      if (target === id) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current');
+      a.classList.toggle('done', stepDone(target));
+    });
+    var crumb = document.getElementById('cr-crumb');
+    if (crumb) crumb.textContent = (stepIndex(id) + 1) + '. ' + STEPS[stepIndex(id)][1];
+    if (location.hash.slice(1) !== id || location.search) history.replaceState(null, '', location.pathname + '#' + id);
+    if (scroll) document.querySelector('.cr-steps').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  goTo = function (id) { showStep(id, true); };
+  document.querySelectorAll('.cr-steps a').forEach(function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); showStep(a.getAttribute('href').slice(1)); });
+  });
+  window.addEventListener('hashchange', function () { if (stepIndex(location.hash.slice(1)) !== -1) showStep(location.hash.slice(1)); });
+
+  /** Previous / next buttons under each step. */
+  function stepNav(i) {
+    var prev = STEPS[i - 1], next = STEPS[i + 1];
+    return h('div', { class: 'cr-stepnav' },
+      prev ? h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { showStep(prev[0], true); } }, '← ' + (i) + '. ' + prev[1]) : h('span'),
+      next ? h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { showStep(next[0], true); } }, 'Next: ' + (i + 2) + '. ' + next[1] + ' →') : null);
+  }
+
   function render() {
     showError('');
-    content.replaceChildren(resumeCard(), atsCard(), versionsCard(), matchCard(), jobsCard(),
+    var cards = [resumeCard(), atsCard(), versionsCard(), matchCard(), jobsCard()];
+    cards.forEach(function (c, i) { c.appendChild(stepNav(i)); });
+    content.replaceChildren.apply(content, cards.concat([
       h('p', { class: 'ac-muted cr-privacy' }, '🔒 Your resume is private: it is used only to create your documents and is never shared. ',
-        'The AI rewrites what your resume says and never adds experience you do not have, so always review documents before sending.'));
+        'The AI rewrites what your resume says and never adds experience you do not have, so always review documents before sending.')]));
+    showStep(activeStep || startStep());
   }
   load();
 })();

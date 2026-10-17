@@ -74,6 +74,7 @@
 
   async function startListening() {
     if (listening || starting || engine.state !== 'ready') return;
+    if (lic.state !== 'active') { applyLicence(); return; }
     starting = true; refreshButtons();
     try {
       const source = (settings && settings.audioSource) || 'both';
@@ -325,6 +326,104 @@
       window.getSelection().removeAllRanges();
       picked = null; btn.disabled = true;
     });
+  }
+
+  // ---- licence: the licence screen covers the assistant until there is a valid trial or licence -------------
+  let lic = { state: 'none' };
+  const GATE = {
+    none: ['Welcome to ClassCue', 'Start a free trial or enter your licence key to use the assistant.'],
+    expired: ['Your licence has ended', 'Buy a licence or enter a new key to keep using the assistant. Your settings and notes are kept.'],
+    revoked: ['Licence cancelled', 'This licence was cancelled. Enter another key, or contact support.'],
+    removed: ['This computer is not activated', 'This computer was removed from the licence. Enter your key again to activate it.'],
+    'check-needed': ['Licence check needed', ''],
+  };
+
+  function gateMsg(text, kind) { const m = $('gateMsg'); m.textContent = text || ''; m.className = 'gateMsg' + (kind ? ' ' + kind : ''); }
+
+  function applyLicence(s) {
+    if (s) lic = s;
+    const active = lic.state === 'active';
+    $('licenceGate').classList.toggle('show', !active);
+    $('licBadge').textContent = !active ? '' : lic.dev ? 'DEV' : lic.kind === 'trial' ? `TRIAL · ${lic.daysLeft} DAY${lic.daysLeft === 1 ? '' : 'S'} LEFT` : '';
+    if (!active) {
+      const [title, text] = GATE[lic.state] || GATE.none;
+      $('gateTitle').textContent = lic.state === 'expired' && lic.kind === 'trial' ? 'Your free trial has ended' : title;
+      $('gateText').textContent = lic.state === 'check-needed' ? lic.message : text;   // the server's own wording only where ours has none
+      $('gateTrial').style.display = lic.state === 'none' ? '' : 'none';
+      if (lic.problem) gateMsg(lic.problem, 'bad');
+      if (listening) stopListening();
+    }
+    const info = $('licInfo');
+    info.textContent = '';
+    const line = t => info.appendChild(el('div', '', t));
+    if (lic.dev) line('Development mode: the licence check is switched off.');
+    else if (lic.state === 'none') line('No licence on this computer yet.');
+    else {
+      line(`${lic.kind === 'trial' ? 'Free trial' : `Plan: ${lic.plan}`} · ${active ? 'active' : lic.state}`);
+      line(lic.expiresAt ? `Valid until ${new Date(lic.expiresAt).toLocaleDateString()}${active && lic.daysLeft !== null ? ` (${lic.daysLeft} day${lic.daysLeft === 1 ? '' : 's'} left)` : ''}` : 'Never expires');
+      if (lic.maskedKey) line(`Key: ${lic.maskedKey} · This PC: ${lic.deviceName || ''}`);
+      if (lic.checkedAt) line(`Last checked: ${new Date(lic.checkedAt).toLocaleString()}${lic.lastError ? ` (last try failed: ${lic.lastError})` : ''}`);
+    }
+    $('btnLicDeactivate').disabled = !!lic.dev || lic.state === 'none';
+  }
+
+  /** Run a licence action with its button showing that it is busy. */
+  async function licenceAction(button, busyText, fn) {
+    const label = button.textContent;
+    button.disabled = true; button.textContent = busyText;
+    gateMsg('');
+    try {
+      const res = await fn();
+      if (res && res.ok === false) gateMsg(res.message || 'That did not work. Try again.', 'bad');
+      if (res && res.status) applyLicence(res.status);
+      return res;
+    } finally { button.disabled = false; button.textContent = label; }
+  }
+
+  function setupLicence() {
+    $('btnTrial').addEventListener('click', () => licenceAction($('btnTrial'), 'Starting…', async () => {
+      const email = $('trialEmail').value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: 'Enter your email address first.' };
+      const res = await api.startTrial(email);
+      if (res && res.ok) afterUnlock();
+      return res;
+    }));
+    $('btnActivate').addEventListener('click', () => licenceAction($('btnActivate'), 'Activating…', async () => {
+      const key = $('licKey').value.trim();
+      if (!key) return { ok: false, message: 'Paste your licence key first.' };
+      const res = await api.activateLicence(key);
+      if (res && res.ok) { $('licKey').value = ''; afterUnlock(); }
+      return res;
+    }));
+    $('trialEmail').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnTrial').click(); });
+    $('licKey').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnActivate').click(); });
+    $('btnCheckAgain').addEventListener('click', () => licenceAction($('btnCheckAgain'), 'Checking…', async () => {
+      const s = await api.refreshLicence();
+      applyLicence(s);
+      if (s.state !== 'active') gateMsg(s.lastError || 'Still not active.', 'bad');
+      return null;
+    }));
+    $('btnBuy').addEventListener('click', () => api.buy());
+    $('btnLicCheck').addEventListener('click', () => licenceAction($('btnLicCheck'), 'Checking…', async () => applyLicence(await api.refreshLicence())));
+    const deactivate = $('btnLicDeactivate');
+    let armed = null;
+    deactivate.addEventListener('click', async () => {
+      if (!armed) {
+        deactivate.textContent = 'Click again to deactivate';
+        armed = setTimeout(() => { armed = null; deactivate.textContent = 'Deactivate this PC…'; }, 4000);
+        return;
+      }
+      clearTimeout(armed); armed = null; deactivate.textContent = 'Deactivate this PC…';
+      const res = await api.deactivateLicence();
+      if (res && res.ok) { showSettings(false); applyLicence(res.status); gateMsg('This computer was deactivated. Its place on the licence is free again.', 'good'); }
+      else if (res) { $('saved').textContent = res.message; }
+    });
+  }
+
+  /** Just unlocked: if no AI key is saved yet, open Settings so the teacher can add one. */
+  function afterUnlock() {
+    gateMsg('');
+    if (settings && !settings.hasKey) showSettings(true);
   }
 
   // ---- the "Ask" box: type a question or a few keywords, press Enter or Ask ----------------------------
@@ -628,12 +727,15 @@
     $('btnCapture').addEventListener('click', () => api.captureScreen('area'));
     setupAskSelected();
     setupAskBox();
+    setupLicence();
+    api.onLicence(applyLicence);
 
     api.onPipeline(onPipeline);
     api.onEngine(applyEngine);
     api.onUi(m => {
       if (!m) return;
       if (m.type === 'toggle-listening') toggleListening();
+      if (m.type === 'licence-locked') stopListening();
       if (m.type === 'reset-begin') onResetBegin();
       if (m.type === 'reset-done') onResetDone();
       if (m.type === 'opacity') { showOpacity(m.value); if (settings) settings.opacity = m.value; }   // reset by Ctrl/Cmd+Shift+T
@@ -642,7 +744,8 @@
     settings = await api.getSettings();
     showOpacity(settings.opacity);
     applyEngine(await api.getEngine());
-    if (settings && !settings.hasKey) showSettings(true);
+    applyLicence(await api.getLicence());
+    if (settings && !settings.hasKey && lic.state === 'active') showSettings(true);
   }
 
   init();

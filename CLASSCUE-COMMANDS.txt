@@ -41,6 +41,22 @@ Open a terminal in that folder before running any command below.
           Starts the desktop tool (the private assistant windows).
 
 
+  AI MOCK INTERVIEWER (practice for job interviews, separate window):
+      npm run interview
+          Pick company (50 listed), role, round and experience. The AI asks
+          questions; answer by voice or typing; get a score out of 10, what was
+          good, what to improve and a stronger answer; report at the end
+          (Save report -> DocumentsMock Interviews). Uses the same AI key as the
+          assistant (set in its Settings). This window is NOT hidden from
+          screen sharing: it is for practice only.
+
+  LICENCE (free trial or licence key):
+      The assistant asks for a licence the first time it opens. The admin
+      server must be running (npm run admin or npm run web), because the app
+      checks licences with it (address in srclicencesettings.js).
+      Developing without a licence: set TNA_LICENCE=off before npm start
+      (works only when not installed).
+
 ---------------------------------------------------------------------
  3. RUN ONE PART AT A TIME
 ---------------------------------------------------------------------

@@ -31,8 +31,10 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 });
 
 class GeminiAnswerer {
-  constructor({ apiKey = '', model = DEFAULT_MODEL, effort = 'low', subject = '', retryDelayMs = 1000 } = {}) {
+  constructor({ apiKey = '', model = DEFAULT_MODEL, effort = 'low', subject = '', retryDelayMs = 1000, fetchImpl = null } = {}) {
     this.retryDelayMs = retryDelayMs;
+    // every request goes through this; the licence-server proxy (proxy.js) sends them to the server instead
+    this._fetch = fetchImpl || ((url, init) => fetch(url, init));
     this.model = model;
     this.effort = effort;
     this.subject = subject;
@@ -42,6 +44,7 @@ class GeminiAnswerer {
   setApiKey(apiKey) { this.apiKey = apiKey || ''; }
   setModel(model) { this.model = model || DEFAULT_MODEL; }
   setSubject(subject) { this.subject = subject || ''; }
+  setProfile(profile) { this.profile = profile || null; }   // topics and resume from the admin dashboard
   get ready() { return !!this.apiKey; }
 
   _body(model, ask, withThinking = true) {
@@ -51,7 +54,7 @@ class GeminiAnswerer {
     if (thinking && withThinking) generationConfig.thinkingConfig = thinking;
     const body = {
       systemInstruction: { parts: [{ text: systemPromptFor(this.effort) }] },
-      contents: [{ role: 'user', parts: [{ text: buildUserMessage({ subject: this.subject, ...ask }) }] }],
+      contents: [{ role: 'user', parts: [{ text: buildUserMessage({ subject: this.subject, profile: this.profile, ...ask }) }] }],
       generationConfig,
     };
     // Google Search grounding: the model can look facts up instead of relying on memory (more accurate answers)
@@ -61,7 +64,7 @@ class GeminiAnswerer {
 
   /** Open the answer stream for one model; returns the OK response or throws an error with .status. */
   async _open(model, ask, signal) {
-    const request = withThinking => fetch(`${ENDPOINT}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
+    const request = withThinking => this._fetch(`${ENDPOINT}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
       body: JSON.stringify(this._body(model, ask, withThinking)),
@@ -108,7 +111,7 @@ class GeminiAnswerer {
     const lines = [];
     for (const model of [this.model, ...FALLBACK_MODELS].filter((m, i, a) => a.indexOf(m) === i)) {
       try {
-        const res = await fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+        const res = await this._fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
           method: 'POST', signal: AbortSignal.timeout(20000),
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
           body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply with the single word OK.' }] }], generationConfig: { maxOutputTokens: 20 } }),
@@ -137,12 +140,12 @@ class GeminiAnswerer {
         };
         const thinking = thinkingConfig(model, 'low');
         if (thinking && withThinking) generationConfig.thinkingConfig = thinking;
-        return fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+        return this._fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: EXTRACT_PROMPT }] },
-            contents: [{ role: 'user', parts: [{ text: buildExtractMessage({ subject: this.subject, context, text, previous }) }] }],
+            contents: [{ role: 'user', parts: [{ text: buildExtractMessage({ subject: this.subject, profile: this.profile, context, text, previous }) }] }],
             generationConfig,
           }),
           signal,
@@ -154,6 +157,40 @@ class GeminiAnswerer {
         const data = await res.json();
         const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
         return parseQuestionList(parts.filter(p => p.text && !p.thought).map(p => p.text).join(''));
+      }
+      let detail = '';
+      try { detail = (await res.json()).error.message; } catch (_) { /* not JSON */ }
+      lastError = Object.assign(new Error(detail || `Gemini returned ${res.status}`), { status: res.status });
+      if (![429, 500, 502, 503, 504].includes(res.status)) throw lastError;
+    }
+    throw lastError;
+  }
+
+  /** One plain request, whole reply as text (used by the mock interviewer). json: ask for a JSON reply. */
+  async complete({ system, user, maxTokens = 2000, json = false, signal } = {}) {
+    if (!this.apiKey) throw Object.assign(new Error('No Gemini API key set'), { code: 'no-key' });
+    // 3.5 Flash with little thinking answers in seconds; 3.8 Flash refuses "minimal" and is often busy (measured)
+    const models = [...SCREEN_MODELS, this.model, ...FALLBACK_MODELS].filter((m, i, a) => a.indexOf(m) === i);
+    let lastError;
+    for (const model of models) {
+      const post = fast => {
+        const generationConfig = { maxOutputTokens: maxTokens, temperature: 0.5 };
+        const thinking = thinkingConfig(model, 'low');
+        if (fast && thinking) generationConfig.thinkingConfig = thinking;
+        if (fast && json) generationConfig.responseMimeType = 'application/json';
+        return this._fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
+          body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig }),
+          signal,
+        });
+      };
+      let res = await post(true);
+      if (res.status === 400) res = await post(false);
+      if (res.ok) {
+        const data = await res.json();
+        const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+        return parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
       }
       let detail = '';
       try { detail = (await res.json()).error.message; } catch (_) { /* not JSON */ }
@@ -177,14 +214,14 @@ class GeminiAnswerer {
         const thinking = thinkingConfig(model, 'low');
         if (fast && thinking) generationConfig.thinkingConfig = thinking;
         if (fast) Object.assign(generationConfig, { responseMimeType: 'application/json', responseSchema: { type: 'ARRAY', items: { type: 'STRING' } } });
-        return fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
+        return this._fetch(`${ENDPOINT}/${encodeURIComponent(model)}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: SCREEN_PROMPT }] },
             contents: [{ role: 'user', parts: [
               { inline_data: { mime_type: mimeType, data: image } },
-              { text: buildScreenMessage({ subject: this.subject, previous }) },
+              { text: buildScreenMessage({ subject: this.subject, profile: this.profile, previous }) },
             ] }],
             generationConfig,
           }),
@@ -259,4 +296,4 @@ class GeminiAnswerer {
   }
 }
 
-module.exports = { GeminiAnswerer, DEFAULT_MODEL, thinkingConfig };
+module.exports = { GeminiAnswerer, DEFAULT_MODEL, thinkingConfig, ENDPOINT };

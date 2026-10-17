@@ -3,7 +3,7 @@
 // Runs in the Electron main process only: the API key never reaches the web pages.
 
 const Anthropic = require('@anthropic-ai/sdk');
-const { EXTRACT_PROMPT, SCREEN_PROMPT, parseQuestionList, buildExtractMessage, buildScreenMessage, formatPrevious } = require('./framing');
+const { EXTRACT_PROMPT, SCREEN_PROMPT, parseQuestionList, buildExtractMessage, buildScreenMessage, formatPrevious, formatProfile } = require('./framing');
 
 const DEFAULT_MODEL = 'claude-opus-5-5';
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
@@ -40,7 +40,8 @@ That's it: the loop stops by itself when the list runs out.
 - Usually 80 to 160 words; go longer only when the question asks for several steps or code. Write ONE short statement per line, at most about 18 words each, so the teacher can read a line, pause, then read the next. Never write a paragraph, and never a long sentence with several clauses: split it into separate lines. A few "-" bullet points or numbered steps are fine for a sequence of steps, but never headings, bold or other markdown. Write maths simply (x^2, sqrt(x), a/b); keep code short and plain.
 - Finish when the explanation is complete. Do NOT end with an offer, a suggestion or a question: never write things like "let me know if...", "would you like me to...", "feel free to ask", "do you want more detail", "I hope this helps", and do not suggest what to ask next. Do not ask the user any question at all. If something is unclear, make the most sensible assumption, say so in one short sentence, and answer.
 - Accuracy matters more than sounding confident: think the question through, check names, numbers and facts, and answer what was actually asked. If you are not sure of something, say so briefly instead of guessing.
-- Use the subject and the transcript only to correct obvious recognition mistakes (e.g. "dot net" is .NET). When a term has several meanings (for example "enable an API" can mean the Dataverse/Power Pages Web API, a custom connector, or an Azure API), pick the meaning that fits the subject of the class; if the subject does not settle it, answer the most likely meaning and add one short sentence naming the other.`;
+- Use the subject and the transcript only to correct obvious recognition mistakes (e.g. "dot net" is .NET). When a term has several meanings (for example "enable an API" can mean the Dataverse/Power Pages Web API, a custom connector, or an Azure API), pick the meaning that fits the subject of the class; if the subject does not settle it, answer the most likely meaning and add one short sentence naming the other.
+- When "Topics to focus on" or a background from a resume is given, answer within those areas: choose the meaning, technologies and examples that fit them and the person's experience. A question clearly outside them is still answered normally.`;
 
 /** `effort` is accepted by Opus / Sonnet / Fable models, not by Haiku. */
 const supportsEffort = model => /^claude-(opus|sonnet|fable)-\d/.test(model);
@@ -75,10 +76,11 @@ function cleanAnswer(text) {
   return out;
 }
 
-function buildUserMessage({ subject, context, question, previous, source }) {
+function buildUserMessage({ subject, context, question, previous, source, profile }) {
   const lines = (context || []).map(l => `- ${l}`).join('\n') || '- (nothing yet)';
   return [
     `Subject of this class: ${subject || '(not specified)'}`,
+    ...formatProfile(profile),
     '',
     'Recent class transcript (oldest first):',
     lines,
@@ -112,6 +114,7 @@ class Answerer {
   }
   setModel(model) { this.model = model || DEFAULT_MODEL; this.fallbackRejected = false; }
   setSubject(subject) { this.subject = subject || ''; }
+  setProfile(profile) { this.profile = profile || null; }   // topics and resume from the admin dashboard
   get ready() { return !!this.client; }
 
   /** "Test connection": does a tiny question work with the selected model? */
@@ -130,9 +133,18 @@ class Answerer {
     if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
     const message = await this.client.messages.create({
       model: this.model, max_tokens: 600, system: EXTRACT_PROMPT,
-      messages: [{ role: 'user', content: buildExtractMessage({ subject: this.subject, context, text, previous }) }],
+      messages: [{ role: 'user', content: buildExtractMessage({ subject: this.subject, profile: this.profile, context, text, previous }) }],
     }, { signal });
     return parseQuestionList(message.content.filter(b => b.type === 'text').map(b => b.text).join(''));
+  }
+
+  /** One plain request, whole reply as text (used by the mock interviewer for questions and feedback). */
+  async complete({ system, user, maxTokens = 2000, signal } = {}) {
+    if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
+    const message = await this.client.messages.create({
+      model: this.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }],
+    }, { signal });
+    return message.content.filter(b => b.type === 'text').map(b => b.text).join('');
   }
 
   /** Screen capture: copy the question(s) out of a screenshot (base64). Returns a list (may be empty), or null. */
@@ -142,7 +154,7 @@ class Answerer {
       model: this.model, max_tokens: 2000, system: SCREEN_PROMPT,
       messages: [{ role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: mimeType, data: image } },
-        { type: 'text', text: buildScreenMessage({ subject: this.subject, previous }) },
+        { type: 'text', text: buildScreenMessage({ subject: this.subject, profile: this.profile, previous }) },
       ] }],
     }, { signal });
     return parseQuestionList(message.content.filter(b => b.type === 'text').map(b => b.text).join(''));
@@ -153,7 +165,7 @@ class Answerer {
       model: this.model,
       max_tokens: 4096, // thinking tokens count towards this, so leave plenty of room
       system: systemPromptFor(this.effort),
-      messages: [{ role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous, source }) }],
+      messages: [{ role: 'user', content: buildUserMessage({ subject: this.subject, profile: this.profile, context, question, previous, source }) }],
     };
     if (supportsEffort(this.model)) params.output_config = { effort: this.effort };
     return params;

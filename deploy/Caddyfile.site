@@ -1,0 +1,13 @@
+
+# The website (home page), static files built by website/build.js. Added by deploy/setup.sh when a site host is given.
+__SITE_HOST__ {
+	encode gzip
+	root * /opt/classcue/website
+	try_files {path} {path}.html {path}/index.html
+	header /assets/* Cache-Control "public, max-age=3600"
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	file_server
+}

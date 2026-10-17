@@ -1,0 +1,30 @@
+# ClassCue admin server (licence API + dashboard), run by systemd on the server.
+# Installed by deploy/setup.sh to /etc/systemd/system/classcue-admin.service
+[Unit]
+Description=ClassCue admin server (licences, API, dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=classcue
+Group=classcue
+WorkingDirectory=/opt/classcue/admin
+Environment=HOST=127.0.0.1
+Environment=PORT=4180
+Environment=ADMIN_DATA_DIR=/opt/classcue/data
+Environment=SECURE_COOKIES=1
+Environment=TRUST_PROXY=1
+Environment=TRIAL_DAYS=7
+ExecStart=/usr/bin/node --no-warnings server.js
+Restart=always
+RestartSec=5
+
+# hardening: the server may only write to its data folder
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/classcue/data
+
+[Install]
+WantedBy=multi-user.target

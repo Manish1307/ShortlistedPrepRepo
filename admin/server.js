@@ -12,23 +12,28 @@ const { open } = require('./lib/db');
 const auth = require('./lib/auth');
 const { Signer } = require('./lib/licence');
 const aikeys = require('./lib/aikeys');
+const { TokenSigner } = require('./lib/aiproxy');
 const { buildRoutes } = require('./lib/routes');
 const { ApiError, readJson, sendJson, parseCookies, SECURITY_HEADERS } = require('./lib/http');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
 
-function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false } = {}) {
+function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false, aiUpstream, proxyLimiters, jobSourceBase } = {}) {
   const db = open(path.join(dataDir, 'admin.db'));
   const signer = new Signer(dataDir);
   aikeys.setup(db);
   const vault = new aikeys.KeyVault(dataDir);
+  const tokens = new TokenSigner(vault.secret);   // AI proxy access tokens (see lib/aiproxy.js)
   const limiters = {
     login: new auth.Limiter({ max: 5, windowMs: 15 * 60 * 1000 }),
     licence: new auth.Limiter({ max: 60, windowMs: 60 * 1000 }),
     contact: new auth.Limiter({ max: 5, windowMs: 60 * 60 * 1000 }),
+    trial: new auth.Limiter({ max: 10, windowMs: 60 * 60 * 1000 }),
+    track: new auth.Limiter({ max: 120, windowMs: 60 * 1000 }),
+    opportunity: new auth.Limiter({ max: 8, windowMs: 60 * 60 * 1000 }),
   };
-  const routes = buildRoutes({ db, signer, vault, limiters });
+  const routes = buildRoutes({ db, signer, vault, limiters, tokens, upstream: aiUpstream, proxyLimiters, jobSourceBase });
   const compiled = routes.map(r => ({
     ...r,
     regex: new RegExp('^' + r.pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'),
@@ -58,9 +63,10 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
       return serveStatic(req, res, url.pathname);
     }
 
-    // The website and the desktop app call the public API from other origins; it carries no cookies.
+    // The website and the desktop app call the public API from other origins; it carries no cookies
+    // (the website's My account page sends its sign-in token as Authorization: Bearer).
     const isPublic = url.pathname.startsWith('/api/');
-    const cors = isPublic ? { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' } : {};
+    const cors = isPublic ? { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' } : {};
     if (req.method === 'OPTIONS') { res.writeHead(isPublic ? 204 : 405, { ...cors, ...SECURITY_HEADERS }); return res.end(); }
 
     const route = compiled.find(r => r.method === req.method && r.regex.test(url.pathname));
@@ -82,8 +88,10 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
       }
     }
 
-    const body = req.method === 'GET' ? {} : await readJson(req);
+    if (route.options.before) route.options.before(req);   // e.g. the AI proxy's token, checked before a large body is read
+    const body = req.method === 'GET' ? {} : await readJson(req, route.options.maxBody);
     const result = await route.handler(req, res, { params, body, query: url.searchParams, admin, token, ip: clientIp(req) });
+    if (res.headersSent) return;   // the route streamed its own reply (the AI proxy)
 
     const headers = { ...cors, ...SECURITY_HEADERS };
     if (result && result.cookie) {
@@ -99,10 +107,12 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
   const server = http.createServer((req, res) => {
     handle(req, res).catch(err => {
       if (res.headersSent) return res.end();
-      if (err instanceof ApiError) return sendJson(res, err.status, { ok: false, error: err.message, code: err.code }, SECURITY_HEADERS);
-      if (err && err.status) return sendJson(res, err.status, { ok: false, error: err.message }, SECURITY_HEADERS);
+      // errors from the public API carry the CORS header too, so the website can show the message ("Wrong email or password")
+      const headers = String(req.url).startsWith('/api/') ? { ...SECURITY_HEADERS, 'Access-Control-Allow-Origin': '*' } : SECURITY_HEADERS;
+      if (err instanceof ApiError) return sendJson(res, err.status, { ok: false, error: err.message, code: err.code }, headers);
+      if (err && err.status) return sendJson(res, err.status, { ok: false, error: err.message }, headers);
       console.error('Unexpected error:', err);
-      sendJson(res, 500, { ok: false, error: 'Something went wrong on the server' }, SECURITY_HEADERS);
+      sendJson(res, 500, { ok: false, error: 'Something went wrong on the server' }, headers);
     });
   });
 
@@ -118,6 +128,7 @@ if (require.main === module) {
     secureCookies: process.env.SECURE_COOKIES === '1',
   });
   const owners = app.db.prepare("SELECT COUNT(*) AS n FROM admins WHERE role = 'owner' AND disabled = 0").get().n;
+  require('./lib/jobs').scheduleSync(app.db);   // Find jobs: refresh the companies' openings every JOB_SYNC_HOURS (default 6)
   app.server.listen(port, host, () => {
     console.log(`Admin dashboard: http://${host === '127.0.0.1' ? 'localhost' : host}:${port}`);
     if (!owners) console.log('No admin account yet. Create the first owner with:  npm run admin:create -- you@example.com');

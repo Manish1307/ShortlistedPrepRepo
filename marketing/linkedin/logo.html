@@ -1,0 +1,16 @@
+<!doctype html>
+<!-- LinkedIn company logo, 400x400 (LinkedIn shows it in a rounded square, so the gradient fills the whole image). -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=block">
+<style>
+  html, body { margin: 0; width: 400px; height: 400px; overflow: hidden; }
+  .logo { position: relative; width: 400px; height: 400px; background: linear-gradient(135deg, #00c4cc 0%, #4f7cff 48%, #7d2ae8 100%); display: grid; place-items: center; overflow: hidden; }
+  /* soft light from the top left, like the site's hero */
+  .logo::before { content: ""; position: absolute; inset: 0; background: radial-gradient(260px 220px at 18% 12%, rgba(255,255,255,.28), transparent 70%); }
+  .s { position: relative; font: 800 268px/1 "Plus Jakarta Sans", "Segoe UI", sans-serif; color: #fff; letter-spacing: -.04em; margin-top: -14px; text-shadow: 0 10px 30px rgba(40, 10, 110, .28); }
+  /* the spark from the site's "AI Powered" pill */
+  .spark { position: absolute; top: 74px; right: 84px; width: 46px; height: 46px; }
+</style></head>
+<body><div class="logo"><span class="s">S</span>
+<svg class="spark" viewBox="0 0 24 24"><path d="M12 0c.8 6.3 5.7 11.2 12 12-6.3.8-11.2 5.7-12 12-.8-6.3-5.7-11.2-12-12C6.3 11.2 11.2 6.3 12 0z" fill="#fff"/></svg>
+</div></body></html>

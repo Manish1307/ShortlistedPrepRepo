@@ -2,13 +2,16 @@
 // Live Class overlay: a floating toolbar, live transcript strip and question/answer card for use while teaching.
 // It hears questions with the same offline speech engine and answers them with the same AI service, model, subject
 // and prompts as the teacher assistant (saved Settings are shared; change them in the assistant's Settings).
-// It needs an active ClassCue licence (the same one as the assistant), checked with the licence server, which also
-// sends the AI keys to use: Groq for answers and Gemini for screenshots, chosen per licence in the admin dashboard
-// (AI keys). Keys from the server are kept in memory only; without one, the key saved on this computer is used.
+// It needs an active ClassCue licence (the same one as the assistant), checked with the licence server. The AI runs
+// through that server's AI proxy: Groq for answers and Gemini for screenshots, with the keys chosen per licence in the
+// admin dashboard (AI keys), and the keys never reach this computer (only a short-lived access token does).
+// A server without the proxy sends the keys instead (kept in memory only); without either, the key saved on this
+// computer is used.
 // While developing, TNA_LICENCE=off skips the licence check (local keys only).
 // It is a normal window: it is NOT hidden from screen sharing or recording.   npm run liveclass
 
 const { app, BrowserWindow, ipcMain, session, desktopCapturer, screen, shell } = require('electron');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -18,10 +21,12 @@ const { Answerer } = require('./src/ai/answerer');
 const { GeminiAnswerer } = require('./src/ai/gemini');
 const { GroqAnswerer } = require('./src/ai/groq');
 const { AnswerRouter } = require('./src/ai/router');
+const { ProxyAnswerer } = require('./src/ai/proxy');
 const { Pipeline } = require('./src/pipeline');
 const { WhisperServer } = require('./src/stt/whisperServer');
 const { LicenceClient, computerId } = require('./src/licence/client');
 const licenceSettings = require('./src/licence/settings');
+const { ConversationOutbox } = require('./src/conversations/outbox');
 
 // Tuned for a live class (the teacher assistant keeps its own, more patient settings), measured on this PC:
 // - a phrase ends after a 0.6 s pause (0.8 s in the assistant) and long speech is cut into pieces of at most 8 s;
@@ -53,13 +58,16 @@ let pipeline = null;
 let engine = { state: 'starting', message: '' };
 let speechModel = '';
 let licence = null;
-let serverKeys = {};                       // { groq?: {apiKey, source, label}, gemini?: {...} } from the licence server
+let serverKeys = {};                       // { groq?: {apiKey, source, label}, gemini?: {...} } from an older licence server
+let proxyGrant = null;                     // { token, expiresAt, services: {groq, gemini} }: AI through the licence server
 let keySources = { groq: 'none', gemini: 'none' };
+let serverProfile = null;                  // { topics, resume } for this customer, from the admin dashboard (Topics and resume)
+let outbox = null;                        // finished classes waiting to be saved on the licence server (Conversations)
 
 function send(channel, payload) { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); }
 const fromWin = event => !!(win && !win.isDestroyed() && event.sender === win.webContents);
 function setEngine(state, message = '') { engine = { state, message }; send('engine', engine); }
-const activeModel = s => (s.provider === 'gemini' ? s.geminiModel : s.provider === 'groq' ? s.groqModel : s.model);
+const activeModel = s => (s.provider === 'gemini' ? s.geminiModel : s.provider === 'groq' || s.provider === 'proxy' ? s.groqModel : s.model);
 
 function createWindow() {
   win = new BrowserWindow({
@@ -114,27 +122,48 @@ function licenceStatus() {
 }
 const licensed = () => licenceStatus().state === 'active';
 
-/** Puts the right key into each AI client: the server's key for this licence first, else the one saved here. */
+/**
+ * Chooses how each service is reached: through the licence server's AI proxy when it serves it for this licence,
+ * else with the key the server sent (older server), else with the key saved here.
+ */
 function applyKeys() {
   if (!answerer) return;
   const s = config.load();
+  const proxied = (proxyGrant && proxyGrant.services) || {};
+  answerer.providers.proxy.setServices(proxied);
   for (const provider of ['groq', 'gemini']) {
     const fromServer = serverKeys[provider] && serverKeys[provider].apiKey;
     const local = config.getApiKey(provider);
     answerer.providers[provider].setApiKey(fromServer || local);
-    keySources[provider] = fromServer ? 'server' : local ? 'local' : 'none';
+    keySources[provider] = proxied[provider] ? 'proxy' : fromServer ? 'server' : local ? 'local' : 'none';
   }
-  // the server's keys decide the services: Groq writes the answers, Gemini reads screenshots
-  answerer.setProvider(serverKeys.groq ? 'groq' : s.provider);
-  answerer.setScreenProvider(serverKeys.gemini ? 'gemini' : s.screenProvider);
+  // the server decides the services: Groq writes the answers, Gemini reads screenshots
+  answerer.setProvider(proxied.groq ? 'proxy' : serverKeys.groq ? 'groq' : s.provider);
+  answerer.setScreenProvider(proxied.gemini ? 'proxy' : serverKeys.gemini ? 'gemini' : s.screenProvider);
+  answerer.setProfile(serverProfile);   // the topics and resume decide the area of the questions and answers
+}
+
+/** The AI proxy's access token; renewed from the licence server when it is about to expire or was refused. */
+let renewing = null;
+async function proxyToken(renew = false) {
+  const fresh = proxyGrant && proxyGrant.expiresAt - Date.now() > 60 * 1000;
+  if (fresh && !renew) return proxyGrant.token;
+  if (!renewing) renewing = syncLicence().finally(() => { renewing = null; });
+  await renewing;
+  return proxyGrant ? proxyGrant.token : null;
 }
 
 /** Re-check the licence and fetch this licence's AI keys. Tells the page what changed. */
 async function syncLicence() {
-  if (licenceSkipped()) { serverKeys = {}; applyKeys(); send('licence', licenceStatus()); return; }
+  if (licenceSkipped()) { serverKeys = {}; proxyGrant = null; serverProfile = null; applyKeys(); send('licence', licenceStatus()); return; }
   if (!licence) return;
-  const { ai } = await licence.appConfig();
+  const { ai, proxy, profile } = await licence.appConfig({ proxy: true });
   serverKeys = licensed() ? ai : {};
+  if (profile !== undefined) serverProfile = profile;   // offline: keep the topics and resume from the last check
+  if (!licensed()) serverProfile = null;
+  // offline for a moment: a token that is still valid keeps working
+  const keep = proxyGrant && proxyGrant.expiresAt > Date.now() && !Object.keys(ai).length ? proxyGrant : null;
+  proxyGrant = licensed() ? proxy || keep : null;
   applyKeys();
   if (!licensed() && pipeline) pipeline.pause();
   send('licence', licenceStatus());
@@ -151,6 +180,7 @@ async function startEngine() {
     gemini: new GeminiAnswerer({ apiKey: config.getApiKey('gemini'), model: s.geminiModel, effort: s.effort, subject: s.subject }),
     groq: new GroqAnswerer({ apiKey: config.getApiKey('groq'), model: s.groqModel, effort: s.effort, subject: s.subject }),
     claude: new Answerer({ apiKey: config.getApiKey('claude'), model: s.model, effort: s.effort, subject: s.subject }),
+    proxy: new ProxyAnswerer({ serverUrl: licenceSettings.SERVER_URL, getToken: proxyToken, model: s.groqModel, effort: s.effort, subject: s.subject }),
   });
   applyKeys();
   pipeline = new Pipeline({ whisper: null, answerer, subject: s.subject, autoAnswer: s.autoAnswer, vad: LIVE_VAD, quietMs: LIVE_QUIET_MS });
@@ -195,6 +225,7 @@ function info() {
     engine, speechModel, subject: s.subject, provider, model: activeModel({ ...s, provider }), screenProvider,
     hasKey: answerer ? answerer.ready : !!config.getApiKey(s.provider), audioSource: s.audioSource, autoAnswer: s.autoAnswer, language: s.language,
     keySources, licence: licenceStatus(),
+    profile: serverProfile ? { topics: serverProfile.topics, hasResume: !!serverProfile.resume } : null,
   };
 }
 
@@ -260,16 +291,46 @@ ipcMain.on('lc:capture', event => { if (allowed(event)) captureScreen(); });
 // Auto Answer here applies to this Live Class session only; the assistant's saved setting is left as it is
 ipcMain.on('lc:auto-answer', (event, on) => { if (fromWin(event) && pipeline) pipeline.setAutoAnswer(!!on); });
 ipcMain.on('lc:close', event => { if (fromWin(event)) app.quit(); });   // Quit: closes the window and stops the speech engine
+// The see-through parts of the window let clicks reach the app behind it; mouse moves are still forwarded so the
+// page can switch back as soon as the pointer is over the toolbar, transcript or answer card.
+ipcMain.on('lc:click-through', (event, on) => {
+  if (fromWin(event)) { if (on) win.setIgnoreMouseEvents(true, { forward: true }); else win.setIgnoreMouseEvents(false); }
+});
+
+// ---- End: the whole class goes to the licence server, shown in the dashboard under Conversations ----------
+// It is written to a file on this computer first, so a class is never lost when the server cannot be reached.
+
+const isoOr = (value, fallback) => (Number.isFinite(Date.parse(value)) ? new Date(Date.parse(value)).toISOString() : fallback);
+ipcMain.handle('lc:save-conversation', async (event, c) => {
+  if (!fromWin(event) || !outbox || !c || typeof c !== 'object') return null;
+  const endedAt = isoOr(c.endedAt, new Date().toISOString());
+  const list = value => (Array.isArray(value) ? value : []);
+  outbox.add({
+    uid: /^[A-Za-z0-9-]{8,64}$/.test(String(c.uid || '')) ? c.uid : crypto.randomUUID(),
+    app: 'liveclass', subject: config.load().subject || '',
+    startedAt: isoOr(c.startedAt, endedAt), endedAt,
+    transcript: list(c.transcript).map(p => ({ at: p && p.at, text: String((p && p.text) || '') })),
+    items: list(c.items).map(it => ({
+      at: it && it.at, question: String((it && it.question) || ''), answer: String((it && it.answer) || ''),
+      status: it && it.status, error: String((it && it.error) || ''), source: String((it && it.source) || ''), vote: it && it.vote,
+    })),
+  });
+  const result = await outbox.flush();
+  return { saved: !result.error, message: result.error };
+});
 
 // ---- app lifecycle -----------------------------------------------------------------------------------
 
 app.whenReady().then(() => {
   setupMediaPermissions();
   setupLicence();
+  outbox = new ConversationOutbox({ dir: path.join(app.getPath('userData'), 'conversations-outbox'), serverUrl: licenceSettings.SERVER_URL, getToken: proxyToken });
   createWindow();
+
   win.webContents.once('did-finish-load', async () => {
     startEngine();          // builds the AI clients straight away, then loads the speech model
     await syncLicence();
+    if (outbox.pending().length) outbox.flush();   // classes that could not be sent last time
   });
   setInterval(() => { syncLicence(); }, CONFIG_REFRESH_MS).unref();
 });

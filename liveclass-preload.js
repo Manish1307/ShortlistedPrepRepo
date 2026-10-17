@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('liveClassAPI', {
   captureScreen: () => ipcRenderer.send('lc:capture'),
   setAutoAnswer: on => ipcRenderer.send('lc:auto-answer', !!on),
   close: () => ipcRenderer.send('lc:close'),
+  setClickThrough: on => ipcRenderer.send('lc:click-through', !!on),
+  saveConversation: conversation => ipcRenderer.invoke('lc:save-conversation', conversation),
   activateLicence: key => ipcRenderer.invoke('lc:licence-activate', String(key || '')),
   checkLicence: () => ipcRenderer.invoke('lc:licence-check'),
   onLicence: callback => subscribe('licence', callback),

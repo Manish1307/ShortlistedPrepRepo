@@ -29,6 +29,14 @@ function computerId(dir) {
   return id;
 }
 
+/** The customer's topics and resume from /api/app/config (set in the admin dashboard), or null when none is set. */
+function cleanProfile(p) {
+  if (!p || typeof p !== 'object') return null;
+  const topics = Array.isArray(p.topics) ? p.topics.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+  const resume = typeof p.resume === 'string' ? p.resume.slice(0, 20000) : '';
+  return topics.length || resume ? { topics, resume } : null;
+}
+
 class LicenceClient {
   /**
    * @param {{serverUrl: string, publicKeyPem: string, dir: string, deviceId: string, deviceName?: string,
@@ -156,25 +164,33 @@ class LicenceClient {
 
   /**
    * Re-check the licence (like refresh) and get the AI keys this licence should use (/api/app/config).
-   * Returns { status, ai: { groq?: {apiKey, source, label}, gemini?: {...} } }. The keys are only returned, never
+   * Returns { status, ai: { groq?: {apiKey, source, label}, gemini?: {...} }, proxy, profile } (profile: the customer's
+   * topics and resume, null when none is set, undefined when the server was not reached). The keys are only returned, never
    * saved on this computer. Offline, or with an older server, ai is empty and the grace period applies as usual.
    */
-  async appConfig() {
+  async appConfig({ proxy = false } = {}) {
     const saved = this._read();
     const p = this._verified(saved);
-    if (!p) return { status: this.status(), ai: {} };
+    if (!p) return { status: this.status(), ai: {}, proxy: null, profile: null };
     try {
-      const data = await this._post('/api/app/config', { key: p.key, deviceId: this.deviceId, deviceName: this.deviceName, appVersion: this.appVersion });
+      // proxy: ask for an AI proxy access token instead of the keys; a server without the proxy sends keys as before
+      const data = await this._post('/api/app/config', { key: p.key, deviceId: this.deviceId, deviceName: this.deviceName, appVersion: this.appVersion, ...(proxy ? { proxy: true } : {}) });
       if (data.ok) {
         const accepted = this._accept(data);
-        return { status: this.status(), ai: accepted.ok && data.ai && typeof data.ai === 'object' ? data.ai : {} };
+        const grant = data.aiProxy;
+        return {
+          status: this.status(),
+          ai: accepted.ok && data.ai && typeof data.ai === 'object' ? data.ai : {},
+          proxy: accepted.ok && grant && typeof grant.token === 'string' ? { token: grant.token, expiresAt: Date.parse(grant.expiresAt) || 0, services: grant.services || {} } : null,
+          profile: accepted.ok ? cleanProfile(data.profile) : null,
+        };
       }
       if (REJECTED[data.code]) this._write({ ...saved, rejected: { code: data.code, message: data.message || '', at: new Date(this.now()).toISOString() } });
       else this.lastError = data.error || data.message || 'The licence server did not send the app settings.';
     } catch (err) {
       this.lastError = err.message;
     }
-    return { status: this.status(), ai: {} };
+    return { status: this.status(), ai: {}, proxy: null, profile: undefined };   // undefined: unknown (offline), keep what was there
   }
 
   /** Free this computer's place on the licence (moving to a new PC), then forget the licence here. */
@@ -190,4 +206,4 @@ class LicenceClient {
   }
 }
 
-module.exports = { LicenceClient, computerId };
+module.exports = { LicenceClient, computerId, cleanProfile };

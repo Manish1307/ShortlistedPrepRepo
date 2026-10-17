@@ -21,8 +21,10 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
 });
 
 class GroqAnswerer {
-  constructor({ apiKey = '', model = DEFAULT_MODEL, effort = 'low', subject = '', retryDelayMs = 600 } = {}) {
+  constructor({ apiKey = '', model = DEFAULT_MODEL, effort = 'low', subject = '', retryDelayMs = 600, fetchImpl = null } = {}) {
     this.apiKey = apiKey;
+    // every request goes through this; the licence-server proxy (proxy.js) sends them to the server instead
+    this._fetch = fetchImpl || ((url, init) => fetch(url, init));
     this.model = model;
     this.effort = effort;
     this.subject = subject;
@@ -32,10 +34,11 @@ class GroqAnswerer {
   setApiKey(apiKey) { this.apiKey = apiKey || ''; }
   setModel(model) { this.model = model || DEFAULT_MODEL; }
   setSubject(subject) { this.subject = subject || ''; }
+  setProfile(profile) { this.profile = profile || null; }   // topics and resume from the admin dashboard
   get ready() { return !!this.apiKey; }
 
   async _post(body, signal) {
-    const res = await fetch(ENDPOINT, {
+    const res = await this._fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify(body),
@@ -55,7 +58,7 @@ class GroqAnswerer {
 
   /** Ask Groq which chat models this key can use, best first. Model names change often, so we never rely on one. */
   async _availableModels(signal) {
-    const res = await fetch(MODELS_ENDPOINT, { headers: { Authorization: 'Bearer ' + this.apiKey }, signal });
+    const res = await this._fetch(MODELS_ENDPOINT, { headers: { Authorization: 'Bearer ' + this.apiKey }, signal });
     if (!res.ok) return [];
     const ids = ((await res.json()).data || []).map(m => m.id);
     const chat = ids.filter(id => !/whisper|tts|guard|playai|embed|orpheus|moderation/i.test(id));
@@ -114,7 +117,7 @@ class GroqAnswerer {
     const lines = [];
     let ids;
     try {
-      const res = await fetch(MODELS_ENDPOINT, { headers: { Authorization: 'Bearer ' + this.apiKey }, signal: AbortSignal.timeout(15000) });
+      const res = await this._fetch(MODELS_ENDPOINT, { headers: { Authorization: 'Bearer ' + this.apiKey }, signal: AbortSignal.timeout(15000) });
       if (res.status === 401) return ['Groq rejected the key (401). Check that it was copied completely (it starts with gsk_), or create a new one at console.groq.com/keys.'];
       if (!res.ok) return ['Groq answered with an error (' + res.status + ') when listing models. Try again in a minute.'];
       ids = ((await res.json()).data || []).map(m => m.id);
@@ -141,10 +144,22 @@ class GroqAnswerer {
     const res = await this._open(model => ({
       model, temperature: 0, max_tokens: 500, stream: false, ...this._reasoning(model),
       messages: [{ role: 'system', content: EXTRACT_PROMPT },
-        { role: 'user', content: buildExtractMessage({ subject: this.subject, context, text, previous }) }],
+        { role: 'user', content: buildExtractMessage({ subject: this.subject, profile: this.profile, context, text, previous }) }],
     }), signal);
     const data = await res.json();
     return parseQuestionList(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
+  }
+
+  /** One plain request, whole reply as text (used by the mock interviewer). json: ask for a JSON reply. */
+  async complete({ system, user, maxTokens = 2000, json = false, signal } = {}) {
+    if (!this.apiKey) throw Object.assign(new Error('No Groq API key set'), { code: 'no-key' });
+    const res = await this._open(model => ({
+      model, stream: false, temperature: 0.5, max_tokens: maxTokens, ...this._reasoning(model),
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    }), signal);
+    const data = await res.json();
+    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
   }
 
   /** Screen capture: copy the question(s) out of a screenshot (base64). Returns a list (may be empty), or null. */
@@ -153,7 +168,7 @@ class GroqAnswerer {
     const body = model => ({
       model, stream: false, temperature: 0, max_tokens: 1500,
       messages: [{ role: 'system', content: SCREEN_PROMPT }, { role: 'user', content: [
-        { type: 'text', text: buildScreenMessage({ subject: this.subject, previous }) },
+        { type: 'text', text: buildScreenMessage({ subject: this.subject, profile: this.profile, previous }) },
         { type: 'image_url', image_url: { url: `data:${mimeType};base64,${image}` } },
       ] }],
     });
@@ -190,7 +205,7 @@ class GroqAnswerer {
     const res = await this._open(model => ({
       model, stream: true, temperature: 0.4, max_tokens: maxTokens, ...this._reasoning(model),
       messages: [{ role: 'system', content: systemPromptFor(this.effort) },
-        { role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous, source }) }],
+        { role: 'user', content: buildUserMessage({ subject: this.subject, profile: this.profile, context, question, previous, source }) }],
     }), signal);
 
     let text = '', held = '', decided = false, skipped = false;
@@ -225,4 +240,4 @@ class GroqAnswerer {
   }
 }
 
-module.exports = { GroqAnswerer, DEFAULT_MODEL };
+module.exports = { GroqAnswerer, DEFAULT_MODEL, ENDPOINT, MODELS_ENDPOINT };

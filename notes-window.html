@@ -185,6 +185,22 @@
     .settings .check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 12px; color: #e5e7eb; }
     .settings .actions { margin-top: 16px; display: flex; gap: 8px; align-items: center; }
     .ok { color: #86efac; font-size: 12px; }
+    /* licence screen: covers the assistant (not Settings) until there is a valid licence */
+    .gate { position: absolute; inset: 41px 0 0 0; background: #18181c; z-index: 4; display: none; overflow-y: auto; }
+    .gate.show { display: block; }
+    .gateBox { max-width: 520px; margin: 0 auto; padding: 26px 18px; }
+    .gateBox h2 { margin: 0 0 6px; font-size: 20px; color: #fff; }
+    .gateText { margin: 0 0 16px; color: #cbd5e1; font-size: 13px; line-height: 1.5; }
+    .gateCard { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+    .gateCard h3 { margin: 0 0 4px; font-size: 14px; color: #fff; }
+    .gateCard .hint { font-size: 12px; color: #9ca3af; line-height: 1.4; }
+    .gateRow { display: flex; gap: 8px; margin-top: 10px; }
+    .gateRow input { flex: 1; min-width: 0; box-sizing: border-box; background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 7px 10px; font-size: 13px; outline: none; }
+    .gateRow input:focus { border-color: #60a5fa; }
+    .gateMsg { min-height: 18px; font-size: 12px; line-height: 1.45; margin: 4px 0; }
+    .gateMsg.bad { color: #fca5a5; } .gateMsg.good { color: #86efac; }
+    .licBadge { margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 10px; letter-spacing: .04em; background: rgba(251,191,36,.2); color: #fde68a; }
+    .licBadge:empty { display: none; }
     /* ALWAYS ON: the real pointer is invisible over the whole window; our own pointer (below) is drawn instead */
     body.nocursor * { cursor: none !important; }
     /* Windows controls the pointer over a drag area itself, so while the pointer is hidden the title bar is not one */
@@ -199,7 +215,7 @@
   <div class="panel">
     <div id="grip" aria-label="Drag to resize"></div>
     <div class="titlebar">
-      <span><span id="dot" class="dot"></span><span id="statusText">🔒 Private Assistant</span></span>
+      <span><span id="dot" class="dot"></span><span id="statusText">🔒 Private Assistant</span><span id="licBadge" class="licBadge"></span></span>
       <span class="right">
         <span class="opacity-wrap">
           <button id="opacityBtn" class="opacity" aria-label="Window transparency (Ctrl/Cmd+Shift+T = back to 100%)" aria-haspopup="true" aria-expanded="false">100% ▾</button>
@@ -257,6 +273,32 @@ This text is NOT visible to students during screen share."></textarea>
       <div class="badge">🔒 Hidden from screen share · saved on this computer</div>
     </div>
 
+    <div id="licenceGate" class="gate">
+      <div class="gateBox">
+        <h2 id="gateTitle">Welcome to ClassCue</h2>
+        <p id="gateText" class="gateText">Start a free trial or enter your licence key to use the assistant.</p>
+        <div id="gateTrial" class="gateCard">
+          <h3 id="trialTitle">Start your 7-day free trial</h3>
+          <div class="hint">No payment needed. One trial per computer.</div>
+          <div class="gateRow">
+            <input id="trialEmail" type="text" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Your email" aria-label="Your email" />
+            <button id="btnTrial" class="btn primary">Start free trial</button>
+          </div>
+        </div>
+        <div class="gateCard">
+          <h3>I have a licence key</h3>
+          <div class="gateRow">
+            <input id="licKey" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="CC-XXXX-XXXX-XXXX" aria-label="Licence key" />
+            <button id="btnActivate" class="btn primary">Activate</button>
+          </div>
+        </div>
+        <div id="gateMsg" class="gateMsg" aria-live="polite"></div>
+        <div class="gateRow">
+          <button id="btnCheckAgain" class="btn">↻ Check again</button>
+          <button id="btnBuy" class="btn">Buy a licence</button>
+        </div>
+      </div>
+    </div>
     <div id="settings" class="settings">
       <label for="sSubject">Subject / topic of today's class</label>
       <input id="sSubject" type="text" maxlength="200" placeholder="e.g. Quadratic equations, Grade 10 maths" />
@@ -333,6 +375,15 @@ This text is NOT visible to students during screen share."></textarea>
         <div class="hint" id="screenKeyHint"></div>
       </div>
 
+      <div class="trouble">
+        <h4>Licence</h4>
+        <div id="licInfo" class="hint"></div>
+        <div class="actions">
+          <button id="btnLicCheck" class="btn">↻ Check now</button>
+          <button id="btnLicDeactivate" class="btn">Deactivate this PC…</button>
+        </div>
+        <div class="hint">Deactivate frees this computer's place on your licence, so you can use it on a new PC.</div>
+      </div>
       <div class="trouble">
         <h4>If something is stuck</h4>
         <div class="actions">

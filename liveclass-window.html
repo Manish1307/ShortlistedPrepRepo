@@ -127,6 +127,7 @@
     .chatrow input:focus { border-color: var(--accent); }
 
     .overlay.collapsed .strip, .overlay.collapsed .card { display: none; }
+    .savenote { color: var(--muted); font-size: 12px; }
     .ended { margin-top: 8px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 14px; display: flex; align-items: center; gap: 10px; }
 
     /* ---- settings menu (kebab) ---- */
@@ -210,6 +211,9 @@
       <div class="srow" id="licenceRowWrap">
         <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg><span id="licenceRow">Licence: checking…</span></div>
       </div>
+      <div class="srow" id="focusRowWrap" hidden>
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg><span id="focusRow"></span></div>
+      </div>
       <div class="srow link" id="btnDashboard" title="Open the dashboard">
         <div class="lbl"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span>Dashboard</span></div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M9 7h8v8"/></svg>
@@ -273,7 +277,7 @@
     </div>
 
     <div class="ended" id="ended" hidden>
-      <span>Class ended after <b id="endedTime"></b> · <span id="endedCount"></span></span>
+      <span>Class ended after <b id="endedTime"></b> · <span id="endedCount"></span><br /><small class="savenote" id="endedSave"></small></span>
       <span class="grow"></span>
       <button class="sbtn primary" id="btnRestart">Start again</button>
       <button class="sbtn" id="btnClose">Quit</button>

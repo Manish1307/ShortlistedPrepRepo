@@ -63,12 +63,17 @@ class Limiter {
 // What each role may change. Everyone signed in may read everything except the team list.
 const PERMISSIONS = {
   'messages.write': ['owner', 'admin', 'support'],
+  'opportunities.write': ['owner', 'admin', 'support'],
   'licence.minor': ['owner', 'admin', 'support'],   // extend, reset devices, note
   'licence.major': ['owner', 'admin'],              // create, revoke, reinstate, change device limit
   'customers.write': ['owner', 'admin'],
   'orders.write': ['owner', 'admin'],
   'releases.write': ['owner', 'admin'],
   'aikeys.write': ['owner', 'admin'],               // add, replace, set default, assign AI keys to licences
+  'conversations.delete': ['owner', 'admin'],       // delete a saved Live Class conversation
+  'profiles.write': ['owner', 'admin', 'support'],  // a customer's topics and resume (what the AI focuses on)
+  'accounts.write': ['owner', 'admin'],             // a customer's website login: new password, turn off / on
+  'jobs.write': ['owner', 'admin'],                 // Find jobs: companies, sync, master prompt
   'team.read': ['owner'],
   'team.write': ['owner'],
 };

@@ -22,6 +22,7 @@
     return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
   };
   const isQuestion = text => /\?\s*$/.test(text) && text.trim().split(/\s+/).length > 2;
+  const newUid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12));
 
   let toastTimer = null;
   function toast(text) {
@@ -35,7 +36,7 @@
   const DASHBOARD_URL = 'http://localhost:4180';
   const SOURCES = { mic: 'Mic', system: 'System', both: 'Mic + System' };
   const LANGUAGES = { en: 'English', hi: 'Hindi', es: 'Spanish', fr: 'French', de: 'German' };
-  const PROVIDERS = { groq: 'Groq', gemini: 'Gemini', claude: 'Claude', demo: 'Demo' };
+  const PROVIDERS = { groq: 'Groq', gemini: 'Gemini', claude: 'Claude', demo: 'Demo', proxy: 'Groq' };   // proxy: Groq through the licence server
 
   // ---- state ---------------------------------------------------------------------------------------
   const DEFAULTS = { zoom: 100, opacity: 100, font: 15 };
@@ -45,7 +46,9 @@
     language: 'en', autoAnswer: false, editing: false,
     engine: { state: 'starting', message: '' }, info: null, notice: null,
     licence: { state: live ? 'checking' : 'active', dev: !live },
-    heard: [],         // { text, isQuestion }
+    heard: [],         // { text, isQuestion }: the latest phrases, shown in the strip
+    log: [],           // { at, text }: everything heard this class, saved when it ends
+    uid: newUid(),     // this class's id on the server (sending it twice does not make two copies)
     partial: '',       // the words of the phrase still being spoken
     speaking: false, transcribing: false,
     items: [],         // { id, question, text, status: 'thinking' | 'done' | 'error', error, at: Date, vote }
@@ -307,6 +310,7 @@
         state.partial = '';
         state.heard.push({ text: m.text, isQuestion: isQuestion(m.text) });
         if (state.heard.length > 60) state.heard.shift();
+        if (!state.ended) state.log.push({ at: new Date().toISOString(), text: m.text });
         renderPhrases();
         break;
       }
@@ -432,10 +436,29 @@
     $('ended').hidden = false;
     closeMenus();
     applyView();
+    saveConversation();
+  }
+
+  /** Sends the finished class to the dashboard (Conversations). Kept on this computer if the server cannot be reached. */
+  async function saveConversation() {
+    const line = $('endedSave');
+    line.textContent = '';
+    if (!live || !api.saveConversation || (!state.log.length && !state.items.length)) return;
+    line.textContent = 'Saving to the dashboard…';
+    const conversation = {
+      uid: state.uid, startedAt: new Date(state.startedAt).toISOString(), endedAt: new Date().toISOString(),
+      transcript: state.log,
+      items: state.items.map(i => ({ at: i.at.toISOString(), question: i.question, answer: i.text, status: i.status === 'thinking' ? 'unanswered' : i.status, error: i.error || '', source: i.source || '', vote: i.vote })),
+    };
+    try {
+      const r = await api.saveConversation(conversation);
+      line.textContent = r && r.saved ? '✓ Saved to the dashboard' : (r && r.message) || 'Not saved';
+    } catch (err) { line.textContent = 'Not saved: ' + err.message; }
   }
 
   function restart() {
-    Object.assign(state, { startedAt: Date.now(), ended: false, heard: [], partial: '', items: [], index: -1, editing: false, collapsed: false, notice: null });
+    Object.assign(state, { startedAt: Date.now(), ended: false, heard: [], log: [], uid: newUid(), partial: '', items: [], index: -1, editing: false, collapsed: false, notice: null });
+    $('endedSave').textContent = '';
     $('strip').hidden = false;
     $('card').hidden = false;
     $('ended').hidden = true;
@@ -494,6 +517,18 @@
   $('srcMenu').addEventListener('click', e => e.stopPropagation());
   document.addEventListener('click', closeMenus);
 
+  // The window is larger than what it shows (transparent around the panels, and most of it when collapsed):
+  // clicks on those empty parts go to the app behind it. Never switched in the middle of a drag or text selection.
+  if (live && api.setClickThrough) {
+    let through = null;
+    document.addEventListener('mousemove', e => {
+      if (e.buttons) return;
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const empty = !target || target === document.documentElement || target === document.body || target === $('overlay');
+      if (empty !== through) { through = empty; api.setClickThrough(empty); }
+    });
+  }
+
   document.addEventListener('keydown', e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement && document.activeElement.tagName);
     if (e.key === 'Escape') { closeMenus(); return; }
@@ -507,7 +542,7 @@
   });
 
   // ---- start ---------------------------------------------------------------------------------------
-  const SOURCE_TEXT = { server: 'key from your licence', local: 'key saved on this computer', none: 'no key' };
+  const SOURCE_TEXT = { proxy: 'through your licence (no key on this computer)', server: 'key from your licence', local: 'key saved on this computer', none: 'no key' };
   function applyInfo(info) {
     state.info = info;
     const ai = `${PROVIDERS[info.provider] || info.provider} · ${info.model}`;
@@ -516,6 +551,15 @@
     $('account').parentElement.title = (info.subject ? 'Subject: ' + info.subject + '\n' : '') + 'AI: ' + ai +
       (ks.groq ? `\nGroq: ${SOURCE_TEXT[ks.groq]}\nGemini (screenshots): ${SOURCE_TEXT[ks.gemini]}` : '');
     if (info.licence) applyLicence(info.licence);
+    // the topics and resume set for this customer in the admin dashboard
+    const p = info.profile;
+    $('focusRowWrap').hidden = !p;
+    if (p) {
+      const focus = [p.topics.length ? p.topics.join(', ') : '', p.hasResume ? 'resume' : ''].filter(Boolean).join(' · ');
+      $('focusRow').textContent = 'Focus: ' + focus;
+      $('focusRowWrap').title = 'Set in the admin dashboard (Topics and resume). The AI answers within these areas.' +
+        (p.topics.length ? '\nTopics: ' + p.topics.join(', ') : '') + (p.hasResume ? '\nUses the resume to fit the answers to the person\'s experience.' : '');
+    }
   }
 
   $('gateActivate').addEventListener('click', activate);

@@ -1,0 +1,28 @@
+<!-- title: My account | description: Your profile, licences, computers, topics and classes. -->
+<link rel="stylesheet" href="assets/account.css?v=5">
+<section class="ac-hero">
+  <div class="wrap">
+    <div class="ac-hero-row">
+      <div class="ac-who">
+        <div class="ac-avatar" id="ac-avatar" aria-hidden="true">·</div>
+        <div>
+          <h1 id="ac-name">Loading your account…</h1>
+          <div class="ac-sub" id="ac-sub"></div>
+        </div>
+      </div>
+      <div class="ac-hero-actions">
+        <a class="btn btn-primary" href="career.html">Career toolkit</a>
+        <a class="btn" href="contact.html">Get help</a>
+        <button class="btn" type="button" id="ac-signout" hidden>Sign out</button>
+      </div>
+    </div>
+    <nav class="ac-tabs" id="ac-tabs" role="tablist" aria-label="Account sections" hidden></nav>
+  </div>
+</section>
+<section class="ac-main">
+  <div class="wrap">
+    <p class="note ac-alert" id="ac-error" role="alert" hidden></p>
+    <div id="ac-content"></div>
+  </div>
+</section>
+<script src="assets/account.js?v=4"></script>

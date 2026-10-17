@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, desktopCapturer } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, screen, session, desktopCapturer, shell } = require('electron');
 const fs = require('fs');
 const exporter = require('./src/export');
 const os = require('os');
@@ -11,8 +11,14 @@ const { GroqAnswerer } = require('./src/ai/groq');
 const { AnswerRouter } = require('./src/ai/router');
 const { Pipeline } = require('./src/pipeline');
 const { WhisperServer } = require('./src/stt/whisperServer');
+const { LicenceClient, computerId } = require('./src/licence/client');
+const licenceSettings = require('./src/licence/settings');
 
-const WHISPER_DIR = process.env.TNA_WHISPER_DIR || path.join(__dirname, 'whisper');
+// Installed copies keep their settings, keys and licence in %APPDATA%ClassCue (development keeps teacher-notes-app).
+if (app.isPackaged) app.setName('ClassCue');
+
+// Installed: the speech engine sits next to the app (resources\whisper), because programs cannot run from inside app.asar.
+const WHISPER_DIR = process.env.TNA_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
 const BIN_DIR = path.join(WHISPER_DIR, 'bin');
 const MODELS_DIR = path.join(WHISPER_DIR, 'models');
 
@@ -260,6 +266,95 @@ function stopEngine() {
   if (whisper) whisper.stop();
 }
 
+// ---- licence: free trial or licence key, checked with the licence server ------------------------------
+// Without a valid licence the assistant is locked (listening, capture, asking); settings stay usable.
+// While developing (not installed) TNA_LICENCE=off, or the smoke test, skips the check.
+
+let licence = null;
+const licenceSkipped = () => !app.isPackaged && (process.env.TNA_LICENCE === 'off' || (process.argv.includes('--smoke') && !process.env.TNA_SMOKE_LICENCE));
+
+function licenceStatus() {
+  if (licenceSkipped()) return { state: 'active', kind: 'development', plan: 'development', dev: true };
+  return licence ? { ...licence.status(), server: licenceSettings.SERVER_URL } : { state: 'none' };
+}
+const licensed = () => licenceStatus().state === 'active';
+const sendLicence = () => toNotes('licence', licenceStatus());
+
+/** True when the assistant may be used; otherwise shows the licence screen and returns false. */
+function requireLicence() {
+  if (licensed()) {
+    // in use and the last check is a few minutes old: check again in the background, so a cancelled licence locks soon
+    if (Date.now() - lastLicenceCheck > ON_USE_CHECK_MS) refreshLicence();
+    return true;
+  }
+  sendLicence();
+  if (notesWindow && !notesWindow.isDestroyed() && !notesWindow.isVisible()) notesWindow.show();
+  return false;
+}
+
+function setupLicence() {
+  const dir = app.getPath('userData');
+  licence = new LicenceClient({
+    serverUrl: licenceSettings.SERVER_URL,
+    publicKeyPem: fs.readFileSync(licenceSettings.PUBLIC_KEY_FILE, 'utf8'),
+    dir, deviceId: computerId(dir), deviceName: os.hostname(), appVersion: app.getVersion(),
+    graceDays: licenceSettings.GRACE_DAYS,
+  });
+}
+
+// How quickly a licence cancelled in the dashboard reaches the app: a check every 30 minutes, and also when the
+// assistant is used and the last check is over 5 minutes old. Offline, the grace period applies instead.
+const PERIODIC_CHECK_MS = 30 * 60 * 1000;
+const ON_USE_CHECK_MS = 5 * 60 * 1000;
+let lastLicenceCheck = 0;
+let licenceCheckRunning = null;
+
+function refreshLicence() {
+  if (!licence || licenceSkipped()) return Promise.resolve();
+  if (licenceCheckRunning) return licenceCheckRunning;          // one check at a time
+  lastLicenceCheck = Date.now();
+  licenceCheckRunning = (async () => {
+    const before = licensed();
+    await licence.refresh();
+    debugLog('note', { message: `licence check: ${licenceStatus().state}${licence.lastError ? ' (' + licence.lastError + ')' : ''}` });
+    sendLicence();
+    if (before && !licensed()) {                                 // cancelled or expired while running: stop now
+      if (pipeline) pipeline.pause();
+      toNotes('ui', { type: 'licence-locked' });
+      if (notesWindow && !notesWindow.isDestroyed() && !notesWindow.isVisible()) notesWindow.show();
+    }
+  })().finally(() => { licenceCheckRunning = null; });
+  return licenceCheckRunning;
+}
+setInterval(() => { refreshLicence(); }, PERIODIC_CHECK_MS).unref();
+
+ipcMain.handle('licence:get', event => (fromNotes(event) ? licenceStatus() : null));
+ipcMain.handle('licence:activate', async (event, key) => {
+  if (!fromNotes(event) || !licence) return null;
+  const res = await licence.activate(String(key || ''));
+  sendLicence();
+  return res;
+});
+ipcMain.handle('licence:trial', async (event, email) => {
+  if (!fromNotes(event) || !licence) return null;
+  const res = await licence.startTrial(String(email || ''));
+  sendLicence();
+  return res;
+});
+ipcMain.handle('licence:refresh', async event => {
+  if (!fromNotes(event)) return null;
+  await refreshLicence();
+  return licenceStatus();
+});
+ipcMain.handle('licence:deactivate', async event => {
+  if (!fromNotes(event) || !licence) return null;
+  if (pipeline) pipeline.pause();
+  const res = await licence.deactivate();
+  sendLicence();
+  return res;
+});
+ipcMain.on('licence:buy', event => { if (fromNotes(event)) shell.openExternal(licenceSettings.BUY_URL); });
+
 // ---- screen capture: read a question a student shared (picture, Notepad, chat) straight off the screen ----------
 // The teacher draws a box around the question (or takes the whole screen); the AI copies the question out of the
 // picture and it is answered in the private window like a spoken one. The selection window is hidden from screen
@@ -332,7 +427,7 @@ function forAI(image) {
 
 /** mode 'area': the teacher draws a box around the question; 'full': the whole screen the mouse is on. */
 async function captureQuestion(mode = 'area') {
-  if (capturing || !pipeline) return;
+  if (capturing || !pipeline || !requireLicence()) return;
   capturing = true;
   let shot = null;
   try {
@@ -391,6 +486,17 @@ function runSmokeTest() {
     })`);
     // a title="..." added later must be removed straight away (Windows draws those tooltips as separate windows)
     page.elementsWithTooltip = await wc.executeJavaScript("new Promise(r => { const t = document.createElement('button'); t.title = 'late tooltip'; document.body.appendChild(t); setTimeout(() => { const left = document.querySelectorAll('[title]').length; t.remove(); r(left); }, 80); })");
+    if (process.env.TNA_SMOKE_LICENCE) {   // the licence screen with the real licence check (TNA_SMOKE_LICENCE=1)
+      await new Promise(r => setTimeout(r, 1500));
+      page.licence = await wc.executeJavaScript(`({
+        gateShown: document.getElementById('licenceGate').classList.contains('show'),
+        title: document.getElementById('gateTitle').textContent,
+        trialOffered: document.getElementById('gateTrial').style.display !== 'none',
+        badge: document.getElementById('licBadge').textContent,
+      })`);
+      page.licence.main = licenceStatus().state;
+      page.licence.blockedAsk = !requireLicence();
+    }
     if (process.env.TNA_SMOKE_RESTART) {   // really restart the assistant and see it come back
       const before = engine.state;
       await restartAssistant('smoke test');
@@ -473,6 +579,7 @@ function runSmokeTest() {
     }
     const report = { page, engine, contentProtectionOn: true, problems };
     console.log('SMOKE ' + JSON.stringify(report, null, 1));
+    if (process.env.TNA_SMOKE_REPORT) fs.writeFileSync(process.env.TNA_SMOKE_REPORT, JSON.stringify(report, null, 1));   // an installed app prints nothing
     if (process.env.TNA_SMOKE_SHOT) {
       notesWindow.setContentProtection(false); // test-only: protection also blanks our own screenshot
       notesWindow.showInactive();
@@ -491,7 +598,8 @@ app.whenReady().then(() => {
   setupMediaPermissions();
   createMainWindow();
   createNotesWindow();
-  notesWindow.webContents.once('did-finish-load', () => startEngine());
+  setupLicence();
+  notesWindow.webContents.once('did-finish-load', () => { startEngine(); sendLicence(); refreshLicence(); });
   if (process.argv.includes('--smoke')) runSmokeTest();
 
   // Global hotkey: Ctrl+Shift+N (Cmd+Shift+N on macOS) toggles the notes window
@@ -509,8 +617,8 @@ app.whenReady().then(() => {
   globalShortcut.register(`${mod}+Alt+Shift+R`, () => { restartAssistant('shortcut'); });
   // Ctrl+Shift+T puts the window back to fully visible (in case it was made too faint to find)
   globalShortcut.register(`${mod}+Shift+T`, () => { const next = config.save({ opacity: 100 }); if (notesWindow) notesWindow.setOpacity(1); toNotes('ui', { type: 'opacity', value: next.opacity }); });
-  globalShortcut.register(`${mod}+Shift+L`, () => toNotes('ui', { type: 'toggle-listening' }));
-  globalShortcut.register(`${mod}+Shift+A`, () => { if (pipeline) pipeline.completeQuestion(); });
+  globalShortcut.register(`${mod}+Shift+L`, () => toNotes('ui', { type: 'toggle-listening' }));   // the page checks the licence
+  globalShortcut.register(`${mod}+Shift+A`, () => { if (pipeline && requireLicence()) pipeline.completeQuestion(); });
   // Ctrl+Shift+Q: draw a box around a question on the screen; Ctrl+Alt+Shift+Q: read the whole screen
   globalShortcut.register(`${mod}+Shift+Q`, () => { captureQuestion('area'); });
   globalShortcut.register(`${mod}+Alt+Shift+Q`, () => { captureQuestion('full'); });
@@ -555,6 +663,7 @@ ipcMain.on('audio:chunk', (event, data) => {
 
 ipcMain.on('listening:set', (event, on) => {
   if (!fromNotes(event) || !pipeline) return;
+  if (on && !requireLicence()) return;
   audioStats.listening = !!on; audioStats.chunks = 0; audioStats.silentChecks = 0;
   debugLog('note', { message: on ? 'listening started' : 'listening stopped' });
   if (on) pipeline.resume(); else pipeline.pause();
@@ -566,18 +675,18 @@ ipcMain.on('screen:capture', (event, mode) => {
 
 // "Ask selected": text the teacher selected in an answer becomes the next question
 ipcMain.on('ask:selection', (event, d) => {
-  if (!fromNotes(event) || !pipeline || !d || typeof d.text !== 'string') return;
+  if (!fromNotes(event) || !pipeline || !d || typeof d.text !== 'string' || !requireLicence()) return;
   const from = d.from && typeof d.from.question === 'string' ? { question: d.from.question, answer: String(d.from.answer || '') } : null;
   pipeline.askSelection(d.text, from);
 });
 
 // The "Ask" box: a typed question or keywords
 ipcMain.on('ask:typed', (event, text, corrected) => {
-  if (fromNotes(event) && pipeline && typeof text === 'string') pipeline.askTyped(text, { corrected: corrected === true });
+  if (fromNotes(event) && pipeline && typeof text === 'string' && requireLicence()) pipeline.askTyped(text, { corrected: corrected === true });
 });
 
 ipcMain.on('ask:last', event => {
-  if (fromNotes(event) && pipeline) pipeline.completeQuestion();   // "question finished"
+  if (fromNotes(event) && pipeline && requireLicence()) pipeline.completeQuestion();   // "question finished"
 });
 
 ipcMain.handle('engine:status', event => (fromNotes(event) ? engine : null));

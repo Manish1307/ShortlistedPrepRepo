@@ -7,6 +7,7 @@
   const root = document.getElementById('app');
   let me = null;
   let openCount = 0;
+  let newOppCount = 0;
   let view = 'overview';
 
   /** h('div', {class: 'x', onclick: fn}, 'text', childNode, ...) builds an element. */
@@ -61,10 +62,10 @@
   const moneyList = list => (list && list.length ? list.map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'USD'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
-    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'team': ['owner'],
+    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
 
-  const STATUS_PILL = { default: 'good', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '' };
+  const STATUS_PILL = { default: 'good', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '' };
   const pill = text => h('span', { class: 'pill ' + (STATUS_PILL[text] || '') }, text);
 
   // ---------- dialogs and forms ----------
@@ -141,7 +142,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview'], ['customers', 'Customers'], ['licences', 'Licences'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
+    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
     ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
   ];
 
@@ -150,7 +151,7 @@
     const content = h('main', { class: 'main', id: 'content' });
     const nav = NAV.filter(([id]) => id !== 'team' || me.role === 'owner').map(([id, label]) =>
       h('button', { class: 'nav-item', 'aria-current': id === view ? 'page' : null, onclick: () => { view = id; render(); } },
-        label, id === 'messages' && openCount ? h('span', { class: 'badge-count' }, openCount) : null));
+        label, id === 'messages' && openCount ? h('span', { class: 'badge-count' }, openCount) : null, id === 'opportunities' && newOppCount ? h('span', { class: 'badge-count' }, newOppCount) : null));
     root.replaceChildren(h('div', { class: 'shell' },
       h('nav', { class: 'side', 'aria-label': 'Main' }, h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'C'), 'ClassCue admin'), nav,
         h('div', { class: 'spacer' }), h('div', { class: 'who' }, `${me.email} (${me.role})`),
@@ -160,13 +161,14 @@
   }
 
   async function refreshOpenCount() {
-    try { openCount = (await get('/admin/api/messages?status=open')).messages.length; } catch (_) { /* ignore */ }
+    try { openCount = (await get('/admin/api/messages?status=open')).messages.length; newOppCount = (await get('/admin/api/opportunities?status=new')).counts.new; } catch (_) { /* ignore */ }
   }
 
   // ---------- overview ----------
   async function overview(el) {
     const o = await get('/admin/api/overview');
     openCount = o.openMessages;
+    newOppCount = o.website.newOpportunities;
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num), sub ? h('div', { class: 'sub' }, sub) : null);
     const max = Math.max(1, ...o.signupSeries.map(s => s.count));
     const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'New customers per day, last 30 days' },
@@ -181,7 +183,9 @@
         stat('Computers seen, 7 days', o.devicesActive7Days),
         stat('Trial to paid', o.trialConversion.percent + '%', `${o.trialConversion.converted} of ${o.trialConversion.trialCustomers} trial customers`),
         stat('Open support', o.openMessages),
-        stat('Refunded', moneyList(o.refundedTotal))),
+        stat('Refunded', moneyList(o.refundedTotal)),
+        stat('Website visitors today', o.website.today, `${o.website.visitors7Days} in 7 days · ${o.website.visitors30Days} in 30 days`),
+        stat('New opportunities', o.website.newOpportunities, `${o.website.demoRequests30Days} demo requests in 30 days`)),
       h('div', { class: 'grid2' },
         h('div', { class: 'card' }, h('h2', {}, 'New customers, last 30 days'), bars,
           h('div', { class: 'axis' }, h('span', {}, o.signupSeries[0].date), h('span', {}, o.signupSeries[29].date))),
@@ -215,21 +219,56 @@
     }]);
   }
 
+  /** The customer's website login (My account page): status, plus create / new password / turn off. */
+  async function accountSection(c, reopen) {
+    const { account: a } = await get(`/admin/api/customers/${c.id}/account`);
+    const write = can('accounts.write');
+    const status = !a.exists ? 'No login yet. Create one to let the customer see their licences, computers and classes on the website.'
+      : a.disabled ? 'Login turned off: the customer cannot sign in.'
+        : `Login active${a.mustChange ? ', waiting for the customer to choose their own password' : ''}. Last sign-in: ${a.lastLogin ? dateTime(a.lastLogin) : 'never'}.`;
+    const act = action => guard(async () => {
+      if (action === 'reset' && a.exists && !confirm('Make a new password? The old one stops working and the customer is signed out.')) return;
+      const r = await post(`/admin/api/customers/${c.id}/account`, { action });
+      if (action === 'reset') showLogin(c, r); else { toast(action === 'disable' ? 'Login turned off' : 'Login turned on'); reopen(); }
+    });
+    return h('div', {}, h('h3', { style: 'margin-top:14px' }, 'Website login'), h('p', { class: 'small' }, status),
+      write ? h('div', { class: 'actions' },
+        h('button', { class: 'btn sm primary', onclick: () => act('reset') }, a.exists ? 'New password' : 'Create login'),
+        a.exists ? h('button', { class: 'btn sm' + (a.disabled ? '' : ' danger'), onclick: () => act(a.disabled ? 'enable' : 'disable') }, a.disabled ? 'Turn login on' : 'Turn login off') : null) : null);
+  }
+
+  /** The generated password, shown once, with a message ready to send to the customer. */
+  function showLogin(c, r) {
+    const where = r.siteUrl ? `${r.siteUrl}/login.html` : 'the website (Sign in, top right)';
+    const message = `Hello ${c.name || ''},\n\nYour ClassCue account is ready.\nSign in at: ${where}\nEmail: ${r.email}\nPassword: ${r.password}\n\nYou will be asked to choose your own password when you first sign in.`.replace('Hello ,', 'Hello,');
+    dialog('Login created', h('div', {},
+      h('p', {}, 'Send these details to the customer. The password is shown only now; make a new one if it is lost.'),
+      h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', { class: 'mono' }, r.email), h('dt', {}, 'Password'), h('dd', { class: 'mono', style: 'font-size:18px;font-weight:700' }, r.password),
+        h('dt', {}, 'Sign in at'), h('dd', {}, where)),
+      h('div', { class: 'msg-body' }, message)), [
+      { label: 'Copy message', kind: 'primary', closes: false, run: async () => { try { await navigator.clipboard.writeText(message); toast('Copied'); } catch (_) { toast('Select the text and copy it', true); } return true; } },
+      { label: 'Done', run: () => {} }]);
+  }
+
   async function customerDetail(id, done) {
     const d = await get(`/admin/api/customers/${id}`);
     const c = d.customer;
+    let closeDetail = () => {};
+    const login = await accountSection(c, () => { closeDetail(); customerDetail(id, done); });
     const body = h('div', {},
       h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Name'), h('dd', {}, c.name || '—'), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'),
         h('dt', {}, 'Country'), h('dd', {}, c.country || '—'), h('dt', {}, 'Joined'), h('dd', {}, dateTime(c.created_at)), h('dt', {}, 'Notes'), h('dd', {}, c.notes || '—')),
       h('h3', {}, 'Licences'),
       d.licences.length ? d.licences.map(l => h('div', { class: 'list-item' }, h('span', { class: 'mono' }, l.key), h('span', {}, `${l.plan} · `, pill(l.effective_status), ` · ${l.expires_at ? 'to ' + date(l.expires_at) : 'lifetime'}`))) : h('p', { class: 'muted' }, 'None.'),
       h('h3', { style: 'margin-top:14px' }, 'Orders'),
-      d.orders.length ? d.orders.map(o => h('div', { class: 'list-item' }, h('span', {}, `#${o.id} · ${o.plan} · ${date(o.created_at)}`), h('span', {}, money(o.amount_cents, o.currency), ' ', pill(o.status)))) : h('p', { class: 'muted' }, 'None.'));
+      d.orders.length ? d.orders.map(o => h('div', { class: 'list-item' }, h('span', {}, `#${o.id} · ${o.plan} · ${date(o.created_at)}`), h('span', {}, money(o.amount_cents, o.currency), ' ', pill(o.status)))) : h('p', { class: 'muted' }, 'None.'),
+      login);
     const buttons = [];
     if (can('licence.major')) buttons.push({ label: 'Issue licence', run: (close) => { close(); licenceForm(c.id, done); return true; }, closes: false });
     if (can('customers.write')) buttons.push({ label: 'Edit', run: (close) => { close(); customerForm(c, done); return true; }, closes: false });
+    buttons.push({ label: 'Topics and resume', run: (close) => { close(); profileEditor(c.id, done); return true; }, closes: false });
     buttons.push({ label: 'Close', run: () => {} });
-    dialog(c.name || c.email, body, buttons);
+    closeDetail = dialog(c.name || c.email, body, buttons).close;
   }
 
   // ---------- licences ----------
@@ -473,6 +512,300 @@
       [m.status === 'open' ? { label: 'Save and close ticket', kind: 'primary', run: () => save('closed') } : { label: 'Reopen', kind: 'primary', run: () => save('open') }, { label: 'Save note', run: () => save(m.status) }]);
   }
 
+  // ---------- opportunities (demo requests and interest from the website) ----------
+  const STAGES = ['new', 'contacted', 'qualified', 'won', 'lost'];
+  const KIND_LABEL = { demo: 'Demo request', interest: 'Interested', signup: 'Early access', contact: 'Contact form' };
+  async function opportunities(el, status = '', kind = '', query = '') {
+    const { opportunities: rows, counts } = await get('/admin/api/opportunities?status=' + status + '&kind=' + kind + '&q=' + encodeURIComponent(query));
+    newOppCount = counts.new;
+    const redo = (s, k, q) => opportunities(el, s, k, q);
+    const stageFilter = h('select', { 'aria-label': 'Stage', onchange: e => redo(e.target.value, kind, query) },
+      [['', 'All stages'], ...STAGES.map(s => [s, s[0].toUpperCase() + s.slice(1) + ' (' + counts[s] + ')'])].map(([v, l]) => h('option', { value: v }, l)));
+    stageFilter.value = status;
+    const kindFilter = h('select', { 'aria-label': 'Type', onchange: e => redo(status, e.target.value, query) },
+      [['', 'All types'], ...Object.entries(KIND_LABEL)].map(([v, l]) => h('option', { value: v }, l)));
+    kindFilter.value = kind;
+    el.replaceChildren(
+      head('Opportunities', searchBox(v => redo(status, kind, v), 'Search name, email, company', query), kindFilter, stageFilter),
+      h('div', { class: 'cards' }, STAGES.map(s => h('div', { class: 'card stat' }, h('div', { class: 'label' }, s), h('div', { class: 'num' }, counts[s])))),
+      table([
+        { label: 'Date', render: r => dateTime(r.created_at) }, { label: 'Who', render: r => (r.name ? r.name + ' <' + r.email + '>' : r.email) },
+        { label: 'Type', render: r => KIND_LABEL[r.kind] }, { label: 'Company / college', render: r => r.company || '—' },
+        { label: 'Stage', render: r => pill(r.status) }, { label: 'Follow up', render: r => r.follow_up || '—' },
+      ], rows, r => opportunityDetail(r.id, () => redo(status, kind, query)), 'No opportunities yet. They appear here when someone asks for a demo or shows interest on the website.'));
+  }
+
+  async function opportunityDetail(id, done) {
+    const { opportunity: o, notes, pages } = await get('/admin/api/opportunities/' + id);
+    const write = can('opportunities.write');
+    const stage = field('Stage', { name: 'status', type: 'select', value: o.status, options: STAGES.map(s => ({ value: s, label: s })) });
+    const owner = field('Owner', { name: 'owner', value: o.owner, maxlength: 100 });
+    const followUp = field('Follow up on', { name: 'followUp', type: 'date', value: o.follow_up });
+    const worth = field('Deal value (USD)', { name: 'value', type: 'number', min: 0, value: String(o.value_cents / 100) });
+    const note = field('Add a note', { name: 'note', type: 'textarea', maxlength: 2000 });
+    const detail = (label, text) => h('p', { class: 'small' }, h('b', {}, label + ': '), text || '—');
+    const body = h('div', {},
+      detail('Type', KIND_LABEL[o.kind]), detail('Email', o.email), detail('Phone', o.phone), detail('Company / college', o.company),
+      detail('Preparing for', o.role_interest), detail('Came from page', o.source_page), detail('First asked', dateTime(o.created_at)),
+      o.message ? h('div', { class: 'msg-body' }, o.message) : null,
+      write ? h('div', {}, stage, owner, followUp, worth, note) : null,
+      pages.length ? h('div', {}, h('h2', {}, 'Pages this visitor viewed'), pages.map(p => h('div', { class: 'list-item' }, h('span', {}, p.path), h('span', { class: 'muted small' }, dateTime(p.at))))) : null,
+      h('h2', {}, 'History'),
+      notes.length ? notes.map(n => h('div', { class: 'list-item' }, h('span', {}, n.body), h('span', { class: 'muted small' }, n.author + ' · ' + dateTime(n.created_at)))) : h('p', { class: 'muted' }, 'No notes yet.'),
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(o.email) + '?subject=' + encodeURIComponent('Your ShortlistPrep ' + (o.kind === 'demo' ? 'demo' : 'request')) }, 'Reply by email')));
+    const buttons = [];
+    if (write) buttons.push({ label: 'Save', kind: 'primary', run: () => guard(async () => {
+      const v = values(body);
+      await patch('/admin/api/opportunities/' + o.id, { status: v.status, owner: v.owner, followUp: v.followUp, valueCents: Math.round(Number(v.value || 0) * 100), note: v.note });
+      toast('Saved'); done();
+    }) });
+    if (can('customers.write') && !o.customer_id) buttons.push({ label: 'Make customer', run: () => guard(async () => { await post('/admin/api/opportunities/' + o.id + '/customer'); toast('Customer created'); done(); }) });
+    dialog((KIND_LABEL[o.kind] || 'Opportunity') + ' · ' + (o.name || o.email), body, buttons);
+  }
+
+  // ---------- website visits ----------
+  async function visitors(el, days = 30) {
+    const a = await get('/admin/api/analytics?days=' + days);
+    const range = h('select', { 'aria-label': 'Period', onchange: e => visitors(el, Number(e.target.value)) }, [[7, 'Last 7 days'], [30, 'Last 30 days'], [90, 'Last 90 days']].map(([v, l]) => h('option', { value: v }, l)));
+    range.value = String(days);
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num), sub ? h('div', { class: 'sub' }, sub) : null);
+    const max = Math.max(1, ...a.series.map(s => s.visitors));
+    const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'Visitors per day' },
+      a.series.map(s => { const i = h('i', { class: s.visitors ? '' : 'zero', title: s.date + ': ' + s.visitors + ' visitors, ' + s.views + ' page views' }); i.style.height = Math.max(2, (s.visitors / max) * 100) + '%'; return i; }));
+    const list = (title, rows, empty) => h('div', { class: 'card' }, h('h2', {}, title),
+      rows.length ? rows.map(r => h('div', { class: 'list-item' }, h('span', {}, r.name || r.path), h('span', {}, r.visitors + (r.views !== undefined ? ' visitors · ' + r.views + ' views' : ' visitors')))) : h('p', { class: 'muted' }, empty));
+    el.replaceChildren(
+      head('Website visits', range),
+      h('div', { class: 'cards' },
+        stat('Visitors', a.visitors, 'people, not page loads'), stat('Page views', a.views), stat('Today', a.today.visitors, a.today.views + ' page views'),
+        stat('Returning visitors', a.returning, 'came on more than one day'), stat('Opportunities', a.opportunities, 'demo and interest requests'), stat('Visitor to opportunity', a.conversionPercent + '%')),
+      h('div', { class: 'card' }, h('h2', {}, 'Visitors per day'), bars, h('div', { class: 'axis' }, h('span', {}, a.series[0].date), h('span', {}, a.series[a.series.length - 1].date))),
+      h('div', { class: 'grid2' }, list('Top pages', a.topPages, 'No visits recorded yet.'), list('Where visitors come from', a.referrers, 'No visits recorded yet.')),
+      h('div', { class: 'grid2' }, list('Devices', a.devices, 'No visits recorded yet.'), list('Campaign sources (utm_source)', a.sources, 'None yet. Add ?utm_source=name to a link you share.')),
+      h('p', { class: 'muted small' }, 'Visits are counted without cookies or IP addresses: each browser keeps a random id. Search-engine bots and visitors who send "Do Not Track" are not counted.'));
+  }
+
+  // ---------- topics and resume per customer (Live Class's AI uses them to choose the area of its answers) ----------
+  async function profiles(el, query = '') {
+    const { customers: all } = await get('/admin/api/profiles');
+    const term = query.trim().toLowerCase();
+    const rows = term ? all.filter(r => [r.email, r.name, r.organisation, ...r.topics].join(' ').toLowerCase().includes(term)) : all;
+    el.replaceChildren(
+      head('Topics and resume', searchBox(v => profiles(el, v), 'Search customer or topic', query)),
+      h('p', { class: 'muted' }, 'Set what each customer\'s questions are about. Live Class receives the topics and the resume with its licence check (at start and every 30 minutes), and the AI uses them to decide the area of its answers.'),
+      table([
+        { label: 'Customer', render: r => (r.name ? `${r.name} <${r.email}>` : r.email) },
+        { label: 'Topics', wrap: true, render: r => (r.topics.length ? r.topics.join(', ') : h('span', { class: 'muted' }, 'none')) },
+        { label: 'Resume', render: r => (r.resume_chars ? (r.resume_name || 'pasted text') + ` · ${r.resume_chars.toLocaleString()} characters` : h('span', { class: 'muted' }, 'none')) },
+        { label: 'Updated', render: r => dateTime(r.updated_at) },
+      ], rows, r => profileEditor(r.id, () => profiles(el, query)), term ? 'No customers match.' : 'No customers yet. Add one on the Customers page.'));
+  }
+
+  /** Text from a resume file: .txt / .md read here, .docx unzipped here, .pdf read by the server (Gemini). */
+  async function resumeFromFile(file) {
+    const name = file.name.toLowerCase();
+    if (file.size > 5 * 1024 * 1024) throw new Error('The file is larger than 5 MB');
+    if (/\.(txt|md|text)$/.test(name)) return file.text();
+    if (name.endsWith('.docx')) return docxText(await file.arrayBuffer());
+    if (name.endsWith('.pdf')) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return (await post('/admin/api/resume-text', { data: btoa(bin) })).text;
+    }
+    throw new Error('Choose a .pdf, .docx or .txt file, or paste the text');
+  }
+
+  /** The text of a Word .docx file: word/document.xml from the zip, paragraphs as lines. */
+  async function docxText(buffer) {
+    const view = new DataView(buffer);
+    let end = buffer.byteLength - 22;
+    while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--;   // end of the zip's file list
+    if (end < 0) throw new Error('This is not a valid .docx file');
+    let at = view.getUint32(end + 16, true);
+    for (let n = view.getUint16(end + 10, true); n > 0; n--) {
+      const method = view.getUint16(at + 10, true), size = view.getUint32(at + 20, true);
+      const nameLen = view.getUint16(at + 28, true), extra = view.getUint16(at + 30, true), comment = view.getUint16(at + 32, true);
+      const local = view.getUint32(at + 42, true);
+      const fileName = new TextDecoder().decode(new Uint8Array(buffer, at + 46, nameLen));
+      if (fileName === 'word/document.xml') {
+        const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+        const raw = new Uint8Array(buffer, start, size);
+        const xml = method === 0 ? new TextDecoder().decode(raw)
+          : await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        return [...doc.getElementsByTagName('w:p')].map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      }
+      at += 46 + nameLen + extra + comment;
+    }
+    throw new Error('No text was found in this .docx file');
+  }
+
+  async function profileEditor(customerId, done) {
+    const { customer: c, profile: p } = await get(`/admin/api/customers/${customerId}/profile`);
+    const write = can('profiles.write');
+    let resumeName = p.resumeName;
+    const topics = field('Topics', { name: 'topics', type: 'textarea', value: p.topics.join('\n'), maxlength: 3500 },
+      'One per line, for example: Power Apps, Dataverse security, React hooks. Questions are expected to be about these areas.');
+    const resume = h('textarea', { name: 'resume', maxlength: 20000, placeholder: 'Paste the resume text here, or choose a file above.', 'aria-label': 'Resume text' }, p.resume);
+    resume.style.minHeight = '260px';
+    const count = h('span', { class: 'hint' });
+    const fileNote = h('span', { class: 'hint' }, resumeName ? 'From ' + resumeName : '');
+    const showCount = () => { count.textContent = `${resume.value.length.toLocaleString()} / 20,000 characters. The AI reads the first 6,000.`; };
+    resume.addEventListener('input', showCount); showCount();
+    const picker = h('input', { type: 'file', accept: '.pdf,.docx,.txt,.md', 'aria-label': 'Resume file' });
+    picker.addEventListener('change', () => guard(async () => {
+      const file = picker.files[0];
+      if (!file) return;
+      fileNote.textContent = `Reading ${file.name}…`;
+      try {
+        resume.value = (await resumeFromFile(file)).slice(0, 20000);
+        resumeName = file.name;
+        fileNote.textContent = `From ${file.name}. Check the text, then press Save.`;
+        showCount();
+      } catch (err) { fileNote.textContent = ''; throw err; } finally { picker.value = ''; }
+    }));
+    const body = h('div', {},
+      h('p', { class: 'muted small' }, `${c.email}${p.updatedAt ? ` · last changed ${dateTime(p.updatedAt)} by ${p.updatedBy}` : ''}`),
+      topics,
+      h('label', { class: 'field' }, 'Resume', write ? picker : null, fileNote, resume, count),
+      h('p', { class: 'muted small' }, 'Live Class gets the changes on its next licence check: when it starts, or within 30 minutes while it runs.'));
+    if (!write) body.querySelectorAll('textarea').forEach(t => { t.readOnly = true; });
+    const buttons = write ? [{ label: 'Save', kind: 'primary', run: async () => {
+      const ok = await guard(async () => {
+        const v = values(body);
+        await post(`/admin/api/customers/${c.id}/profile`, { topics: v.topics, resume: v.resume, resumeName: v.resume.trim() ? resumeName : '' });
+        return true;
+      });
+      if (!ok) return true;
+      toast('Saved'); done();
+    } }, { label: 'Clear resume', run: () => { resume.value = ''; resumeName = ''; fileNote.textContent = ''; showCount(); return true; }, closes: false }] : [];
+    buttons.push({ label: write ? 'Cancel' : 'Close', run: () => {} });
+    dialog(`Topics and resume · ${c.name || c.email}`, body, buttons).el.classList.add('wide');
+  }
+
+  // ---------- Find jobs: companies (career sites) and the Master Prompt ----------
+  const PROVIDER_LABEL = { greenhouse: 'Greenhouse', lever: 'Lever', smartrecruiters: 'SmartRecruiters', ashby: 'Ashby', workday: 'Workday' };
+  async function jobs(el) {
+    const d = await get('/admin/api/jobs');
+    const write = can('jobs.write');
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const act = (c, action, message) => guard(async () => {
+      const r = await post(`/admin/api/jobs/companies/${c.id}`, { action });
+      toast(r.sync && !r.sync.ok ? `${c.name}: ${r.sync.error}` : message, r.sync && !r.sync.ok);
+      jobs(el);
+    });
+    const syncAll = h('button', { class: 'btn', onclick: () => guard(async () => {
+      syncAll.disabled = true; syncAll.textContent = 'Syncing…';
+      const r = await post('/admin/api/jobs/sync');
+      const failed = r.results.filter(x => !x.ok);
+      toast(failed.length ? `Synced, ${failed.length} failed: ${failed.map(x => x.name).join(', ')}` : `Synced ${r.results.length} companies`, failed.length > 0);
+      jobs(el);
+    }) }, 'Sync all now');
+    el.replaceChildren(
+      head('Jobs', write ? syncAll : null, write ? h('button', { class: 'btn primary', onclick: () => companyForm(() => jobs(el)) }, '+ Add company') : null),
+      h('p', { class: 'muted' }, `Real, active openings from each company's own careers site, refreshed every ${d.syncHours || 'few'} hours and on "Sync". Candidates see them in Career toolkit → Find jobs, and the AI ranks them with the Master Prompt below.`),
+      h('div', { class: 'cards' }, stat('Active jobs', d.stats.active), stat('Posted in the last 7 days', d.stats.week), stat('In India', d.stats.india), stat('Companies', d.companies.length)),
+      table([
+        { label: 'Company', render: r => h('span', {}, h('b', {}, r.name), h('br'), h('a', { href: r.careersUrl, target: '_blank', rel: 'noopener', class: 'small' }, PROVIDER_LABEL[r.provider] + ' · ' + r.board)) },
+        { label: 'Active jobs', render: r => String(r.jobCount) },
+        { label: 'Last sync', render: r => h('span', {}, dateTime(r.lastSync), r.lastError ? h('div', { class: 'small', style: 'color:var(--bad)' }, r.lastError) : null) },
+        { label: 'Status', render: r => pill(r.enabled ? 'on' : 'off') },
+        { label: '', render: r => (write ? h('span', { class: 'tools' },
+          h('button', { class: 'btn sm', onclick: () => act(r, 'sync', `${r.name} synced`) }, 'Sync'),
+          h('button', { class: 'btn sm', onclick: () => act(r, r.enabled ? 'disable' : 'enable', r.enabled ? 'Hidden from candidates' : 'Shown to candidates') }, r.enabled ? 'Turn off' : 'Turn on'),
+          h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Remove ${r.name} and its jobs?`)) guard(async () => { await del(`/admin/api/jobs/companies/${r.id}`); toast('Removed'); jobs(el); }); } }, 'Remove')) : '') },
+      ], d.companies, null, 'No companies yet. Add one with its careers page address.'),
+      promptCard(d, write, () => jobs(el)));
+  }
+
+  function companyForm(done) {
+    const f = h('div', {},
+      field('Company name', { name: 'name', required: true, maxlength: 120, placeholder: 'e.g. Contoso' }),
+      field('Careers page address', { name: 'careersUrl', required: true, maxlength: 500, placeholder: 'https://boards.greenhouse.io/contoso' },
+        'Open the company\'s list of jobs and copy that address. Supported: boards.greenhouse.io/…, jobs.lever.co/…, jobs.smartrecruiters.com/…, jobs.ashbyhq.com/…, <tenant>.wd1.myworkdayjobs.com/…'),
+      field('Country when a job does not say (optional)', { name: 'defaultCountry', maxlength: 80, placeholder: 'e.g. India' }));
+    dialog('Add company', f, [{ label: 'Add and sync', kind: 'primary', closes: false, run: async close => {
+      const r = await guard(() => post('/admin/api/jobs/companies', values(f)));
+      if (!r) return true;
+      close(); done();
+      toast(r.sync.ok ? `${r.company.name}: ${r.company.jobCount} active jobs` : `Added, but the first sync failed: ${r.sync.error}`, !r.sync.ok);
+      return true;
+    } }]);
+  }
+
+  function promptCard(d, write, done) {
+    const box = h('textarea', { name: 'prompt', maxlength: 8000, readonly: !write }, d.prompt.prompt);
+    box.style.minHeight = '320px';
+    return h('div', { class: 'card', style: 'margin-top:18px' },
+      h('h2', {}, 'Master Prompt'),
+      h('p', { class: 'muted small' }, 'Runs when a candidate presses "Find my best matches": the AI reads their resume and scores the real jobs within their filters. ' +
+        (d.prompt.isDefault ? 'Using the default prompt.' : `Last changed ${dateTime(d.prompt.updatedAt)} by ${d.prompt.updatedBy}.`)),
+      box,
+      h('details', {}, h('summary', { class: 'small' }, 'Rules always added after your prompt (keep the AI from inventing jobs, and the answer readable)'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, d.outputRules)),
+      write ? h('div', { class: 'actions' },
+        h('button', { class: 'btn primary', onclick: () => guard(async () => { await post('/admin/api/jobs/prompt', { prompt: box.value }); toast('Master prompt saved'); done(); }) }, 'Save prompt'),
+        h('button', { class: 'btn', onclick: () => { if (confirm('Go back to the default prompt?')) guard(async () => { await post('/admin/api/jobs/prompt', { reset: true }); toast('Default prompt restored'); done(); }); } }, 'Reset to default')) : null);
+  }
+
+  // ---------- Live Class conversations (saved by the app when the class ends) ----------
+  const duration = sec => { const m = Math.round((sec || 0) / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+  const clock = s => new Date(s).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  async function conversations(el, filters = { q: '', from: '', to: '' }) {
+    const { q, from, to } = filters;
+    const { conversations: rows } = await get(`/admin/api/conversations?q=${encodeURIComponent(q)}&from=${from}&to=${to}`);
+    const redo = change => conversations(el, { ...filters, ...change });
+    const day = (label, key) => { const i = h('input', { type: 'date', 'aria-label': label, title: label, onchange: e => redo({ [key]: e.target.value }) }); i.value = filters[key]; return i; };
+    el.replaceChildren(
+      head('Conversations', searchBox(v => redo({ q: v }), 'Search questions, answers, customer', q), day('From', 'from'), day('To', 'to'),
+        from || to ? h('button', { class: 'btn sm', onclick: () => redo({ from: '', to: '' }) }, 'All dates') : null),
+      h('p', { class: 'muted' }, 'Every Live Class session is saved here when the teacher presses End: what was heard, and each question with its answer.'),
+      table([
+        { label: 'Date and time', render: r => dateTime(r.started_at) }, { label: 'Length', render: r => duration(r.duration_sec) },
+        { label: 'Customer', render: r => r.customer_name || r.customer_email }, { label: 'Computer', render: r => r.device_name || '—' },
+        { label: 'Questions', render: r => r.question_count },
+        { label: 'First question', wrap: true, render: r => (r.first_question ? (r.first_question.length > 80 ? r.first_question.slice(0, 80) + '…' : r.first_question) : '—') },
+      ], rows, r => conversationDetail(r.id, () => conversations(el, filters)), q || from || to ? 'No conversations match.' : 'No conversations yet. They appear here when a Live Class session ends.'));
+  }
+
+  async function conversationDetail(id, done) {
+    const { conversation: v, items } = await get('/admin/api/conversations/' + id);
+    const body = h('div', {},
+      h('dl', { class: 'kv' },
+        h('dt', {}, 'Started'), h('dd', {}, dateTime(v.started_at)), h('dt', {}, 'Ended'), h('dd', {}, `${dateTime(v.ended_at)} (${duration(v.duration_sec)})`),
+        h('dt', {}, 'Customer'), h('dd', {}, v.customer_name ? `${v.customer_name} <${v.customer_email}>` : v.customer_email),
+        h('dt', {}, 'Licence'), h('dd', { class: 'mono' }, v.licence_key), h('dt', {}, 'Computer'), h('dd', {}, v.device_name || '—'),
+        h('dt', {}, 'Subject'), h('dd', {}, v.subject || '—')),
+      h('h3', {}, `Questions and answers (${items.length})`),
+      items.length ? items.map(it => h('div', { class: 'qa' },
+        h('div', { class: 'meta' }, `${it.position}. ${clock(it.asked_at)}${it.source ? ' · ' + it.source : ''}${it.vote === 1 ? ' · 👍' : it.vote === -1 ? ' · 👎' : ''}`),
+        h('div', { class: 'q' }, it.question),
+        it.status === 'done' ? h('div', { class: 'a' }, it.answer)
+          : h('div', { class: 'a muted' }, it.status === 'error' ? 'No answer: ' + (it.error || 'the AI could not answer') : 'Not answered before the class ended'))) : h('p', { class: 'muted' }, 'No questions were asked.'),
+      h('details', { open: !items.length }, h('summary', {}, `Everything that was heard (${v.transcript.length} phrases)`),
+        v.transcript.length ? h('div', { class: 'transcript' }, v.transcript.map(p => h('div', {}, h('span', { class: 't' }, clock(p.at)), p.text)))
+          : h('p', { class: 'muted' }, 'Nothing was heard (the microphone was off).')));
+    const buttons = [{ label: 'Download as text', run: () => { downloadConversation(v, items); return true; }, closes: false }];
+    if (can('conversations.delete')) buttons.push({ label: 'Delete', kind: 'danger', run: async () => {
+      if (!confirm('Delete this conversation? This cannot be undone.')) return true;
+      const ok = await guard(async () => { await del('/admin/api/conversations/' + v.id); return true; });
+      if (!ok) return true;
+      toast('Conversation deleted'); done();
+    } });
+    buttons.push({ label: 'Close', run: () => {} });
+    dialog(`Live Class · ${dateTime(v.started_at)}`, body, buttons).el.classList.add('wide');
+  }
+
+  function downloadConversation(v, items) {
+    const lines = [`Live Class conversation`, `Started: ${dateTime(v.started_at)}`, `Ended: ${dateTime(v.ended_at)} (${duration(v.duration_sec)})`,
+      `Customer: ${v.customer_email}`, `Computer: ${v.device_name || '-'}`, v.subject ? `Subject: ${v.subject}` : '', '', 'QUESTIONS AND ANSWERS', ''];
+    for (const it of items) lines.push(`${it.position}. [${clock(it.asked_at)}] ${it.question}`, it.status === 'done' ? it.answer : '(no answer)', '');
+    lines.push('', 'EVERYTHING THAT WAS HEARD', '', ...v.transcript.map(p => `[${clock(p.at)}] ${p.text}`));
+    const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/plain' })), download: `live-class-${v.started_at.slice(0, 16).replace(/[T:]/g, '-')}.txt` });
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
   // ---------- audit ----------
   async function audit(el, query = '') {
     const { entries } = await get('/admin/api/audit?q=' + encodeURIComponent(query));
@@ -515,7 +848,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, customers, licences, aikeys, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, opportunities, visitors, customers, licences, profiles, conversations, jobs, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

@@ -148,25 +148,29 @@ async function fetchJobs(source, { fetchImpl = fetch, base = {}, now = Date.now 
     const [tenant, site] = source.board.split('/');
     const wd = source.wd || 'wd1';
     const origin = base.workday ? base.workday : `https://${tenant}.${wd}.myworkdayjobs.com`;
-    const out = [];
-    let total = 0;   // Workday only sends the total with the first page
-    for (let offset = 0; offset < MAX_JOBS; offset += 20) {
-      const data = await getJson(fetchImpl, `${origin}/wday/cxs/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}/jobs`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText: '' }),
-      });
-      const page = data.jobPostings || [];
-      for (const j of page) {
-        out.push(job({
-          externalId: String((j.bulletFields || [])[0] || j.externalPath), title: j.title, location: j.locationsText || '',
-          department: '', employmentType: '', postedAt: workdayDate(j.postedOn, now()),
-          url: `https://${tenant}.${wd}.myworkdayjobs.com/${site}${j.externalPath}`, description: '',
-        }));
+    const fetchPage = offset => getJson(fetchImpl, `${origin}/wday/cxs/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}/jobs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ appliedFacets: {}, limit: 20, offset, searchText: '' }),
+    });
+    const page = offset => fetchPage(offset).then(data => data.jobPostings || []);
+    // Workday only sends the total with the first page; the other pages are fetched a few at a time
+    const first = await fetchPage(0);
+    const postings = (first.jobPostings || []).slice();
+    const total = Math.min(MAX_JOBS, first.total || 0);
+    if (postings.length === 20) {
+      const offsets = [];
+      for (let o = 20; o < total; o += 20) offsets.push(o);
+      for (let i = 0; i < offsets.length; i += 5) {
+        const pages = await Promise.all(offsets.slice(i, i + 5).map(page));
+        pages.forEach(p => postings.push(...p));
+        if (pages.some(p => p.length < 20)) break;
       }
-      if (offset === 0) total = data.total || 0;
-      if (page.length < 20 || out.length >= total) break;
     }
-    return out;
+    return postings.slice(0, MAX_JOBS).map(j => job({
+      externalId: String((j.bulletFields || [])[0] || j.externalPath), title: j.title, location: j.locationsText || '',
+      department: '', employmentType: '', postedAt: workdayDate(j.postedOn, now()),
+      url: `https://${tenant}.${wd}.myworkdayjobs.com/${site}${j.externalPath}`, description: '',
+    }));
   }
   throw new Error('Unsupported job board');
 }

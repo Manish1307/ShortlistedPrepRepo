@@ -1,6 +1,6 @@
 'use strict';
-// Find jobs: companies' careers boards (Greenhouse, Lever, SmartRecruiters, Ashby, Workday) are synced into the
-// database; candidates filter and page through the active jobs; the admin's Master Prompt scores them with the AI.
+// AI Job search: candidates pick a resume and say what to look for; live jobs are read from the companies' careers
+// boards (Greenhouse, Lever, SmartRecruiters, Ashby, Workday) and the admin's Master Prompt scores them with the AI.
 // A fake job board and a fake Gemini stand in for the real services.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -13,7 +13,7 @@ const { createApp } = require('../admin/server');
 const { hashPassword } = require('../admin/lib/auth');
 const aikeys = require('../admin/lib/aikeys');
 const sources = require('../admin/lib/jobsources');
-const { DEFAULT_MASTER_PROMPT } = require('../admin/lib/jobs');
+const { DEFAULT_MASTER_PROMPT, maintain } = require('../admin/lib/jobs');
 
 const listen = server => new Promise(r => server.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${server.address().port}`)));
 const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString();
@@ -55,31 +55,40 @@ async function fakeBoards() {
   return { state, base, sourceBase: { greenhouse: base + '/gh', lever: base + '/lever', smartrecruiters: base + '/sr', ashby: base + '/ashby', workday: base + '/wd' }, close: () => new Promise(r => server.close(r)) };
 }
 
-/** Fake Gemini for the matching: scores every job id it is shown, plus one made-up id that must be ignored. */
+/** Fake Gemini: the analysis step returns a profile; the scoring step scores every job id it is shown, plus one made-up id that must be ignored. */
 async function fakeGemini() {
   const seen = [];
-  let onlyMadeUp = false;   // answer with made-up ids only
+  let onlyMadeUp = false, delay = 0;
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', c => { raw += c; });
-    req.on('end', () => {
+    req.on('end', () => setTimeout(() => {
       const body = JSON.parse(raw);
       seen.push(body);
-      const ids = [...body.contents[0].parts[0].text.matchAll(/"id":(\d+)/g)].map(m => Number(m[1]));
-      const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], reason: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none' }));
-      matches.push({ id: 999999, score: 99, bucket: 'high', reason: 'made up' });
-      const out = { profile: { seniority: 'Mid-level (6 years)', targetRoles: ['.NET Developer', 'Scrum Master'], summary: 'Strong .NET engineer.' }, matches };
+      const system = body.systemInstruction.parts[0].text, user = body.contents[0].parts[0].text;
+      let out;
+      if (/This step only analyses the candidate/.test(system)) {
+        out = { level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
+          searchTerms: ['.net', 'scrum master', 'backend engineer', 'qa engineer'], resumeFixes: ['Replace the [add number] markers'] };
+      } else {
+        const label = (/labels: ([^|)\n]+)/.exec(user) || [])[1];
+        const ids = [...user.matchAll(/"id":(\d+)/g)].map(m => Number(m[1]));
+        const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], why: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none', resume: (label || '').trim() }));
+        matches.push({ id: 999999, score: 99, bucket: 'high', why: 'made up' });
+        out = { matches };
+      }
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }));
-    });
+    }, delay));
   });
   const base = await listen(server);
-  return { base, seen, madeUpOnly: v => { onlyMadeUp = v; }, close: () => new Promise(r => server.close(r)) };
+  return { base, seen, madeUpOnly: v => { onlyMadeUp = v; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
 }
 
 async function start() {
   const boards = await fakeBoards(), ai = await fakeGemini();
-  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase });
+  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase,
+    jobCatalogue: [{ name: 'Contoso', url: 'https://boards.greenhouse.io/contoso' }, { name: 'Northwind', url: 'https://careers.smartrecruiters.com/Northwind' }] });
   const base = await listen(app.server);
   aikeys.addKey(app.db, app.vault, { provider: 'gemini', label: 'Gemini', key: 'AIza' + 'g'.repeat(35) + 'GGGG', makeDefault: true });
   for (const [mail, role] of [['boss@example.com', 'owner'], ['help@example.com', 'support']]) {
@@ -95,7 +104,7 @@ async function start() {
       return { status: r.status, json: await r.json() };
     };
     await call('POST', '/admin/api/login', { email, password: 'correct-horse-battery' });
-    return { get: u => call('GET', u), post: (u, b) => call('POST', u, b || {}), del: u => call('DELETE', u) };
+    return { get: u => call('GET', u), post: (u, b) => call('POST', u, b || {}) };
   };
   const site = async () => {
     const { token } = await fetch(base + '/api/account/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'asha@example.com', password: 'a-long-password' }) }).then(r => r.json());
@@ -103,9 +112,27 @@ async function start() {
       const r = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: body === undefined ? undefined : JSON.stringify(body) });
       return { status: r.status, json: await r.json() };
     };
-    return { get: u => call('GET', u), post: (u, b) => call('POST', u, b || {}) };
+    const get = u => call('GET', u), post = (u, b) => call('POST', u, b || {});
+    /** Start a search and wait for it to finish. */
+    const search = async params => {
+      const started = await post('/api/career/jobsearch', params);
+      if (started.status !== 202) return started;
+      for (let i = 0; i < 200; i++) {
+        const r = await get('/api/career/jobsearch/' + started.json.search.id);
+        if (r.json.search.status !== 'running') return r;
+        await new Promise(res => setTimeout(res, 25));
+      }
+      throw new Error('search did not finish');
+    };
+    return { get, post, search };
   };
-  return { app, base, boards, ai, admin, site, stop: async () => { await app.close(); await boards.close(); await ai.close(); } };
+  const addResume = () => {
+    app.db.prepare("INSERT INTO career_resumes (customer_id, file_name, source_text, uploaded_at) VALUES (?, 'cv', ?, datetime('now'))")
+      .run(cust, 'Asha Rao. Senior .NET developer with C#, ASP.NET Core and Azure. Acting Scrum Master. '.repeat(5));
+    app.db.prepare("INSERT INTO career_versions (customer_id, role, content_json, created_at) VALUES (?, 'Scrum Master', ?, datetime('now'))")
+      .run(cust, JSON.stringify({ fitScore: 70, fitNote: '', resume: { name: 'Asha Rao', headline: 'Scrum Master', summary: 'Scrum Master for 3 years.', skills: [], experience: [], projects: [], education: [], certifications: [] } }));
+  };
+  return { app, base, boards, ai, admin, site, addResume, stop: async () => { await app.close(); await boards.close(); await ai.close(); } };
 }
 async function withServer(fn) { const s = await start(); try { await fn(s); } finally { await s.stop(); } }
 
@@ -153,37 +180,10 @@ test('all five job boards are read, with paging, hidden jobs skipped and HTML re
   } finally { await boards.close(); }
 });
 
-test('the admin adds companies; syncing adds, refreshes and closes jobs', async () => {
+test('the Master Prompt can be changed and reset; the dashboard shows search stats', async () => {
   await withServer(async s => {
     const help = await s.admin('help@example.com');
-    assert.equal((await help.post('/admin/api/jobs/companies', { name: 'Contoso', careersUrl: 'https://boards.greenhouse.io/contoso' })).status, 403);
-    const boss = await s.admin('boss@example.com');
-    assert.equal((await boss.post('/admin/api/jobs/companies', { name: 'X', careersUrl: 'https://www.naukri.com/x' })).status, 400);
-    const added = await boss.post('/admin/api/jobs/companies', { name: 'Contoso', careersUrl: 'https://boards.greenhouse.io/contoso' });
-    assert.equal(added.status, 201);
-    assert.equal(added.json.sync.ok, true);
-    assert.equal(added.json.company.jobCount, 3);                                              // the non-https link is skipped
-    assert.equal((await boss.post('/admin/api/jobs/companies', { name: 'Again', careersUrl: 'https://boards.greenhouse.io/contoso' })).status, 409);
-    const broken = await boss.post('/admin/api/jobs/companies', { name: 'Missing', careersUrl: 'https://boards.greenhouse.io/missing' });
-    assert.equal(broken.json.sync.ok, false);
-    assert.match(broken.json.company.lastError, /404/);
-
-    s.boards.state.greenhouse = s.boards.state.greenhouse.filter(j => j.id !== 2);             // the Scrum Master job closes
-    s.boards.state.greenhouse[0].title = 'Senior .NET Developer (C#)';
-    const synced = await boss.post('/admin/api/jobs/sync');
-    assert.equal(synced.json.results.length, 2);
-    const rows = s.app.db.prepare('SELECT external_id, title, active FROM jobs ORDER BY external_id').all();
-    assert.deepEqual(rows.map(r => [r.external_id, r.active]), [['1', 1], ['2', 0], ['3', 1]]);
-    assert.equal(rows[0].title, 'Senior .NET Developer (C#)');
-
-    const page = (await boss.get('/admin/api/jobs')).json;
-    assert.equal(page.stats.active, 2);
-    assert.equal(page.prompt.isDefault, true);
-  });
-});
-
-test('the Master Prompt can be changed and reset', async () => {
-  await withServer(async s => {
+    assert.equal((await help.post('/admin/api/jobs/prompt', { prompt: 'Act as a strict recruiter for senior Indian IT candidates. Score harshly.' })).status, 403);
     const boss = await s.admin('boss@example.com');
     assert.equal((await boss.post('/admin/api/jobs/prompt', { prompt: 'short' })).status, 400);
     const saved = await boss.post('/admin/api/jobs/prompt', { prompt: 'Act as a strict recruiter for senior Indian IT candidates. Score harshly.' });
@@ -191,52 +191,114 @@ test('the Master Prompt can be changed and reset', async () => {
     assert.equal(saved.json.prompt.updatedBy, 'boss@example.com');
     const reset = await boss.post('/admin/api/jobs/prompt', { reset: true });
     assert.equal(reset.json.prompt.prompt, DEFAULT_MASTER_PROMPT);
+    const page = (await boss.get('/admin/api/jobs')).json;
+    assert.deepEqual(page.builtInCompanies, ['Contoso', 'Northwind']);
+    assert.equal(page.stats.searches, 0);
+    assert.match(page.outputRules, /Never invent companies, jobs or links/);
+    assert.equal((await boss.post('/admin/api/jobs/companies', { name: 'X', careersUrl: 'https://boards.greenhouse.io/x' })).status, 404);   // the admin no longer adds companies
   });
 });
 
-test('candidates filter and page through active jobs, and the AI scores them with the Master Prompt', async () => {
+test('AI Job search: live jobs from the built-in companies, filtered by country and scored into groups with the Master Prompt', async () => {
   await withServer(async s => {
     const boss = await s.admin('boss@example.com');
-    const contoso = (await boss.post('/admin/api/jobs/companies', { name: 'Contoso', careersUrl: 'https://boards.greenhouse.io/contoso' })).json.company;
-    await boss.post('/admin/api/jobs/companies', { name: 'Northwind', careersUrl: 'https://careers.smartrecruiters.com/Northwind' });
     await boss.post('/admin/api/jobs/prompt', { prompt: 'CUSTOM MASTER PROMPT: act as a recruiter for Indian IT candidates and score every job.' });
     const web = await s.site();
+    assert.equal((await web.post('/api/career/jobsearch', { country: 'India' })).status, 400);                // no resume yet
+    s.addResume();
 
-    let r = (await web.get('/api/career/jobs?pageSize=20&page=2')).json;
-    assert.equal(r.total, 153);
-    assert.deepEqual([r.page, r.pages, r.jobs.length], [2, 8, 20]);
-    assert.deepEqual(r.countries.map(c => c.name).slice(0, 2), ['India', 'United Kingdom']);
-    assert.equal((await web.get('/api/career/jobs?country=United%20Kingdom')).json.jobs[0].title, 'Data Engineer');
-    assert.equal((await web.get('/api/career/jobs?q=scrum')).json.total, 1);
-    assert.equal((await web.get(`/api/career/jobs?companies=${contoso.id}`)).json.total, 3);
-    assert.equal((await web.get('/api/career/jobs?days=7&companies=' + contoso.id)).json.total, 1);   // only the 1-day-old job
-    assert.equal((await web.get('/api/career/jobs?location=pune')).json.jobs[0].title, 'Scrum Master');
-    assert.ok((await web.get('/api/career/jobs')).json.jobs[0].url.startsWith('https://'));
+    const r = await web.search({ resume: 'all', country: 'India' });
+    const search = r.json.search;
+    assert.equal(search.status, 'done', search.error);
+    const { profile, jobs, coverage } = search.result;
+    assert.equal(profile.level, 'Mid-level (6 years)');
+    assert.deepEqual(profile.resumeFixes, ['Replace the [add number] markers']);
+    assert.equal(coverage.companies, 2);
+    assert.equal(coverage.live, 152);                                            // Contoso's 2 India jobs + Northwind's 150; London and the http link are out
+    assert.equal(coverage.considered, 60);                                       // the most relevant ones go to the AI
+    assert.ok(jobs.length === 60 && jobs.every(j => j.url.startsWith('https://')));   // the made-up id is ignored
+    assert.ok(jobs.some(j => j.title === 'Senior .NET Developer') && jobs.some(j => j.title === 'Scrum Master'));
+    assert.ok(!jobs.some(j => j.title === 'Data Engineer'));
+    assert.equal(jobs[0].score, 88);                                             // best first
+    assert.deepEqual(search.counts, { high: 20, medium: 20, stretch: 20 });
+    assert.equal(jobs[0].resume, 'Uploaded resume');   // which resume to send, when searching with all of them
+    assert.equal(search.params.resumeLabel, 'All my resumes (2)');
+    assert.equal(r.json.usage.used, 1);
 
-    assert.equal((await web.post('/api/career/jobs/match', {})).status, 400);                  // no resume yet
-    s.app.db.prepare("INSERT INTO career_resumes (customer_id, file_name, source_text, uploaded_at) VALUES (1, 'cv', ?, datetime('now'))")
-      .run('Asha Rao. Senior .NET developer with C#, ASP.NET Core and Azure. Acting Scrum Master. '.repeat(5));
-    const m = await web.post('/api/career/jobs/match', { resume: 'ats', companies: [contoso.id] });
-    assert.equal(m.status, 200);
-    assert.equal(m.json.scored, 3);                                                             // the made-up id is ignored
-    assert.equal(m.json.profile.seniority, 'Mid-level (6 years)');
-    assert.equal(m.json.usage.used, 1);
-    const prompt = s.ai.seen[0].systemInstruction.parts[0].text;
-    assert.match(prompt, /^CUSTOM MASTER PROMPT/);
-    assert.match(prompt, /Never invent companies, jobs or links/);                              // the locked rules are always added
-    assert.match(s.ai.seen[0].contents[0].parts[0].text, /"title":"Senior .NET Developer"/);
+    const [analysis, scoring] = s.ai.seen;
+    assert.match(analysis.systemInstruction.parts[0].text, /^CUSTOM MASTER PROMPT[\s\S]*This step only analyses/);
+    assert.match(scoring.systemInstruction.parts[0].text, /^CUSTOM MASTER PROMPT[\s\S]*Never invent companies, jobs or links/);
+    assert.match(scoring.contents[0].parts[0].text, /=== RESUME: Scrum Master ===/);
+    assert.match(scoring.contents[0].parts[0].text, /Country: India/);
 
-    r = (await web.get(`/api/career/jobs?companies=${contoso.id}&sort=match`)).json;
-    assert.equal(r.jobs[0].match.score, 88);
-    assert.deepEqual(r.counts, { high: 1, medium: 1, stretch: 1 });
-    assert.equal((await web.get(`/api/career/jobs?companies=${contoso.id}&bucket=stretch`)).json.total, 1);
-    assert.equal((await web.get('/api/career/jobs?resume=v99')).json.jobs.every(j => j.match === null), true);   // scores belong to one resume
+    const list = (await web.get('/api/career/jobsearch')).json;
+    assert.equal(list.searches.length, 1);
+    assert.equal(list.searches[0].result, undefined);                             // the list is light; open one for the jobs
+    assert.equal((await boss.get('/admin/api/jobs')).json.stats.searches, 1);
+  });
+});
 
-    // an answer with only made-up ids is an error, and is not counted against the daily limit
+test('AI Job search: companies typed by the candidate are found by name or careers link', async () => {
+  await withServer(async s => {
+    s.addResume();
+    const web = await s.site();
+    const r = await web.search({ resume: 'ats', country: '', companies: 'contoso, fabrikam\nhttps://www.naukri.com/x, Nonexistent Co' });
+    const search = r.json.search;
+    assert.equal(search.status, 'done', search.error);
+    const { jobs, coverage } = search.result;
+    assert.equal(coverage.companies, 2);                                          // Contoso (built in) and Fabrikam (found on Lever)
+    assert.deepEqual(coverage.notFound, ['Nonexistent Co']);
+    assert.deepEqual(coverage.notSupported, ['https://www.naukri.com/x']);
+    assert.ok(jobs.some(j => j.company === 'fabrikam' && j.title === 'Backend Engineer'));
+    assert.ok(jobs.every(j => j.resume === ''));                                  // one resume: nothing to choose
+    assert.equal(s.app.db.prepare("SELECT provider FROM job_companies WHERE board = 'fabrikam'").get().provider, 'lever');
+
+    const none = await web.search({ companies: 'Nonexistent Co' });
+    assert.equal(none.json.search.status, 'failed');
+    assert.match(none.json.search.error, /could be found/);
+    assert.equal((await web.post('/api/career/jobsearch', { companies: Array.from({ length: 31 }, (_, i) => 'Co' + i).join(',') })).status, 400);
+  });
+});
+
+test('AI Job search: failures say why and are not counted; one search at a time', async () => {
+  await withServer(async s => {
+    s.addResume();
+    const web = await s.site();
+    const empty = await web.search({ country: 'Japan' });
+    assert.equal(empty.json.search.status, 'failed');
+    assert.match(empty.json.search.error, /No live openings were found in Japan/);
+    assert.equal(s.ai.seen.length, 0);                                            // no AI call when there are no jobs
+
     s.ai.madeUpOnly(true);
-    const none = await web.post('/api/career/jobs/match', { resume: 'ats', companies: [contoso.id] });
-    assert.equal(none.status, 502);
-    assert.match(none.json.error, /could not score/);
-    assert.equal((await web.get('/api/career')).json.usage.used, 1);
+    const bad = await web.search({ country: 'India' });
+    assert.equal(bad.json.search.status, 'failed');
+    assert.match(bad.json.search.error, /could not score/);
+    assert.equal(bad.json.usage.used, 0);
+
+    s.ai.madeUpOnly(false); s.ai.slow(300);
+    const first = await web.post('/api/career/jobsearch', { country: 'India' });
+    assert.equal(first.status, 202);
+    assert.equal((await web.post('/api/career/jobsearch', { country: 'India' })).status, 409);
+    assert.equal((await web.post(`/api/career/jobsearch/${first.json.search.id}/delete`)).status, 409);
+    let done;
+    for (let i = 0; i < 200 && !done; i++) {
+      const r = await web.get('/api/career/jobsearch/' + first.json.search.id);
+      if (r.json.search.status !== 'running') done = r.json.search;
+      else await new Promise(res => setTimeout(res, 25));
+    }
+    assert.equal(done.status, 'done');
+    assert.equal((await web.post(`/api/career/jobsearch/${first.json.search.id}/delete`)).json.ok, true);
+    assert.equal((await web.get('/api/career/jobsearch')).json.searches.length, 2);
+  });
+});
+
+test('career sites nobody searched for two weeks are dropped from the cache', async () => {
+  await withServer(async s => {
+    const db = s.app.db;
+    const old = new Date(Date.now() - 20 * 86400000).toISOString();
+    db.prepare("INSERT INTO job_companies (name, careers_url, provider, board, created_at, last_used) VALUES ('Old', 'https://boards.greenhouse.io/old', 'greenhouse', 'old', ?, ?)").run(old, old);
+    db.prepare("INSERT INTO job_companies (name, careers_url, provider, board, created_at, last_used) VALUES ('Contoso', 'https://boards.greenhouse.io/contoso', 'greenhouse', 'contoso', ?, ?)").run(old, new Date().toISOString());
+    assert.equal(await maintain(db, { base: s.boards.sourceBase }), 1);
+    assert.deepEqual(db.prepare('SELECT name, job_count FROM job_companies').all().map(r => [r.name, r.job_count]), [['Contoso', 3]]);
   });
 });

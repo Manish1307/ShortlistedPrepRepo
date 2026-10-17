@@ -210,40 +210,60 @@
   .cr-ring { width: 70px; height: 70px; } .cr-ring span { width: 54px; height: 54px; font-size: 20px; }
 }
 
-/* ---------- Find jobs (career.html, step 5) ---------- */
-.jb-filters { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-.jb-filters input, .jb-filters select, .jb-match select { padding: 10px 12px; font-size: 15px; }
-.jb-companies { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; font-size: 14px; }
-.jb-company { background: #fff; border: 1px solid var(--bd) !important; color: var(--body); }
-.jb-company.on { background: var(--purple); color: #fff; border-color: var(--purple) !important; }
-.jb-match { display: grid; grid-template-columns: 1.3fr 1fr auto; gap: 10px; align-items: center; margin-bottom: 6px; }
-.jb-buckets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
-.jb-bucket { border: 1px solid var(--bd); background: #fff; border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; color: var(--body); }
-.jb-bucket.on { color: #fff; border-color: transparent; }
-.jb-bucket.all.on { background: var(--ink); } .jb-bucket.high.on { background: #0a8a5c; } .jb-bucket.medium.on { background: #a86c00; } .jb-bucket.stretch.on { background: #b4235e; }
-.jb-info { color: var(--muted); font-size: 13.5px; font-weight: 600; margin: 8px 0; }
+/* ---------- AI Job search (career.html, step 5) ---------- */
+.js-form { display: grid; gap: 10px; }
+.js-row { display: grid; gap: 10px; align-items: center; }
+.js-row.two { grid-template-columns: 1fr 1fr; }
+.js-row.three { grid-template-columns: 1.4fr 1fr 1fr; }
+.js-row.actions { grid-template-columns: auto 1fr auto; }
+.js-form input[type="text"], .js-form select, .js-form textarea { padding: 10px 12px; font-size: 15px; }
+.js-form textarea { min-height: 0; resize: vertical; }
+.js-check { display: inline-flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; color: var(--body); cursor: pointer; }
+.js-check input { width: 18px; height: 18px; accent-color: var(--purple); }
+.js-small { font-size: 13px; margin: 8px 0 0; }
+.js-status {  margin: 12px 0 0; font-size: 14.5px; font-weight: 600; }
+.js-status:empty { display: none; }
+.js-status.busy { color: var(--purple); background: var(--tint); border-radius: 14px; padding: 12px 14px; }
+.js-status.bad { color: #b4235e; }
+.js-status-in { display: flex; align-items: center; gap: 10px; }
+.js-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: js-spin .8s linear infinite; flex: none; }
+@keyframes js-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .js-spin { animation: none; } }
+.js-result { margin-top: 18px; }
+.js-profile { border: 1px solid var(--bd); background: var(--tint); border-radius: 16px; padding: 14px 16px; }
+.js-profile p { margin: 6px 0; }
+.js-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 14px; }
+.js-line .ac-chips { margin: 0; }
+.js-group { margin-top: 18px; }
+.js-group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 8px; }
+.js-group-head h3 { margin: 0; font-size: 17px; }
+.js-group.high .jb-scroll { border-color: #9fd8c2; } .js-group.medium .jb-scroll { border-color: #ecd29a; } .js-group.stretch .jb-scroll { border-color: #efb4c9; }
+.js-num { color: var(--muted); font-weight: 700; width: 28px; }
+.js-fit { min-width: 38px; justify-content: center; }
+.js-fixes { margin-top: 20px; border: 1px solid #ecd29a; background: #fffaf0; border-radius: 16px; padding: 14px 16px; }
+.js-notes { margin: 14px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+.js-counts { display: inline-flex; gap: 4px; }
+.jb-info { color: var(--muted); font-size: 13.5px; font-weight: 600; margin: 14px 0 0; }
 .jb-scroll { overflow-x: auto; border: 1px solid var(--bd); border-radius: 16px; }
 .jb-table { width: 100%; border-collapse: collapse; font-size: 14.5px; background: #fff; }
 .jb-table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--tint); padding: 10px 12px; white-space: nowrap; }
 .jb-table td { padding: 12px; border-top: 1px solid var(--line); vertical-align: top; }
 .jb-table tr:hover td { background: #fcfbff; }
-.jb-sub { font-size: 12.5px; margin-top: 2px; }
-.jb-reason { font-size: 12.5px; color: var(--body); margin-top: 4px; max-width: 280px; }
+.jb-reason { font-size: 12.5px; color: var(--body); max-width: 300px; }
 .jb-gap { font-size: 12px; color: #a86c00; margin-top: 2px; }
 .jb-open { white-space: nowrap; text-align: right; }
-.jb-pager { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; font-weight: 600; }
-.jb-pager select { width: auto; padding: 6px 10px; font-size: 13.5px; }
 @media (max-width: 900px) {
-  .jb-filters { grid-template-columns: 1fr 1fr; }
-  .jb-match { grid-template-columns: 1fr 1fr; } .jb-match .btn { grid-column: 1 / -1; }
+  .js-row.three { grid-template-columns: 1fr 1fr; } .js-row.three input:first-child { grid-column: 1 / -1; }
+  .js-row.actions { grid-template-columns: 1fr auto; } .js-row.actions .btn { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
-  .jb-filters, .jb-match { grid-template-columns: 1fr; }
-  .jb-scroll { border: 0; overflow: visible; }
+  .js-row.two, .js-row.three, .js-row.actions { grid-template-columns: 1fr; }
+  .jb-scroll { border: 0 !important; overflow: visible; }
   .jb-table, .jb-table tbody, .jb-table tr, .jb-table td { display: block; width: 100%; }
   .jb-table thead { display: none; }
   .jb-table tr { border: 1px solid var(--bd); border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; background: #fff; }
   .jb-table td { border: 0; padding: 4px 0; }
-  .jb-table td[data-label]:not([data-label="Role"])::before { content: attr(data-label) ": "; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .jb-table td[data-label]:not([data-label="Role"]):not([data-label="#"])::before { content: attr(data-label) ": "; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .js-num { width: auto; }
   .jb-open { text-align: left; margin-top: 6px; }
 }

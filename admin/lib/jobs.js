@@ -1,47 +1,75 @@
 'use strict';
-// Find jobs: real, active openings from the companies the admin adds (by their careers URL, see jobsources.js),
-// synced every few hours. Candidates filter and page through them on the website (Career toolkit → Find jobs), and
-// the AI scores the jobs against their resume with the admin's Master Prompt (dashboard → Jobs).
-// The AI only ever ranks jobs that exist in the database: it cannot invent a company, a job or a link.
+// AI Job search (website: Career toolkit → step 5). The candidate picks one resume or all of them, and says where and
+// what to look for: country, city, role, level and, optionally, the companies (names or careers URLs). The server
+// reads those companies' live openings from their own career sites (jobsources.js; a built-in list of well-known
+// companies when none are given), then the AI, guided by the admin's Master Prompt (dashboard → Jobs), works out the
+// candidate's profile and scores the most relevant real jobs into high, medium and low-probability groups.
+// The AI only ever scores jobs that were fetched from a career site: it cannot invent a company, a job or a link.
+//
+// A search runs in the background (fetching dozens of career sites takes a while); the page polls for its progress.
 
-const { ApiError, text, integer, likeTerm } = require('./http');
+const { ApiError, text, likeTerm } = require('./http');
 const { now, transaction } = require('./db');
 const { signedInCustomer } = require('./accounts');
 const { completeJson } = require('./careerai');
 const sources = require('./jobsources');
+const { CATALOGUE } = require('./jobcatalogue');
 
-const DAY = 86400000;
-const AI_BATCH = 40;              // jobs sent to the AI per "Find my best matches"
+const HOUR = 3600000, DAY = 24 * HOUR;
+const FRESH_FOR = 6 * HOUR;       // a company's jobs fetched within this time are used as they are
+const RETRY_FAILED = HOUR;        // a career site that failed is tried again after this
+const FETCH_BUDGET = 90000;       // a search waits at most this long for career sites (the rest keep loading)
+const PARALLEL = 6;               // career sites fetched at the same time
+const AI_BATCH = 60;              // jobs the AI scores per search
+const MAX_COMPANIES = 30;         // typed by the candidate
+const KEEP_SEARCHES = 20;         // per candidate
+const BUCKETS = ['high', 'medium', 'stretch'];
+const LEVELS = ['', 'Fresher / entry-level', 'Mid-level', 'Senior', 'Lead / manager'];
 
-const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting assistant for candidates in India.
+const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting machine for candidates in India.
 
-1. Analyse the candidate's resume in depth: skills, tools, domain, education, years of experience and achievements.
-   Work out their real seniority (fresher / entry-level, mid-level, senior or lead) and the roles they should target.
-   Do not assume they are a fresher if the resume shows experience.
-2. For EACH job posting provided, give a fit score from 0 to 100 based on:
+1. Analyse the candidate's resume(s) in depth: skills, tools, domain, education, years of experience and achievements.
+   Work out their real level (fresher / entry-level, mid-level, senior, lead or manager) and the roles they should target.
+   Suggest fresher or entry-level roles only when the resume shows little or no work experience.
+2. Respect the candidate's search preferences (country, city, role, level) when they give them.
+3. For each job posting, give a fit score from 0 to 100:
    - required skills and tools the candidate actually has (40%)
    - experience level match: not too junior, not too senior (25%)
    - role and domain relevance (20%)
-   - location fit: prefer India, and remote roles open to India (15%)
-3. Put every job in one group:
-   - "high": strong match, apply first (score 75 or more)
-   - "medium": good match with small gaps (score 50 to 74)
-   - "stretch": worth trying, but clear gaps (score under 50 that is still realistic)
-4. For each job, write one short, honest reason for the score and the single most important gap (or "none").
-   Consider startups, scale-ups, MNCs, consulting firms, tech and non-tech companies equally; judge only the fit.`;
+   - location fit with the candidate's preferences (15%)
+4. Put every job in one group:
+   - "high": high probability, apply first (score 75 or more)
+   - "medium": medium probability, small gaps (score 50 to 74)
+   - "stretch": low probability, worth a try (score under 50)
+5. For each job, write one short, honest reason for the score and the single most important gap (or "none").
+   Treat startups, scale-ups, MNCs, consulting firms, tech and non-tech companies equally; judge only the fit.
+6. List the most important fixes to make to the resume before applying: leftover placeholders, typos, outdated
+   lines, missing numbers, missing certifications.`;
 
-const OUTPUT_RULES = `RULES (always apply):
+const ANALYSIS_RULES = `RULES (always apply):
+- This step only analyses the candidate. Do not list or invent jobs.
+- Never claim skills or experience the resume does not show.
+- Reply with ONLY a JSON object:
+{
+  "level": "e.g. Mid-level (6 years)",
+  "summary": "one or two sentences about the candidate",
+  "strengths": ["3-6 strongest areas"],
+  "targetRoles": ["3-6 job titles to target, best first"],
+  "searchTerms": ["6-15 short job-title words or phrases that find matching postings, e.g. program manager, power platform, scrum master"],
+  "resumeFixes": ["up to 6 specific fixes to the resume before applying"]
+}`;
+
+const SCORING_RULES = `RULES (always apply):
 - Score ONLY the job postings listed below, using their exact "id". Never invent companies, jobs or links.
 - Never claim the candidate has skills or experience the resume does not show.
 - Reply with ONLY a JSON object:
-{
-  "profile": { "seniority": "e.g. Mid-level (6 years)", "targetRoles": ["3-6 roles the candidate should target"], "summary": "one sentence" },
-  "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "reason": "one sentence", "gap": "short phrase or none" } ]
-}
+{ "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "why": "one sentence", "gap": "short phrase or none", "resume": "label of the best resume to send" } ] }
 Include every listed job in "matches".`;
 
-const BUCKETS = ['high', 'medium', 'stretch'];
 const parse = s => { try { return JSON.parse(s); } catch (_) { return null; } };
+const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const strings = (v, n, max) => (Array.isArray(v) ? v : []).map(x => String(x || '').trim().slice(0, max)).filter(Boolean).slice(0, n);
+const sleep = ms => new Promise(r => setTimeout(r, ms).unref());
 
 function masterPrompt(db) {
   const row = db.prepare("SELECT value, updated_at, updated_by FROM job_settings WHERE key = 'master_prompt'").get();
@@ -49,12 +77,14 @@ function masterPrompt(db) {
     : { prompt: DEFAULT_MASTER_PROMPT, updatedAt: null, updatedBy: '', isDefault: true };
 }
 
-/** Fetch one company's jobs and update the database: new jobs added, known ones refreshed, missing ones closed. */
-async function syncCompany(db, company, opts = {}) {
+// ===================== career sites → jobs table =====================
+
+/** Save one company's jobs: new ones added, known ones refreshed, missing ones closed. list: already fetched, or fetched here. */
+async function syncCompany(db, company, opts = {}, list = null) {
   const stamp = now();
   try {
     const extra = parse(company.extra) || {};
-    const list = await sources.fetchJobs({ provider: company.provider, board: company.board, wd: extra.wd, defaultCountry: company.default_country }, opts);
+    if (!list) list = await sources.fetchJobs({ provider: company.provider, board: company.board, wd: extra.wd, defaultCountry: company.default_country }, opts);
     transaction(db, () => {
       const upsert = db.prepare(`INSERT INTO jobs (company_id, external_id, title, location, country, department, employment_type, posted_at, url, description, active, first_seen, last_seen)
         VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)
@@ -64,110 +94,254 @@ async function syncCompany(db, company, opts = {}) {
       for (const j of list) {
         if (!j.title || !j.url || !/^https:\/\//i.test(j.url)) continue;
         upsert.run(company.id, j.externalId, String(j.title).slice(0, 300), String(j.location || '').slice(0, 300), String(j.country || '').slice(0, 80),
-          String(j.department || '').slice(0, 160), String(j.employmentType || '').slice(0, 80), j.postedAt, j.url, j.description || '', stamp, stamp);
+          String(j.department || '').slice(0, 160), String(j.employmentType || '').slice(0, 80), j.postedAt, j.url, String(j.description || '').slice(0, 2000), stamp, stamp);
       }
-      db.prepare('UPDATE jobs SET active = 0 WHERE company_id = ? AND last_seen < ?').run(company.id, stamp);                 // closed since the last sync
-      db.prepare('DELETE FROM jobs WHERE company_id = ? AND active = 0 AND last_seen < ?').run(company.id, new Date(Date.now() - 60 * DAY).toISOString());
+      db.prepare('UPDATE jobs SET active = 0 WHERE company_id = ? AND last_seen < ?').run(company.id, stamp);                 // closed since the last fetch
+      db.prepare('DELETE FROM jobs WHERE company_id = ? AND active = 0 AND last_seen < ?').run(company.id, new Date(Date.now() - 30 * DAY).toISOString());
       const count = db.prepare('SELECT COUNT(*) AS n FROM jobs WHERE company_id = ? AND active = 1').get(company.id).n;
       db.prepare("UPDATE job_companies SET last_sync = ?, last_error = '', job_count = ? WHERE id = ?").run(stamp, count, company.id);
     });
     return { ok: true, jobs: list.length };
   } catch (err) {
     const message = String((err && err.message) || err).slice(0, 300);
-    db.prepare('UPDATE job_companies SET last_sync = ?, last_error = ? WHERE id = ?').run(stamp, message, company.id);
+    try { db.prepare('UPDATE job_companies SET last_sync = ?, last_error = ? WHERE id = ?').run(stamp, message, company.id); } catch (_) { /* database closed */ }
     return { ok: false, error: message };
   }
 }
 
-async function syncAll(db, opts = {}) {
-  const results = [];
-  for (const c of db.prepare('SELECT * FROM job_companies WHERE enabled = 1 ORDER BY id').all()) results.push({ id: c.id, name: c.name, ...(await syncCompany(db, c, opts)) });
-  return results;
+// one fetch per company at a time, shared by searches that run together
+const inflight = new WeakMap();
+function refresh(db, company, opts) {
+  if (!inflight.has(db)) inflight.set(db, new Map());
+  const running = inflight.get(db);
+  if (!running.has(company.id)) running.set(company.id, syncCompany(db, company, opts).finally(() => running.delete(company.id)));
+  return running.get(company.id);
 }
 
-/** Sync every few hours while the server runs (JOB_SYNC_HOURS, default 6; 0 turns it off). */
+const isFresh = c => c.last_sync && Date.now() - Date.parse(c.last_sync) < (c.last_error ? RETRY_FAILED : FRESH_FOR);
+
+/** Fetch the companies whose jobs are out of date, waiting at most `budget` ms. Calls progress(done, total). */
+async function gather(db, companies, opts, progress, budget = FETCH_BUDGET) {
+  const queue = companies.filter(c => !isFresh(c));
+  let done = companies.length - queue.length;
+  progress(done, companies.length);
+  const worker = async () => {
+    while (queue.length) { await refresh(db, queue.shift(), opts); done++; progress(done, companies.length); }
+  };
+  const all = Promise.all(Array.from({ length: Math.min(PARALLEL, queue.length) }, worker));
+  await Promise.race([all, sleep(budget)]);
+  return { loading: companies.length - done };
+}
+
+/** Keep the cache small: refresh companies searched in the last 3 days, drop those nobody searched for 14 days. */
+async function maintain(db, opts = {}) {
+  db.prepare('DELETE FROM job_companies WHERE COALESCE(last_used, created_at) < ?').run(new Date(Date.now() - 14 * DAY).toISOString());
+  const recent = db.prepare('SELECT * FROM job_companies WHERE last_used >= ? ORDER BY id').all(new Date(Date.now() - 3 * DAY).toISOString());
+  for (const c of recent) await refresh(db, c, opts);
+  return recent.length;
+}
+
+/** Every JOB_SYNC_HOURS (default 6; 0 turns it off). */
 function scheduleSync(db) {
   const hours = process.env.JOB_SYNC_HOURS === undefined ? 6 : Number(process.env.JOB_SYNC_HOURS);
   if (!(hours > 0)) return null;
-  const run = () => syncAll(db).catch(err => console.error('Job sync failed:', err));
+  const run = () => maintain(db).catch(err => console.error('Job refresh failed:', err));
   setTimeout(run, 60 * 1000).unref();
-  return setInterval(run, hours * 3600 * 1000).unref();
+  return setInterval(run, hours * HOUR).unref();
 }
 
-/** Keywords from a structured resume (skills, headline, titles), for picking the jobs worth sending to the AI. */
-function resumeKeywords(resume, extra = '') {
-  const words = [];
-  const add = s => String(s || '').toLowerCase().split(/[^a-z0-9.+#]+/).filter(w => w.length > 1 && !STOP.has(w)).forEach(w => words.push(w));
-  if (resume) {
-    add(resume.headline);
-    (resume.skills || []).forEach(g => (g.items || []).forEach(add));
-    (resume.experience || []).forEach(e => add(e.title));
+// ===================== companies typed by the candidate → career sites =====================
+
+const CAREERS_URL = { greenhouse: b => `https://boards.greenhouse.io/${b}`, lever: b => `https://jobs.lever.co/${b}`, ashby: b => `https://jobs.ashbyhq.com/${b}`, smartrecruiters: b => `https://careers.smartrecruiters.com/${b}` };
+
+/** "Infosys, https://jobs.lever.co/acme\nTCS" → up to MAX_COMPANIES distinct entries. */
+function companyList(input) {
+  const seen = new Set(), out = [];
+  for (const raw of String(input || '').split(/[\n,;]+/)) {
+    const s = raw.trim();
+    if (s && !seen.has(norm(s))) { seen.add(norm(s)); out.push(s.slice(0, 300)); }
   }
-  add(extra);
-  return [...new Set(words)];
+  if (out.length > MAX_COMPANIES) throw new ApiError(400, `Enter at most ${MAX_COMPANIES} companies`);
+  return out;
 }
-const STOP = new Set(['and', 'the', 'for', 'with', 'senior', 'junior', 'lead', 'engineer', 'developer', 'manager', 'of', 'in', 'to', 'a', 'an', 'at', 'team', 'specialist', 'associate', 'ii', 'iii', 'sr', 'jr']);
 
 function addRoutes(ctx) {
   const { db, add, audit, one, all } = ctx;
   const ai = { db, vault: ctx.vault, upstream: ctx.upstream };
   const fetchOpts = { base: ctx.jobSourceBase || {} };
-  const companyRow = id => one('SELECT * FROM job_companies WHERE id = ?', id);
-  const present = c => ({ id: c.id, name: c.name, careersUrl: c.careers_url, provider: c.provider, board: c.board, defaultCountry: c.default_country,
-    enabled: !!c.enabled, lastSync: c.last_sync, lastError: c.last_error, jobCount: c.job_count });
+  const catalogue = ctx.jobCatalogue || CATALOGUE;
+  const budget = ctx.jobFetchBudget || FETCH_BUDGET;
+
+  // a search cannot survive a restart
+  db.prepare("UPDATE career_job_searches SET status = 'failed', error = 'The search was interrupted. Please run it again.', finished_at = ? WHERE status = 'running'").run(now());
+
+  /** The job_companies row for a career site (added if new), marked as used now. */
+  function boardRow(name, board, url) {
+    const stamp = now();
+    db.prepare(`INSERT INTO job_companies (name, careers_url, provider, board, extra, created_at, last_used) VALUES (?,?,?,?,?,?,?)
+                ON CONFLICT (provider, board) DO UPDATE SET last_used = excluded.last_used`)
+      .run(name, url, board.provider, board.board, JSON.stringify(board.wd ? { wd: board.wd } : {}), stamp, stamp);
+    return one('SELECT * FROM job_companies WHERE provider = ? AND board = ?', board.provider, board.board);
+  }
+
+  /** A company name or careers URL → {row} or {error}. Unknown names are looked up on the job-board systems. */
+  async function resolve(entry) {
+    if (/^https?:\/\//i.test(entry) || /^[\w-]+(\.[\w-]+)+\//.test(entry)) {
+      const board = sources.parseBoardUrl(/^https?:/i.test(entry) ? entry : 'https://' + entry);
+      if (!board) return { name: entry, error: 'not-supported' };
+      return { name: entry, row: boardRow(board.board.split('/')[0], board, entry) };
+    }
+    const key = norm(entry);
+    const known = catalogue.find(c => norm(c.name) === key);
+    if (known) return { name: entry, row: boardRow(known.name, sources.parseBoardUrl(known.url), known.url) };
+    const cached = all('SELECT * FROM job_companies').find(c => norm(c.name) === key && !c.last_error && c.job_count > 0);
+    if (cached) return { name: entry, row: boardRow(cached.name, { provider: cached.provider, board: cached.board, ...(parse(cached.extra) || {}) }, cached.careers_url) };
+    // try the name as a board on each system; the first that lists jobs wins
+    const hyphen = entry.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const tries = [['greenhouse', key], ['lever', key], ['lever', hyphen], ['ashby', key], ['smartrecruiters', entry.replace(/[^A-Za-z0-9]/g, '')]]
+      .filter(([, b], i, a) => b && a.findIndex(x => x[0] === a[i][0] && x[1] === b) === i);
+    const found = await Promise.all(tries.map(([provider, board]) =>
+      sources.fetchJobs({ provider, board }, fetchOpts).then(list => (list.length ? { provider, board, list } : null), () => null)));
+    const hit = found.find(Boolean);
+    if (!hit) return { name: entry, error: 'not-found' };
+    const row = boardRow(entry.trim(), hit, CAREERS_URL[hit.provider](hit.board));
+    await syncCompany(db, row, fetchOpts, hit.list);
+    return { name: entry, row: one('SELECT * FROM job_companies WHERE id = ?', row.id) };
+  }
+
+  /** The resume(s) the candidate picked: "all", "ats" (the improved one, or the uploaded text) or "v<id>" (a role version). */
+  function resumesFor(customerId, key) {
+    const r = one('SELECT * FROM career_resumes WHERE customer_id = ?', customerId);
+    if (!r) throw new ApiError(400, 'Upload your resume first (Career toolkit, step 1).', 'no-resume');
+    const career = require('./career');
+    const ats = parse(r.ats_json);
+    const main = { key: 'ats', label: ats ? 'ATS-friendly resume' : 'Uploaded resume', text: ats ? career.resumeText(ats.resume) : r.source_text };
+    const versions = all('SELECT id, role, content_json FROM career_versions WHERE customer_id = ? ORDER BY id DESC', customerId)
+      .map(v => { const c = parse(v.content_json); return c && { key: 'v' + v.id, label: v.role, text: career.resumeText(c.resume) }; }).filter(Boolean);
+    if (key === 'all') return [main, ...versions];
+    if (key === 'ats') return [main];
+    const v = versions.find(x => x.key === key);
+    if (!v) throw new ApiError(404, 'Resume version not found');
+    return [v];
+  }
+
+  const presentSearch = (row, full) => {
+    const result = parse(row.result_json);
+    const counts = Object.fromEntries(BUCKETS.map(b => [b, result ? result.jobs.filter(j => j.bucket === b).length : 0]));
+    return { id: row.id, params: parse(row.params_json) || {}, status: row.status, progress: row.progress, error: row.error,
+      createdAt: row.created_at, finishedAt: row.finished_at, counts, ...(full ? { result } : {}) };
+  };
+
+  /** The whole search, in the background. Errors are saved on the search; nothing is counted unless it succeeds. */
+  async function runSearch(id, customerId, p, resumes) {
+    const step = progress => db.prepare('UPDATE career_job_searches SET progress = ? WHERE id = ?').run(progress, id);
+    try {
+      // 1. the companies' career sites
+      const typed = companyList(p.companies);
+      step(typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : 'Getting ready to search…');
+      const resolved = typed.length ? await Promise.all(typed.map(resolve))
+        : catalogue.map(c => ({ name: c.name, row: boardRow(c.name, sources.parseBoardUrl(c.url), c.url), builtIn: true }));
+      const rows = resolved.filter(r => r.row).map(r => r.row);
+      if (!rows.length) throw new ApiError(400, 'None of those companies could be found. Check the names, or paste the link of their careers page.');
+      const { loading } = await gather(db, rows, fetchOpts, (done, total) => step(`Reading live openings from career sites: ${done} of ${total}…`), budget);
+
+      // 2. the jobs within the candidate's filters
+      const where = [`j.active = 1`, `j.company_id IN (${rows.map(() => '?').join(',')})`], params = rows.map(r => r.id);
+      if (p.country) {
+        where.push(`(j.country = ? OR j.location LIKE ? ESCAPE '\\'${p.remote ? " OR (j.country IN ('', 'Remote') AND j.location LIKE '%remote%')" : ''})`);   // remote, but not tied to another country
+        params.push(p.country, likeTerm(p.country));
+      }
+      if (p.city) { where.push("j.location LIKE ? ESCAPE '\\'"); params.push(likeTerm(p.city)); }
+      if (p.days) { where.push('j.posted_at >= ?'); params.push(new Date(Date.now() - p.days * DAY).toISOString()); }
+      const pool = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.posted_at, j.url, substr(j.description, 1, 1500) AS description, c.name AS company
+                        FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE ${where.join(' AND ')}
+                        ORDER BY j.posted_at IS NULL, j.posted_at DESC LIMIT 20000`, ...params);
+      if (!pool.length) throw new ApiError(400, `No live openings were found${p.country ? ' in ' + p.country : ''}${p.city ? ', ' + p.city : ''} at ${typed.length ? 'those companies' : 'the companies we searched'}. Try a wider location, a longer date range, or other companies.`);
+
+      // 3. the candidate's profile (and the job titles to look for)
+      step('Analysing your resume…');
+      const prompt = masterPrompt(db).prompt;
+      const resumeBlock = resumes.map(r => `=== RESUME: ${r.label} ===\n${r.text.slice(0, resumes.length > 1 ? 8000 : 20000)}`).join('\n\n').slice(0, 40000);
+      const wishes = [`Country: ${p.country || 'any'}`, `City: ${p.city || 'any'}`, `Role or keywords: ${p.role || '(let the AI decide)'}`, `Level: ${p.level || '(let the AI decide from the resume)'}`].join('\n');
+      const a = await completeJson(ai, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
+      const profile = { level: String(a.level || '').slice(0, 100), summary: String(a.summary || '').slice(0, 400), strengths: strings(a.strengths, 6, 120),
+        targetRoles: strings(a.targetRoles, 6, 80), resumeFixes: strings(a.resumeFixes, 6, 300) };
+
+      // 4. the most relevant jobs: the role typed and the profile's job titles found in the title (most) and description
+      const role = String(p.role || '').toLowerCase().trim();
+      const phrases = [...new Set([...strings(a.searchTerms, 15, 60), ...profile.targetRoles, ...(role ? [role] : [])].map(s => s.toLowerCase()))].filter(s => s.length > 1);
+      const relevance = j => {
+        const title = j.title.toLowerCase(), rest = (j.department + ' ' + j.description).toLowerCase();
+        let n = !role ? 0 : title.includes(role) ? 12 : rest.includes(role) ? 3 : 0;
+        for (const ph of phrases) {
+          if (title.includes(ph)) { n += 6; continue; }
+          const words = ph.split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
+          const hits = words.filter(w => title.includes(w)).length;
+          n += words.length && hits === words.length ? 4 : hits;
+          if (rest.includes(ph)) n += 1;
+        }
+        return n;
+      };
+      const ranked = pool.map((j, i) => ({ j, r: relevance(j), i })).filter(x => x.r > 0).sort((x, y) => y.r - x.r || x.i - y.i);
+      // no single company fills the batch: each gets a fair share first, then the best of the rest fill it up
+      const order = ranked.length ? ranked.map(x => x.j) : pool;
+      const share = Math.max(10, Math.ceil(AI_BATCH / rows.length)), perCompany = new Map();
+      const first = order.filter(j => { const n = perCompany.get(j.company) || 0; perCompany.set(j.company, n + 1); return n < share; }).slice(0, AI_BATCH);
+      const picked = new Set(first);
+      const batch = first.concat(order.filter(j => !picked.has(j)).slice(0, AI_BATCH - first.length));
+
+      // 5. score them with the Master Prompt
+      step(`Scoring the ${batch.length} most relevant of ${pool.length.toLocaleString('en-IN')} live jobs against your resume…`);
+      const lines = batch.map(j => JSON.stringify({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country,
+        posted: (j.posted_at || '').slice(0, 10), summary: String(j.description || '').replace(/\s+/g, ' ').slice(0, 350) }));
+      const labels = resumes.map(r => r.label);
+      const out = await completeJson(ai, {
+        system: prompt + '\n\n' + SCORING_RULES,
+        user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE PROFILE: ${profile.level}. ${profile.summary}\n\nCANDIDATE RESUME(S) (labels: ${labels.join(' | ')}):\n${resumeBlock}\n\nJOB POSTINGS (one JSON object per line):\n${lines.join('\n')}`,
+        maxTokens: 12000,
+      });
+      const byId = new Map(batch.map(j => [j.id, j]));
+      const seen = new Set();
+      const jobs = (Array.isArray(out.matches) ? out.matches : []).filter(m => m && byId.has(Number(m.id)) && !seen.has(Number(m.id)) && seen.add(Number(m.id))).map(m => {
+        const j = byId.get(Number(m.id));
+        const score = Math.max(0, Math.min(100, Math.round(Number(m.score) || 0)));
+        return { id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.posted_at, url: j.url, score,
+          bucket: BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch',
+          why: String(m.why || m.reason || '').slice(0, 300), gap: String(m.gap || '').slice(0, 160),
+          resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '' };
+      }).sort((x, y) => y.score - x.score);
+      // nothing usable (e.g. the AI answered with made-up ids only): an error, not counted against today's limit
+      if (!jobs.length) throw new ApiError(502, 'The AI could not score the jobs this time. Please try again.', 'ai');
+
+      const result = { profile, jobs, coverage: {
+        companies: rows.length, loading, live: pool.length, considered: batch.length,
+        notFound: resolved.filter(r => r.error === 'not-found').map(r => r.name),
+        notSupported: resolved.filter(r => r.error === 'not-supported').map(r => r.name),
+        failed: typed.length ? rows.filter(r => { const c = one('SELECT last_error, job_count FROM job_companies WHERE id = ?', r.id); return c && c.last_error && !c.job_count; }).map(r => r.name) : [],
+      } };
+      db.prepare("UPDATE career_job_searches SET status = 'done', progress = '', result_json = ?, finished_at = ? WHERE id = ?").run(JSON.stringify(result), now(), id);
+      require('./career').countUse(db, customerId);
+    } catch (err) {
+      if (!(err instanceof ApiError)) console.error('AI Job search failed:', err);
+      const message = err instanceof ApiError ? err.message : 'Something went wrong with this search. Please try again.';
+      try { db.prepare("UPDATE career_job_searches SET status = 'failed', progress = '', error = ?, finished_at = ? WHERE id = ?").run(message, now(), id); } catch (_) { /* database closed */ }
+    }
+  }
 
   // ===================== dashboard =====================
-  add('GET', '/admin/api/jobs', { admin: true }, () => ({
-    companies: all('SELECT * FROM job_companies ORDER BY name COLLATE NOCASE').map(present),
-    stats: one(`SELECT COUNT(*) AS active, SUM(CASE WHEN posted_at >= ? THEN 1 ELSE 0 END) AS week, SUM(CASE WHEN country = 'India' THEN 1 ELSE 0 END) AS india
-                FROM jobs WHERE active = 1`, new Date(Date.now() - 7 * DAY).toISOString()),
-    prompt: masterPrompt(db), defaultPrompt: DEFAULT_MASTER_PROMPT, outputRules: OUTPUT_RULES,
-    syncHours: process.env.JOB_SYNC_HOURS === undefined ? 6 : Number(process.env.JOB_SYNC_HOURS),
-  }));
-
-  add('POST', '/admin/api/jobs/companies', { admin: true, perm: 'jobs.write' }, async (req, res, { body, admin }) => {
-    const name = text(body.name, 120, { required: true, field: 'Company name' });
-    const url = text(body.careersUrl, 500, { required: true, field: 'Careers URL' });
-    const board = sources.parseBoardUrl(url);
-    if (!board) throw new ApiError(400, 'That careers URL is not from a supported job board (Greenhouse, Lever, SmartRecruiters, Ashby or Workday). Open the company\'s job list and copy the address of that page.');
-    if (one('SELECT id FROM job_companies WHERE provider = ? AND board = ?', board.provider, board.board)) throw new ApiError(409, 'That company is already in the list');
-    const r = db.prepare('INSERT INTO job_companies (name, careers_url, provider, board, extra, default_country, created_at) VALUES (?,?,?,?,?,?,?)')
-      .run(name, url, board.provider, board.board, JSON.stringify(board.wd ? { wd: board.wd } : {}), text(body.defaultCountry, 80, { field: 'Default country' }), now());
-    audit(admin, 'jobs.company.added', name, `${board.provider}: ${board.board}`);
-    const sync = await syncCompany(db, companyRow(r.lastInsertRowid), fetchOpts);
-    return { status: 201, body: { company: present(companyRow(r.lastInsertRowid)), sync } };
-  });
-
-  add('POST', '/admin/api/jobs/companies/:id', { admin: true, perm: 'jobs.write' }, async (req, res, { params, body, admin }) => {
-    const c = companyRow(params.id);
-    if (!c) throw new ApiError(404, 'Company not found');
-    const action = String(body.action || '');
-    let sync = null;
-    if (action === 'sync') sync = await syncCompany(db, c, fetchOpts);
-    else if (action === 'enable' || action === 'disable') {
-      db.prepare('UPDATE job_companies SET enabled = ? WHERE id = ?').run(action === 'enable' ? 1 : 0, c.id);
-      db.prepare('UPDATE jobs SET active = ? WHERE company_id = ?').run(action === 'enable' ? 1 : 0, c.id);   // a hidden company's jobs are not listed
-      if (action === 'enable') sync = await syncCompany(db, companyRow(c.id), fetchOpts);
-    } else if (action === 'update') {
-      db.prepare('UPDATE job_companies SET name = ?, default_country = ? WHERE id = ?')
-        .run(text(body.name, 120, { required: true, field: 'Company name' }), text(body.defaultCountry, 80, { field: 'Default country' }), c.id);
-    } else throw new ApiError(400, 'Unknown action');
-    audit(admin, `jobs.company.${action}`, c.name);
-    return { company: present(companyRow(c.id)), sync };
-  });
-
-  add('DELETE', '/admin/api/jobs/companies/:id', { admin: true, perm: 'jobs.write' }, (req, res, { params, admin }) => {
-    const c = companyRow(params.id);
-    if (!c) throw new ApiError(404, 'Company not found');
-    db.prepare('DELETE FROM job_companies WHERE id = ?').run(c.id);
-    audit(admin, 'jobs.company.deleted', c.name);
-    return { ok: true };
-  });
-
-  add('POST', '/admin/api/jobs/sync', { admin: true, perm: 'jobs.write' }, async (req, res, { admin }) => {
-    const results = await syncAll(db, fetchOpts);
-    audit(admin, 'jobs.synced', `${results.length} companies`, results.filter(r => !r.ok).map(r => r.name).join(', '));
-    return { results };
+  add('GET', '/admin/api/jobs', { admin: true }, () => {
+    const week = new Date(Date.now() - 7 * DAY).toISOString();
+    return {
+      prompt: masterPrompt(db), defaultPrompt: DEFAULT_MASTER_PROMPT, outputRules: ANALYSIS_RULES + '\n\n' + SCORING_RULES,
+      stats: {
+        searches: one('SELECT COUNT(*) AS n FROM career_job_searches WHERE created_at >= ?', week).n,
+        candidates: one('SELECT COUNT(DISTINCT customer_id) AS n FROM career_job_searches WHERE created_at >= ?', week).n,
+        failed: one("SELECT COUNT(*) AS n FROM career_job_searches WHERE created_at >= ? AND status = 'failed'", week).n,
+        companies: one('SELECT COUNT(*) AS n FROM job_companies').n,
+        jobs: one('SELECT COUNT(*) AS n FROM jobs WHERE active = 1').n,
+      },
+      builtInCompanies: catalogue.map(c => c.name),
+    };
   });
 
   add('POST', '/admin/api/jobs/prompt', { admin: true, perm: 'jobs.write' }, (req, res, { body, admin }) => {
@@ -182,119 +356,54 @@ function addRoutes(ctx) {
     return { prompt: masterPrompt(db) };
   });
 
-  // ===================== website: Career toolkit → Find jobs =====================
+  // ===================== website: Career toolkit → AI Job search =====================
   const me = req => signedInCustomer(db, req).customer;
+  const searchRow = (id, customerId) => one('SELECT * FROM career_job_searches WHERE id = ? AND customer_id = ?', id, customerId);
 
-  /** The resume the candidate picked: "ats" (the improved one, or the uploaded text) or "v<id>" (a role version). */
-  function resumeFor(customerId, key) {
-    const r = one('SELECT * FROM career_resumes WHERE customer_id = ?', customerId);
-    if (!r) throw new ApiError(400, 'Upload your resume first (Career toolkit, step 1).', 'no-resume');
-    const career = require('./career');
-    if (/^v\d+$/.test(key)) {
-      const v = one('SELECT role, content_json FROM career_versions WHERE id = ? AND customer_id = ?', Number(key.slice(1)), customerId);
-      const c = v && parse(v.content_json);
-      if (!c) throw new ApiError(404, 'Resume version not found');
-      return { key, label: v.role, text: career.resumeText(c.resume), structured: c.resume, role: v.role };
-    }
-    const ats = parse(r.ats_json);
-    return { key: 'ats', label: ats ? 'ATS-friendly resume' : 'Uploaded resume', text: ats ? career.resumeText(ats.resume) : r.source_text, structured: ats && ats.resume, role: '' };
-  }
-
-  /** WHERE clause + params for the candidate's filters. */
-  function filterSql(q) {
-    const where = ['j.active = 1', 'c.enabled = 1'], params = [];
-    const ids = String(q.get('companies') || '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 100);
-    if (ids.length) { where.push(`j.company_id IN (${ids.map(() => '?').join(',')})`); params.push(...ids); }
-    const role = String(q.get('q') || '').trim();
-    if (role) { where.push("(j.title LIKE ? ESCAPE '\\' OR j.department LIKE ? ESCAPE '\\')"); params.push(likeTerm(role), likeTerm(role)); }
-    const location = String(q.get('location') || '').trim();
-    if (location) { where.push("j.location LIKE ? ESCAPE '\\'"); params.push(likeTerm(location)); }
-    const country = String(q.get('country') || '').trim();
-    if (country) { where.push('j.country = ?'); params.push(country); }
-    const days = Number(q.get('days'));
-    if ([1, 3, 7, 14, 30].includes(days)) { where.push('j.posted_at >= ?'); params.push(new Date(Date.now() - days * DAY).toISOString()); }
-    return { where: where.join(' AND '), params };
-  }
-
-  add('GET', '/api/career/jobs', { public: true }, (req, res, { query }) => {
+  add('POST', '/api/career/jobsearch', { public: true }, (req, res, { body }) => {
     const c = me(req);
-    const resumeKey = /^(ats|v\d+)$/.test(String(query.get('resume') || '')) ? query.get('resume') : 'ats';
-    const page = Math.max(1, Math.floor(Number(query.get('page')) || 1));
-    const pageSize = [10, 20, 50].includes(Number(query.get('pageSize'))) ? Number(query.get('pageSize')) : 20;
-    const bucket = BUCKETS.includes(query.get('bucket')) ? query.get('bucket') : '';
-    const sort = query.get('sort') === 'match' ? 'match' : 'newest';
-    const f = filterSql(query);
-    const scoreJoin = 'LEFT JOIN career_job_scores s ON s.job_id = j.id AND s.customer_id = ? AND s.resume_key = ?';
-    const where = f.where + (bucket ? ' AND s.bucket = ?' : '');
-    const params = [c.id, resumeKey, ...f.params, ...(bucket ? [bucket] : [])];
-    const total = one(`SELECT COUNT(*) AS n FROM jobs j JOIN job_companies c ON c.id = j.company_id ${scoreJoin} WHERE ${where}`, ...params).n;
-    const order = sort === 'match' ? 's.score IS NULL, s.score DESC, j.posted_at IS NULL, j.posted_at DESC' : 'j.posted_at IS NULL, j.posted_at DESC, j.id DESC';
-    const rows = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.employment_type, j.posted_at, j.url, c.name AS company,
-                             s.score, s.bucket, s.reason, s.gap
-                      FROM jobs j JOIN job_companies c ON c.id = j.company_id ${scoreJoin}
-                      WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`, ...params, pageSize, (page - 1) * pageSize);
-    const counts = Object.fromEntries(BUCKETS.map(b => [b, 0]));
-    for (const r of all('SELECT bucket, COUNT(*) AS n FROM career_job_scores s JOIN jobs j ON j.id = s.job_id WHERE s.customer_id = ? AND s.resume_key = ? AND j.active = 1 GROUP BY bucket', c.id, resumeKey)) counts[r.bucket] = r.n;
-    return {
-      jobs: rows.map(r => ({ id: r.id, title: r.title, company: r.company, location: r.location, country: r.country, department: r.department,
-        employmentType: r.employment_type, postedAt: r.posted_at, url: r.url,
-        match: r.score == null ? null : { score: r.score, bucket: r.bucket, reason: r.reason, gap: r.gap } })),
-      total, page, pageSize, pages: Math.max(1, Math.ceil(total / pageSize)), counts,
-      companies: all(`SELECT c.id, c.name, COUNT(j.id) AS jobs FROM job_companies c LEFT JOIN jobs j ON j.company_id = c.id AND j.active = 1
-                      WHERE c.enabled = 1 GROUP BY c.id ORDER BY c.name COLLATE NOCASE`),
-      countries: all("SELECT country, COUNT(*) AS n FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE j.active = 1 AND c.enabled = 1 AND country <> '' GROUP BY country ORDER BY n DESC").map(r => ({ name: r.country, jobs: r.n })),
-      scoredAt: (one('SELECT MAX(scored_at) AS t FROM career_job_scores WHERE customer_id = ? AND resume_key = ?', c.id, resumeKey) || {}).t,
+    require('./career').checkQuota(db, c.id);
+    const resume = /^(all|ats|v\d+)$/.test(String(body.resume || '')) ? String(body.resume) : 'all';
+    const p = {
+      resume, country: text(body.country, 80, { field: 'Country' }), city: text(body.city, 80, { field: 'City' }),
+      role: text(body.role, 120, { field: 'Role' }), level: LEVELS.includes(body.level) ? body.level : '',
+      days: [7, 14, 30].includes(Number(body.days)) ? Number(body.days) : 0, remote: body.remote !== false,
+      companies: text(body.companies, 4000, { field: 'Companies' }),
     };
+    companyList(p.companies);                                     // too many companies: say so now
+    const resumes = resumesFor(c.id, resume);
+    p.resumeLabel = resume === 'all' ? `All my resumes (${resumes.length})` : resumes[0].label;
+    if (one("SELECT id FROM career_job_searches WHERE customer_id = ? AND status = 'running'", c.id)) {
+      throw new ApiError(409, 'A search is already running. Please wait for it to finish.');
+    }
+    const id = Number(db.prepare('INSERT INTO career_job_searches (customer_id, params_json, status, progress, created_at) VALUES (?,?,?,?,?)')
+      .run(c.id, JSON.stringify(p), 'running', 'Starting…', now()).lastInsertRowid);
+    db.prepare(`DELETE FROM career_job_searches WHERE customer_id = ? AND id NOT IN (SELECT id FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC LIMIT ${KEEP_SEARCHES})`).run(c.id, c.id);
+    runSearch(id, c.id, p, resumes);                              // not awaited: the page polls GET /api/career/jobsearch/:id
+    return { status: 202, body: { search: presentSearch(searchRow(id, c.id), true) } };
   });
 
-  // the Master Prompt runs on the candidate's resume and the most relevant real jobs within their filters
-  add('POST', '/api/career/jobs/match', { public: true }, async (req, res, { body }) => {
+  add('GET', '/api/career/jobsearch', { public: true }, req => {
     const c = me(req);
-    const career = require('./career');
-    career.checkQuota(db, c.id);
-    const resume = resumeFor(c.id, /^(ats|v\d+)$/.test(String(body.resume || '')) ? body.resume : 'ats');
-    const q = new URLSearchParams();
-    for (const k of ['companies', 'q', 'location', 'country', 'days']) if (body[k] != null && body[k] !== '') q.set(k, Array.isArray(body[k]) ? body[k].join(',') : String(body[k]));
-    const f = filterSql(q);
-    const pool = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.posted_at, substr(j.description, 1, 1500) AS description, c.name AS company
-                      FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE ${f.where} ORDER BY j.posted_at IS NULL, j.posted_at DESC LIMIT 3000`, ...f.params);
-    if (!pool.length) throw new ApiError(400, 'No active jobs match your filters. Widen the filters and try again.');
-    // send the most relevant jobs: keyword overlap with the resume (title counts most), newest first on ties
-    const keywords = resumeKeywords(resume.structured, resume.role + ' ' + (resume.structured ? '' : resume.text.slice(0, 3000)));
-    const relevance = j => {
-      const title = j.title.toLowerCase(), rest = (j.department + ' ' + j.description).toLowerCase();
-      return keywords.reduce((n, k) => n + (title.includes(k) ? 3 : 0) + (rest.includes(k) ? 1 : 0), 0);
-    };
-    const batch = pool.map((j, i) => ({ j, r: relevance(j), i })).sort((a, b) => b.r - a.r || a.i - b.i).slice(0, AI_BATCH).map(x => x.j);
-    const lines = batch.map(j => JSON.stringify({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country,
-      posted: (j.posted_at || '').slice(0, 10), summary: String(j.description || '').replace(/\s+/g, ' ').slice(0, 350) }));
-    const out = await completeJson(ai, {
-      system: masterPrompt(db).prompt + '\n\n' + OUTPUT_RULES,
-      user: `CANDIDATE RESUME (${resume.label}):\n${resume.text}\n\nJOB POSTINGS (one JSON object per line):\n${lines.join('\n')}`,
-      maxTokens: 8000,
-    });
-    const sent = new Set(batch.map(j => j.id));
-    const matches = (Array.isArray(out.matches) ? out.matches : []).filter(m => m && sent.has(Number(m.id)));
-    // nothing usable (e.g. the AI scored made-up ids only): say so, and do not count it against today's limit
-    if (!matches.length) throw new ApiError(502, 'The AI could not score these jobs this time. Please try again.', 'ai');
-    const stamp = now();
-    transaction(db, () => {
-      const save = db.prepare(`INSERT INTO career_job_scores (customer_id, resume_key, job_id, score, bucket, reason, gap, scored_at) VALUES (?,?,?,?,?,?,?,?)
-        ON CONFLICT (customer_id, resume_key, job_id) DO UPDATE SET score = excluded.score, bucket = excluded.bucket, reason = excluded.reason, gap = excluded.gap, scored_at = excluded.scored_at`);
-      for (const m of matches) {
-        const score = Math.max(0, Math.min(100, Math.round(Number(m.score) || 0)));
-        const bucket = BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch';
-        save.run(c.id, resume.key, Number(m.id), score, bucket, String(m.reason || '').slice(0, 300), String(m.gap || '').slice(0, 120), stamp);
-      }
-    });
-    career.countUse(db, c.id);
-    const p = out.profile && typeof out.profile === 'object' ? out.profile : {};
-    return {
-      scored: matches.length, considered: batch.length, available: pool.length,
-      profile: { seniority: String(p.seniority || '').slice(0, 80), targetRoles: (Array.isArray(p.targetRoles) ? p.targetRoles : []).slice(0, 6).map(r => String(r).slice(0, 80)), summary: String(p.summary || '').slice(0, 300) },
-      usage: career.usage(db, c.id),
-    };
+    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length };
+  });
+
+  add('GET', '/api/career/jobsearch/:id', { public: true }, (req, res, { params }) => {
+    const c = me(req);
+    const row = searchRow(params.id, c.id);
+    if (!row) throw new ApiError(404, 'Search not found');
+    return { search: presentSearch(row, true), usage: require('./career').usage(db, c.id) };
+  });
+
+  add('POST', '/api/career/jobsearch/:id/delete', { public: true }, (req, res, { params }) => {
+    const c = me(req);
+    const row = searchRow(params.id, c.id);
+    if (!row) throw new ApiError(404, 'Search not found');
+    if (row.status === 'running') throw new ApiError(409, 'Wait for the search to finish first.');
+    db.prepare('DELETE FROM career_job_searches WHERE id = ?').run(row.id);
+    return { ok: true };
   });
 }
+const STOP = new Set(['and', 'the', 'for', 'with', 'senior', 'junior', 'lead', 'engineer', 'developer', 'manager', 'specialist', 'analyst', 'of', 'in', 'to', 'an', 'at', 'team', 'associate', 'ii', 'iii', 'sr', 'jr']);
 
-module.exports = { addRoutes, syncCompany, syncAll, scheduleSync, masterPrompt, resumeKeywords, DEFAULT_MASTER_PROMPT, OUTPUT_RULES };
+module.exports = { addRoutes, syncCompany, maintain, scheduleSync, masterPrompt, companyList, DEFAULT_MASTER_PROMPT, ANALYSIS_RULES, SCORING_RULES };

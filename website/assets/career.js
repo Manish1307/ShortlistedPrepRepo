@@ -385,111 +385,178 @@
         h('div', { class: 'cr-row' }, title, company), version, jd, h('div', { class: 'cr-actions' }, run), out, result, history));
   }
 
-  // ---------- 5. find jobs ----------
-  // Real, active jobs from the companies' own career sites (refreshed every few hours). The AI scores them against
-  // the chosen resume; each "Open" goes to the company's own job page in a new window.
-  var jobFilters = { q: '', location: '', country: '', days: '', companies: [], resume: 'ats', sort: 'newest', bucket: '', page: 1, pageSize: 20 };
-  var BUCKET_LABEL = { high: 'High probability', medium: 'Medium probability', stretch: 'Stretch' };
+  // ---------- 5. AI Job search ----------
+  // The candidate says what to look for; the server reads live openings from the companies' own career sites and the
+  // AI sorts the best ones into high, medium and low-probability groups. A search runs in the background, so the page
+  // polls it. Each "Apply" opens the company's own job page in a new window.
+  var GROUPS = [
+    ['high', '🟢 High probability: apply first', 'Strong match for your resume.'],
+    ['medium', '🟡 Medium probability', 'Good match with small gaps.'],
+    ['stretch', '🔴 Low probability: stretch roles', 'Clear gaps, but worth a try.']
+  ];
+  var LEVELS = [['', 'Level: let the AI decide'], ['Fresher / entry-level', 'Fresher / entry-level'], ['Mid-level', 'Mid-level'], ['Senior', 'Senior'], ['Lead / manager', 'Lead / manager']];
+  var COUNTRIES = ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'Ireland', 'Netherlands', 'Singapore', 'United Arab Emirates', 'Remote'];
+  var searchForm = { resume: 'all', level: '', role: '', country: 'India', city: '', companies: '', days: '', remote: true };
+  var pollTimer = null, cardGen = 0;
+
   function ago(s) {
     if (!s) return '—';
     var d = Math.floor((Date.now() - Date.parse(s)) / 86400000);
     return d <= 0 ? 'Today' : d === 1 ? 'Yesterday' : d < 30 ? d + ' days ago' : new Date(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   }
-  function jobsCard() {
-    var f = jobFilters;
-    var grid = h('div', { class: 'jb-grid', 'aria-live': 'polite' }, h('p', { class: 'ac-muted' }, 'Loading jobs…'));
-    var info = h('div', { class: 'jb-info' });
-    var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
-    var timer = null;
-    var input = function (key, attrs) {
-      var el = h('input', Object.assign({ type: 'text' }, attrs));
-      el.value = f[key];
-      el.addEventListener('input', function () { f[key] = el.value.trim(); f.page = 1; clearTimeout(timer); timer = setTimeout(refresh, 400); });
-      return el;
-    };
-    var select = function (key, options, label) {
-      var el = h('select', { 'aria-label': label }, options.map(function (o) { return h('option', { value: o[0] }, o[1]); }));
-      el.value = String(f[key]);
-      el.addEventListener('change', function () { f[key] = key === 'pageSize' ? Number(el.value) : el.value; f.page = 1; refresh(); });
-      return el;
-    };
-    var countrySel = select('country', [['', 'All countries']], 'Country');
-    var companyBox = h('div', { class: 'jb-companies' });
-    var resumeSel = select('resume', [['ats', 'Match with: my ATS-friendly resume']].concat(state.versions.map(function (v) { return ['v' + v.id, 'Match with: ' + v.role]; })), 'Resume to match');
-    var bucketBar = h('div', { class: 'jb-buckets' });
-    var run = h('button', { class: 'btn btn-primary', type: 'button', disabled: !state.resume }, '✦ Find my best matches');
-    run.addEventListener('click', function () {
-      var done = busy(run, 'Matching… (up to a minute)');
-      message(out, 'Reading your resume and scoring the most relevant jobs within your filters…');
-      call('POST', '/api/career/jobs/match', { resume: f.resume, q: f.q, location: f.location, country: f.country, days: f.days, companies: f.companies })
-        .then(function (d) {
-          setUsage(d.usage);
-          var p = d.profile || {};
-          message(out, 'Scored ' + d.scored + ' of ' + d.available + ' matching jobs.' + (p.seniority ? ' We read you as: ' + p.seniority + (p.targetRoles && p.targetRoles.length ? ' · best roles: ' + p.targetRoles.join(', ') : '') + '.' : ''), 'ok');
-          f.sort = 'match'; f.bucket = ''; f.page = 1; sortSel.value = 'match';
-          refresh();
-        }).catch(function (e) { message(out, e.message, 'bad'); }).then(done);
-    });
-    var sortSel = select('sort', [['newest', 'Newest first'], ['match', 'Best match first']], 'Sort');
+  function fitBadge(n) { return h('span', { class: 'ac-badge js-fit ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)); }
+  function paramsLine(p) {
+    return [p.role || 'Roles from my resume', [p.city, p.country].filter(Boolean).join(', ') || 'Any location', p.level, p.companies ? p.companies.split(/[\n,;]+/).filter(function (x) { return x.trim(); }).length + ' companies' : 'Well-known companies', p.resumeLabel].filter(Boolean).join(' · ');
+  }
 
-    function refresh() {
-      var qs = ['q', 'location', 'country', 'days', 'resume', 'sort', 'bucket', 'page', 'pageSize'].map(function (k) { return k + '=' + encodeURIComponent(f[k]); });
-      if (f.companies.length) qs.push('companies=' + f.companies.join(','));
-      call('GET', '/api/career/jobs?' + qs.join('&')).then(function (d) {
-        // countries and companies come from the live list
-        var current = f.country;
-        countrySel.replaceChildren.apply(countrySel, [h('option', { value: '' }, 'All countries')].concat(d.countries.map(function (c) { return h('option', { value: c.name }, c.name + ' (' + c.jobs + ')'); })));
-        countrySel.value = current;
-        companyBox.replaceChildren.apply(companyBox, d.companies.length ? [h('span', { class: 'ac-muted' }, 'Companies: ')].concat(d.companies.map(function (c) {
-          var on = f.companies.indexOf(c.id) !== -1;
-          return h('button', { type: 'button', class: 'ac-chip cr-chip-btn jb-company' + (on ? ' on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () {
-            f.companies = on ? f.companies.filter(function (x) { return x !== c.id; }) : f.companies.concat(c.id); f.page = 1; refresh();
-          } }, c.name + ' · ' + c.jobs);
-        }), f.companies.length ? [h('button', { type: 'button', class: 'ac-link', onclick: function () { f.companies = []; f.page = 1; refresh(); } }, 'All companies')] : []) : []);
-        var scored = d.counts.high + d.counts.medium + d.counts.stretch;
-        bucketBar.replaceChildren.apply(bucketBar, scored ? [['', 'All jobs'], ['high', BUCKET_LABEL.high + ' (' + d.counts.high + ')'], ['medium', BUCKET_LABEL.medium + ' (' + d.counts.medium + ')'], ['stretch', BUCKET_LABEL.stretch + ' (' + d.counts.stretch + ')']].map(function (b) {
-          return h('button', { type: 'button', class: 'jb-bucket ' + (b[0] || 'all') + (f.bucket === b[0] ? ' on' : ''), onclick: function () { f.bucket = b[0]; f.page = 1; if (b[0]) { f.sort = 'match'; sortSel.value = 'match'; } refresh(); } }, b[1]);
-        }) : []);
-        info.textContent = d.total ? d.total.toLocaleString() + ' active job' + (d.total === 1 ? '' : 's') + (d.scoredAt ? ' · matched ' + ago(d.scoredAt).toLowerCase() : '') : '';
-        grid.replaceChildren(jobsTable(d));
-      }).catch(function (e) { grid.replaceChildren(h('p', { class: 'form-result bad' }, e.message)); });
+  function groupTable(list, withResume, startAt) {
+    var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);
+    return h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table js-table' },
+      h('thead', {}, h('tr', {}, head.map(function (t) { return h('th', {}, t); }))),
+      h('tbody', {}, list.map(function (j, i) {
+        return h('tr', {},
+          h('td', { class: 'js-num', 'data-label': '#' }, String(startAt + i + 1)),
+          h('td', { 'data-label': 'Role' }, h('b', {}, j.title)),
+          h('td', { 'data-label': 'Company' }, j.company),
+          h('td', { 'data-label': 'Location' }, j.location || j.country || '—'),
+          h('td', { 'data-label': 'Posted', title: j.postedAt ? new Date(j.postedAt).toLocaleString() : '' }, ago(j.postedAt)),
+          h('td', { 'data-label': 'Fit' }, fitBadge(j.score)),
+          h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
+            j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
+          withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗')));
+      }))));
+  }
+
+  function searchResult(s) {
+    var r = s.result, p = r.profile, cov = r.coverage;
+    var withResume = s.params.resume === 'all';
+    var n = 0;
+    var notes = [];
+    if (cov.notFound.length) notes.push('Could not find the careers site of: ' + cov.notFound.join(', ') + '. Paste the link of their careers page instead.');
+    if (cov.notSupported.length) notes.push('These careers sites cannot be read yet: ' + cov.notSupported.join(', ') + '. Sites on Greenhouse, Lever, SmartRecruiters, Ashby and Workday work.');
+    if (cov.failed.length) notes.push('These careers sites did not answer: ' + cov.failed.join(', ') + '. Try again later.');
+    if (cov.loading) notes.push(cov.loading + ' careers site' + (cov.loading === 1 ? ' was' : 's were') + ' still loading. Search again in a few minutes to include them.');
+    if (r.jobs.length < 20) notes.push('Fewer than 20 matches: try a wider location, another role, a longer date range or more companies.');
+    return h('div', { class: 'js-result' },
+      h('div', { class: 'js-profile' },
+        h('div', { class: 'ac-subhead' }, 'Your profile'),
+        p.level ? h('p', { class: 'js-level' }, h('b', {}, 'Level: '), p.level) : null,
+        p.summary ? h('p', {}, p.summary) : null,
+        p.strengths.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Strongest areas: '), chips(p.strengths)) : null,
+        p.targetRoles.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Best-fit roles: '), chips(p.targetRoles.map(function (t, i) { return (i + 1) + '. ' + t; }))) : null),
+      h('p', { class: 'jb-info' }, r.jobs.length + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
+        ' · searched ' + dateTime(s.finishedAt) + ' · ' + paramsLine(s.params)),
+      GROUPS.map(function (g) {
+        var list = r.jobs.filter(function (j) { return j.bucket === g[0]; });
+        if (!list.length) return null;
+        var block = h('div', { class: 'js-group ' + g[0] },
+          h('div', { class: 'js-group-head' }, h('h3', {}, g[1] + ' (' + list.length + ')'), h('span', { class: 'ac-muted' }, g[2])),
+          groupTable(list, withResume, n));
+        n += list.length;
+        return block;
+      }),
+      p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),
+        h('ol', { class: 'cr-list' }, p.resumeFixes.map(function (f) { return h('li', {}, f); }))) : null,
+      notes.length ? h('ul', { class: 'js-notes' }, notes.map(function (x) { return h('li', {}, x); })) : null,
+      h('p', { class: 'ac-muted js-small' }, 'Every job comes from the company\'s own careers site and was open when we searched. Openings close quickly, so apply to the high-probability ones soon.'));
+  }
+
+  function jobsCard() {
+    var f = searchForm;
+    var status = h('div', { class: 'js-status', role: 'status', 'aria-live': 'polite' });
+    var result = h('div', {});
+    var history = h('div', {});
+    var searches = [];
+    var gen = ++cardGen;   // a re-rendered card stops the polling of the old one
+
+    var bind = function (el, key, kind) {
+      if (kind === 'check') el.checked = f[key]; else el.value = f[key];
+      el.addEventListener(kind === 'check' ? 'change' : 'input', function () { f[key] = kind === 'check' ? el.checked : el.value; });
+      el.addEventListener('change', function () { f[key] = kind === 'check' ? el.checked : el.value; });
+      return el;
+    };
+    var resumeOptions = [['all', 'Resume: all my resumes (' + (1 + state.versions.length) + ')'], ['ats', 'Resume: ' + (state.resume && state.resume.ats ? 'ATS-friendly resume' : 'uploaded resume')]]
+      .concat(state.versions.map(function (v) { return ['v' + v.id, 'Resume: ' + v.role]; }));
+    var resumeSel = bind(h('select', { 'aria-label': 'Resume to match' }, resumeOptions.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'resume');
+    var levelSel = bind(h('select', { 'aria-label': 'Level' }, LEVELS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'level');
+    var role = bind(h('input', { type: 'text', maxlength: '120', placeholder: 'Role or keywords, e.g. Power Platform, Project Manager (optional)', 'aria-label': 'Role or keywords' }), 'role');
+    var country = bind(h('input', { type: 'text', maxlength: '80', list: 'js-countries', placeholder: 'Country, e.g. India', 'aria-label': 'Country' }), 'country');
+    var city = bind(h('input', { type: 'text', maxlength: '80', placeholder: 'City, e.g. Noida (optional)', 'aria-label': 'City' }), 'city');
+    var companies = bind(h('textarea', { rows: '2', maxlength: '4000', 'aria-label': 'Companies',
+      placeholder: 'Companies (optional): names or careers-page links, separated by commas. e.g. Mastercard, Bosch, https://jobs.lever.co/acme' }), 'companies');
+    var days = bind(h('select', { 'aria-label': 'Posted within' }, [['', 'Posted: any time'], ['7', 'Posted: last 7 days'], ['14', 'Posted: last 14 days'], ['30', 'Posted: last 30 days']].map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'days');
+    var remote = bind(h('input', { type: 'checkbox', id: 'js-remote' }), 'remote', 'check');
+    var run = h('button', { class: 'btn btn-primary js-run', type: 'button', disabled: !state.resume }, '✦ Search jobs with AI');
+    var hint = h('p', { class: 'ac-muted js-small' }, 'Leave "Companies" empty to search well-known companies hiring in India and worldwide.');
+
+    function setRunning(on) { run.disabled = on || !state.resume; run.textContent = on ? 'Searching…' : '✦ Search jobs with AI'; }
+    function showStatus(text, kind) {
+      status.className = 'js-status' + (kind ? ' ' + kind : '');
+      status.replaceChildren();
+      if (text) status.appendChild(h('span', { class: 'js-status-in' }, kind === 'busy' ? h('span', { class: 'js-spin', 'aria-hidden': 'true' }) : null, h('span', {}, text)));
     }
-    function jobsTable(d) {
-      if (!d.companies.length) return h('div', { class: 'ac-empty' }, h('b', {}, 'Jobs are coming soon'), 'We are adding companies. Check back shortly.');
-      if (!d.jobs.length) return h('div', { class: 'ac-empty' }, h('b', {}, 'No jobs match these filters'), 'Try a wider role, another location or a longer date range.');
-      var table = h('table', { class: 'jb-table' },
-        h('thead', {}, h('tr', {}, ['Role', 'Company', 'Location', 'Country', 'Posted', 'Match', ''].map(function (t) { return h('th', {}, t); }))),
-        h('tbody', {}, d.jobs.map(function (j) {
-          var m = j.match;
-          return h('tr', {},
-            h('td', { 'data-label': 'Role' }, h('b', {}, j.title), j.department || j.employmentType ? h('div', { class: 'ac-muted jb-sub' }, [j.department, j.employmentType].filter(Boolean).join(' · ')) : null),
-            h('td', { 'data-label': 'Company' }, j.company),
-            h('td', { 'data-label': 'Location' }, j.location || '—'),
-            h('td', { 'data-label': 'Country' }, j.country || '—'),
-            h('td', { 'data-label': 'Posted', title: j.postedAt ? new Date(j.postedAt).toLocaleString() : '' }, ago(j.postedAt)),
-            h('td', { 'data-label': 'Match' }, m ? h('div', {}, h('span', { class: 'ac-badge ' + (m.bucket === 'high' ? 'good' : m.bucket === 'medium' ? 'warn' : 'bad') }, m.score + ' · ' + BUCKET_LABEL[m.bucket]),
-              m.reason ? h('div', { class: 'jb-reason' }, m.reason) : null, m.gap && !/^none$/i.test(m.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + m.gap) : null) : h('span', { class: 'ac-muted' }, '—')),
-            h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open ↗')));
-        })));
-      var pager = h('div', { class: 'jb-pager' },
-        h('button', { class: 'btn btn-sm', type: 'button', disabled: d.page <= 1, onclick: function () { f.page = d.page - 1; refresh(); grid.scrollIntoView({ behavior: 'smooth' }); } }, '← Previous'),
-        h('span', {}, 'Page ' + d.page + ' of ' + d.pages),
-        h('button', { class: 'btn btn-sm', type: 'button', disabled: d.page >= d.pages, onclick: function () { f.page = d.page + 1; refresh(); grid.scrollIntoView({ behavior: 'smooth' }); } }, 'Next →'),
-        select('pageSize', [['10', '10 per page'], ['20', '20 per page'], ['50', '50 per page']], 'Jobs per page'));
-      return h('div', {}, h('div', { class: 'jb-scroll' }, table), pager);
+    function poll(id) {
+      clearTimeout(pollTimer);
+      if (gen !== cardGen) return;
+      call('GET', '/api/career/jobsearch/' + id).then(function (d) {
+        var s = d.search;
+        if (s.status === 'running') { setRunning(true); showStatus(s.progress || 'Searching…', 'busy'); pollTimer = setTimeout(function () { poll(id); }, 2500); return; }
+        setRunning(false);
+        setUsage(d.usage);
+        if (s.status === 'failed') showStatus(s.error || 'The search failed. Please try again.', 'bad');
+        else { showStatus(''); result.replaceChildren(searchResult(s)); }
+        loadHistory();
+      }).catch(function (e) { setRunning(false); showStatus(e.message, 'bad'); });
     }
-    setTimeout(refresh, 0);
-    return card('cr-jobs', 5, 'Find jobs',
-      'Active openings from the companies\' own career sites, refreshed every few hours. Let the AI score them against your resume, then open a job to apply on the company\'s site.',
-      h('div', {},
-        h('div', { class: 'jb-filters' },
-          input('q', { placeholder: 'Role or keyword, e.g. .NET, Scrum Master', 'aria-label': 'Role or keyword', maxlength: '80' }),
-          input('location', { placeholder: 'City, e.g. Bengaluru', 'aria-label': 'Location', maxlength: '80' }),
-          countrySel,
-          select('days', [['', 'Posted: any time'], ['1', 'Posted: last 24 hours'], ['3', 'Posted: last 3 days'], ['7', 'Posted: last 7 days'], ['14', 'Posted: last 14 days'], ['30', 'Posted: last 30 days']], 'Posted within')),
-        companyBox,
-        h('div', { class: 'jb-match' }, resumeSel, sortSel, run),
-        out, bucketBar, info, grid));
+    run.addEventListener('click', function () {
+      if (!f.country.trim() && !f.city.trim() && !confirm('No country or city given: search jobs everywhere?')) return;
+      setRunning(true); showStatus('Starting your search…', 'busy');
+      call('POST', '/api/career/jobsearch', { resume: f.resume, level: f.level, role: f.role.trim(), country: f.country.trim(), city: f.city.trim(),
+        companies: f.companies.trim(), days: f.days ? Number(f.days) : 0, remote: f.remote })
+        .then(function (d) { result.replaceChildren(); poll(d.search.id); })
+        .catch(function (e) { setRunning(false); showStatus(e.message, 'bad'); });
+    });
+
+    function loadHistory() {
+      return call('GET', '/api/career/jobsearch').then(function (d) {
+        searches = d.searches;
+        if (d.builtInCompanies) hint.textContent = 'Leave "Companies" empty to search ' + d.builtInCompanies + ' well-known companies hiring in India and worldwide.';
+        var past = searches.filter(function (s) { return s.status !== 'running'; });
+        history.replaceChildren(past.length ? h('details', { class: 'cr-history' }, h('summary', {}, 'Earlier searches (' + past.length + ')'),
+          past.map(function (s) {
+            var open = h('button', { class: 'btn btn-sm', type: 'button', disabled: s.status !== 'done', onclick: function () {
+              call('GET', '/api/career/jobsearch/' + s.id).then(function (x) { showStatus(''); result.replaceChildren(searchResult(x.search)); result.scrollIntoView({ behavior: 'smooth', block: 'start' }); })
+                .catch(function (e) { showError(e.message); });
+            } }, 'Open');
+            var del = h('button', { class: 'btn btn-sm cr-delete', type: 'button', onclick: function () {
+              call('POST', '/api/career/jobsearch/' + s.id + '/delete').then(loadHistory).catch(function (e) { showError(e.message); });
+            } }, 'Delete');
+            var counts = s.status === 'done' ? h('span', { class: 'js-counts' }, h('span', { class: 'ac-badge good' }, String(s.counts.high)), h('span', { class: 'ac-badge warn' }, String(s.counts.medium)), h('span', { class: 'ac-badge bad' }, String(s.counts.stretch)))
+              : h('span', { class: 'ac-badge bad' }, 'Failed');
+            return h('div', { class: 'cr-history-row' }, counts, h('span', { class: 'cr-history-name' }, paramsLine(s.params), h('span', { class: 'ac-muted' }, ' · ' + dateTime(s.createdAt))), open, del);
+          })) : '');
+        return searches;
+      });
+    }
+    // on load: show the latest search (or follow it while it runs)
+    setTimeout(function () {
+      loadHistory().then(function (list) {
+        var latest = list[0];
+        if (latest && (latest.status === 'running' || latest.status === 'done')) poll(latest.id);
+      }).catch(function (e) { showStatus(e.message, 'bad'); });
+    }, 0);
+
+    return card('cr-jobs', 5, 'AI Job search',
+      'Tell us what you are looking for. We read live openings from the companies\' own career sites, and the AI matches each one to your resume and sorts them into high, medium and low-probability jobs.',
+      h('div', {}, !state.resume ? h('p', { class: 'ac-muted' }, 'Upload your resume first (step 1).') : null,
+        h('datalist', { id: 'js-countries' }, COUNTRIES.map(function (c) { return h('option', { value: c }); })),
+        h('div', { class: 'js-form' },
+          h('div', { class: 'js-row two' }, resumeSel, levelSel),
+          h('div', { class: 'js-row three' }, role, country, city),
+          companies,
+          h('div', { class: 'js-row actions' }, days, h('label', { class: 'js-check', for: 'js-remote' }, remote, ' Include remote jobs'), run)),
+        hint, status, result, history));
   }
 
   function render() {

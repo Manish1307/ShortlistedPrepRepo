@@ -134,6 +134,12 @@ CREATE TABLE IF NOT EXISTS career_job_scores (
   reason TEXT NOT NULL DEFAULT '', gap TEXT NOT NULL DEFAULT '', scored_at TEXT NOT NULL,
   PRIMARY KEY (customer_id, resume_key, job_id)
 );
+CREATE TABLE IF NOT EXISTS career_job_searches (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  params_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'running', progress TEXT NOT NULL DEFAULT '',
+  result_json TEXT, error TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_career_job_searches ON career_job_searches(customer_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_active ON jobs(active, company_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at);
 CREATE INDEX IF NOT EXISTS idx_career_versions ON career_versions(customer_id);
@@ -157,7 +163,13 @@ function open(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  addColumn(db, 'job_companies', 'last_used', 'TEXT');   // AI Job search: boards nobody searched lately are dropped
   return db;
+}
+
+/** Add a column to a table made by an older version (CREATE TABLE IF NOT EXISTS keeps the old shape). */
+function addColumn(db, table, column, type) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 /** Run several statements as one all-or-nothing step. */

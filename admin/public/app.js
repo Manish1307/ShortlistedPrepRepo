@@ -684,54 +684,20 @@
     dialog(`Topics and resume · ${c.name || c.email}`, body, buttons).el.classList.add('wide');
   }
 
-  // ---------- Find jobs: companies (career sites) and the Master Prompt ----------
-  const PROVIDER_LABEL = { greenhouse: 'Greenhouse', lever: 'Lever', smartrecruiters: 'SmartRecruiters', ashby: 'Ashby', workday: 'Workday' };
+  // ---------- AI Job search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
   async function jobs(el) {
     const d = await get('/admin/api/jobs');
     const write = can('jobs.write');
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
-    const act = (c, action, message) => guard(async () => {
-      const r = await post(`/admin/api/jobs/companies/${c.id}`, { action });
-      toast(r.sync && !r.sync.ok ? `${c.name}: ${r.sync.error}` : message, r.sync && !r.sync.ok);
-      jobs(el);
-    });
-    const syncAll = h('button', { class: 'btn', onclick: () => guard(async () => {
-      syncAll.disabled = true; syncAll.textContent = 'Syncing…';
-      const r = await post('/admin/api/jobs/sync');
-      const failed = r.results.filter(x => !x.ok);
-      toast(failed.length ? `Synced, ${failed.length} failed: ${failed.map(x => x.name).join(', ')}` : `Synced ${r.results.length} companies`, failed.length > 0);
-      jobs(el);
-    }) }, 'Sync all now');
     el.replaceChildren(
-      head('Jobs', write ? syncAll : null, write ? h('button', { class: 'btn primary', onclick: () => companyForm(() => jobs(el)) }, '+ Add company') : null),
-      h('p', { class: 'muted' }, `Real, active openings from each company's own careers site, refreshed every ${d.syncHours || 'few'} hours and on "Sync". Candidates see them in Career toolkit → Find jobs, and the AI ranks them with the Master Prompt below.`),
-      h('div', { class: 'cards' }, stat('Active jobs', d.stats.active), stat('Posted in the last 7 days', d.stats.week), stat('In India', d.stats.india), stat('Companies', d.companies.length)),
-      table([
-        { label: 'Company', render: r => h('span', {}, h('b', {}, r.name), h('br'), h('a', { href: r.careersUrl, target: '_blank', rel: 'noopener', class: 'small' }, PROVIDER_LABEL[r.provider] + ' · ' + r.board)) },
-        { label: 'Active jobs', render: r => String(r.jobCount) },
-        { label: 'Last sync', render: r => h('span', {}, dateTime(r.lastSync), r.lastError ? h('div', { class: 'small', style: 'color:var(--bad)' }, r.lastError) : null) },
-        { label: 'Status', render: r => pill(r.enabled ? 'on' : 'off') },
-        { label: '', render: r => (write ? h('span', { class: 'tools' },
-          h('button', { class: 'btn sm', onclick: () => act(r, 'sync', `${r.name} synced`) }, 'Sync'),
-          h('button', { class: 'btn sm', onclick: () => act(r, r.enabled ? 'disable' : 'enable', r.enabled ? 'Hidden from candidates' : 'Shown to candidates') }, r.enabled ? 'Turn off' : 'Turn on'),
-          h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Remove ${r.name} and its jobs?`)) guard(async () => { await del(`/admin/api/jobs/companies/${r.id}`); toast('Removed'); jobs(el); }); } }, 'Remove')) : '') },
-      ], d.companies, null, 'No companies yet. Add one with its careers page address.'),
-      promptCard(d, write, () => jobs(el)));
-  }
-
-  function companyForm(done) {
-    const f = h('div', {},
-      field('Company name', { name: 'name', required: true, maxlength: 120, placeholder: 'e.g. Contoso' }),
-      field('Careers page address', { name: 'careersUrl', required: true, maxlength: 500, placeholder: 'https://boards.greenhouse.io/contoso' },
-        'Open the company\'s list of jobs and copy that address. Supported: boards.greenhouse.io/…, jobs.lever.co/…, jobs.smartrecruiters.com/…, jobs.ashbyhq.com/…, <tenant>.wd1.myworkdayjobs.com/…'),
-      field('Country when a job does not say (optional)', { name: 'defaultCountry', maxlength: 80, placeholder: 'e.g. India' }));
-    dialog('Add company', f, [{ label: 'Add and sync', kind: 'primary', closes: false, run: async close => {
-      const r = await guard(() => post('/admin/api/jobs/companies', values(f)));
-      if (!r) return true;
-      close(); done();
-      toast(r.sync.ok ? `${r.company.name}: ${r.company.jobCount} active jobs` : `Added, but the first sync failed: ${r.sync.error}`, !r.sync.ok);
-      return true;
-    } }]);
+      head('Jobs'),
+      h('p', { class: 'muted' }, 'Candidates run AI Job search in Career toolkit: they pick a resume (or all of them) and type the country, city, role and companies they want. ' +
+        'The server reads those companies\' live openings from their own career sites, and the AI scores them with the Master Prompt below into high, medium and low-probability jobs.'),
+      h('div', { class: 'cards' }, stat('Searches (7 days)', d.stats.searches), stat('Candidates searching (7 days)', d.stats.candidates), stat('Failed searches (7 days)', d.stats.failed),
+        stat('Live jobs cached', d.stats.jobs, `from ${d.stats.companies} career sites`)),
+      promptCard(d, write, () => jobs(el)),
+      h('details', { class: 'card', style: 'margin-top:18px' }, h('summary', {}, `Companies searched when a candidate leaves "Companies" empty (${d.builtInCompanies.length})`),
+        h('p', { class: 'muted small' }, d.builtInCompanies.join(', '))));
   }
 
   function promptCard(d, write, done) {
@@ -739,7 +705,7 @@
     box.style.minHeight = '320px';
     return h('div', { class: 'card', style: 'margin-top:18px' },
       h('h2', {}, 'Master Prompt'),
-      h('p', { class: 'muted small' }, 'Runs when a candidate presses "Find my best matches": the AI reads their resume and scores the real jobs within their filters. ' +
+      h('p', { class: 'muted small' }, 'Runs on every AI Job search: first the AI analyses the candidate\'s resume(s), then it scores the live jobs found for their search. ' +
         (d.prompt.isDefault ? 'Using the default prompt.' : `Last changed ${dateTime(d.prompt.updatedAt)} by ${d.prompt.updatedBy}.`)),
       box,
       h('details', {}, h('summary', { class: 'small' }, 'Rules always added after your prompt (keep the AI from inventing jobs, and the answer readable)'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, d.outputRules)),

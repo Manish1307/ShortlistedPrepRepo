@@ -76,7 +76,7 @@ function buildRoutes(ctx) {
   profiles.addRoutes({ ...ctx, add, audit, one, all });        // topics and resume per customer (sent to the app above)
   accounts.addRoutes({ ...ctx, add, audit, one, all });        // customer logins for the website's My account page
   career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)
-  jobs.addRoutes({ ...ctx, add, audit, one, all });            // Find jobs: real openings from company career sites, scored by the AI
+  jobs.addRoutes({ ...ctx, add, audit, one, all });            // AI Job search: live openings from career sites, scored by the AI
   add('POST', '/api/licence/deactivate', { public: true }, (req, res, { body, ip }) => {
     ctx.limiters.licence.hit(ip);
     if (ctx.limiters.licence.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');

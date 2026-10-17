@@ -36,6 +36,13 @@ Keys pasted into Settings are stored encrypted with the OS keystore; the app ref
 | Show / hide the Notes window | Ctrl+Shift+N |
 | Start / stop listening | Ctrl+Shift+L |
 | Question finished: answer everything heard so far | Ctrl+Shift+A |
+| Capture a question from the screen (draw a box; Enter = whole screen) | Ctrl+Shift+Q |
+| Capture the whole screen the mouse is on | Ctrl+Alt+Shift+Q |
+
+**Screen capture:** when a student shares a question as a picture, in Notepad or in the chat, press Ctrl+Shift+Q (or
+the 📷 Capture button) and draw a box around it. The selection screen is hidden from screen sharing like the Notes
+window. The selected AI (Gemini, Claude, or a Llama 4 vision model on Groq) copies the question out of the picture and
+it is answered in the usual list, code kept in its own block. Pictures stay in memory and are never written to disk.
 
 Set the **audio source** in Settings: *Meeting audio* (system loopback, Windows only: Teams, Skype, Google Meet,
 anything you hear) or *Microphone*. Fill in the **subject**: it is passed to Whisper as a hint and to Claude as context,

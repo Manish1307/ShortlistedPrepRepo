@@ -7,13 +7,13 @@ class ApiError extends Error {
 
 const MAX_BODY = 100 * 1024;
 
-function readJson(req) {
+function readJson(req, max = MAX_BODY) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on('data', c => {
       size += c.length;
-      if (size > MAX_BODY) { reject(new ApiError(413, 'Request is too large')); req.destroy(); return; }
+      if (size > max) { reject(new ApiError(413, 'Request is too large')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => {

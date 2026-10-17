@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('notesAPI', {
   sendAudio: buffer => ipcRenderer.send('audio:chunk', buffer),
   setListening: on => ipcRenderer.send('listening:set', !!on),
   askLast: () => ipcRenderer.send('ask:last'),
+  askSelection: (text, from) => ipcRenderer.send('ask:selection', { text: String(text || ''), from: from ? { question: String(from.question || ''), answer: String(from.answer || '') } : null }),
+  askTyped: (text, corrected) => ipcRenderer.send('ask:typed', String(text || ''), corrected === true),
+  captureScreen: mode => ipcRenderer.send('screen:capture', mode === 'full' ? 'full' : 'area'),
 
   // settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -28,6 +31,15 @@ contextBridge.exposeInMainWorld('notesAPI', {
   dragEnd: () => ipcRenderer.send('win:drag-end'),
   clearSession: () => ipcRenderer.invoke('session:clear'),
   getEngine: () => ipcRenderer.invoke('engine:status'),
+
+  // licence: free trial, key, re-check, move to another PC, buy page
+  getLicence: () => ipcRenderer.invoke('licence:get'),
+  activateLicence: key => ipcRenderer.invoke('licence:activate', String(key || '')),
+  startTrial: email => ipcRenderer.invoke('licence:trial', String(email || '')),
+  refreshLicence: () => ipcRenderer.invoke('licence:refresh'),
+  deactivateLicence: () => ipcRenderer.invoke('licence:deactivate'),
+  buy: () => ipcRenderer.send('licence:buy'),
+  onLicence: callback => subscribe('licence', callback),
 
   // events from the speech / AI engine
   onPipeline: callback => subscribe('pipeline', callback),

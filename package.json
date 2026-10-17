@@ -13,12 +13,82 @@
     "site:serve": "node website/serve.js",
     "admin": "node admin/server.js",
     "admin:create": "node admin/create-admin.js",
-    "web": "node scripts/dev-web.js"
+    "web": "node scripts/dev-web.js",
+    "interview": "electron interview-main.js",
+    "liveclass": "electron liveclass-main.js",
+    "dist": "electron-builder --win nsis --x64",
+    "server:package": "node website/build.js && tar -czf dist/classcue-server.tgz --exclude=admin/data admin deploy -C website site"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1"
+  },
+  "build": {
+    "appId": "com.classcue.app",
+    "productName": "ClassCue",
+    "copyright": "Copyright © 2026 ClassCue",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "package.json",
+      "main.js",
+      "preload.js",
+      "select-preload.js",
+      "main-window.html",
+      "notes-window.html",
+      "select-window.html",
+      "renderer/capture.js",
+      "renderer/notes-ui.js",
+      "renderer/select-area.js",
+      "src/**/*",
+      "!src/eval/**",
+      "!src/interview/**"
+    ],
+    "extraResources": [
+      {
+        "from": "whisper/bin",
+        "to": "whisper/bin",
+        "filter": [
+          "whisper-server.exe",
+          "whisper.dll",
+          "ggml*.dll",
+          "SDL2.dll",
+          "VERSION.txt"
+        ]
+      },
+      {
+        "from": "whisper/models",
+        "to": "whisper/models",
+        "filter": [
+          "ggml-small.en-q5_1.bin"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "ClassCue-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ClassCue",
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

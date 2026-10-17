@@ -3,7 +3,7 @@
 // Runs in the Electron main process only: the API key never reaches the web pages.
 
 const Anthropic = require('@anthropic-ai/sdk');
-const { EXTRACT_PROMPT, parseQuestionList, buildExtractMessage, formatPrevious } = require('./framing');
+const { EXTRACT_PROMPT, SCREEN_PROMPT, parseQuestionList, buildExtractMessage, buildScreenMessage, formatPrevious, formatProfile } = require('./framing');
 
 const DEFAULT_MODEL = 'claude-opus-5-5';
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
@@ -20,12 +20,28 @@ Answer ONLY the question under "Question just asked". It can be a scenario sprea
 
 Otherwise write the answer exactly as a person would say it out loud, so the teacher can read it straight to the class:
 - Speak in the first person, like a real teacher or colleague explaining to a friend: natural, warm, confident. Never mention that you are an AI, never use phrases like "Certainly!", "Great question", "As an AI".
+- Sound like an experienced human teacher talking live, not like a textbook or a chatbot. Use contractions (it's, you'll, don't, we're). Talk to the students directly with "you" and "we". Use the small connecting words people use when they explain out loud: "so", "now", "basically", "here's the thing", "think of it like", "the trick is", "notice that". Vary how you begin: often go straight to the point, sometimes start with "So," or "Okay, so". Never sound scripted, never use the same opening twice in a row, and never use formal written phrases like "In conclusion", "It is important to note", "Furthermore" or "Additionally".
+- When the question is about code or a worked problem, walk through it the way you would at the whiteboard: "first we...", "then this line...", "and that's why the output is...". Say why each step is done, not just what it does. Never reply with only the result.
+
+Example of the tone (question: "What does a for loop do in Python?"):
+So, a for loop just repeats something for you.
+You give it a list, and it goes through it one item at a time.
+Think of it like calling the register: same action, one name after another.
+Here's a tiny one:
+\`\`\`python
+for name in ["Asha", "Ravi"]:
+    print(name)
+\`\`\`
+First it takes "Asha" and prints it, then it moves on to "Ravi".
+That's it: the loop stops by itself when the list runs out.
+(Match this tone, not these words or this length.)
 - Use easy, everyday words and short sentences. Explain it so a beginner understands on the first hearing. If you must use a technical term, say what it means in plain words straight away.
 - Start with the direct answer in the first sentence, then explain it step by step in simple language. Use a small real-life example or comparison whenever the idea is abstract or technical.
 - Usually 80 to 160 words; go longer only when the question asks for several steps or code. Write ONE short statement per line, at most about 18 words each, so the teacher can read a line, pause, then read the next. Never write a paragraph, and never a long sentence with several clauses: split it into separate lines. A few "-" bullet points or numbered steps are fine for a sequence of steps, but never headings, bold or other markdown. Write maths simply (x^2, sqrt(x), a/b); keep code short and plain.
 - Finish when the explanation is complete. Do NOT end with an offer, a suggestion or a question: never write things like "let me know if...", "would you like me to...", "feel free to ask", "do you want more detail", "I hope this helps", and do not suggest what to ask next. Do not ask the user any question at all. If something is unclear, make the most sensible assumption, say so in one short sentence, and answer.
 - Accuracy matters more than sounding confident: think the question through, check names, numbers and facts, and answer what was actually asked. If you are not sure of something, say so briefly instead of guessing.
-- Use the subject and the transcript only to correct obvious recognition mistakes (e.g. "dot net" is .NET). When a term has several meanings (for example "enable an API" can mean the Dataverse/Power Pages Web API, a custom connector, or an Azure API), pick the meaning that fits the subject of the class; if the subject does not settle it, answer the most likely meaning and add one short sentence naming the other.`;
+- Use the subject and the transcript only to correct obvious recognition mistakes (e.g. "dot net" is .NET). When a term has several meanings (for example "enable an API" can mean the Dataverse/Power Pages Web API, a custom connector, or an Azure API), pick the meaning that fits the subject of the class; if the subject does not settle it, answer the most likely meaning and add one short sentence naming the other.
+- When "Topics to focus on" or a background from a resume is given, answer within those areas: choose the meaning, technologies and examples that fit them and the person's experience. A question clearly outside them is still answered normally.`;
 
 /** `effort` is accepted by Opus / Sonnet / Fable models, not by Haiku. */
 const supportsEffort = model => /^claude-(opus|sonnet|fable)-\d/.test(model);
@@ -60,16 +76,25 @@ function cleanAnswer(text) {
   return out;
 }
 
-function buildUserMessage({ subject, context, question, previous }) {
+function buildUserMessage({ subject, context, question, previous, source, profile }) {
   const lines = (context || []).map(l => `- ${l}`).join('\n') || '- (nothing yet)';
   return [
     `Subject of this class: ${subject || '(not specified)'}`,
+    ...formatProfile(profile),
     '',
     'Recent class transcript (oldest first):',
     lines,
     '',
     ...((previous && previous.length) ? ['Earlier questions in this class and the answers you gave (oldest first):', formatPrevious(previous, 700), ''] : []),
-    'Question just asked:',
+    source === 'screen'
+      ? 'Question just asked (copied from the teacher\'s screen, where a student shared it as a picture or text; it may contain code, data or answer options. Walk the class through it like a teacher: what it does step by step and why, then the final answer, output or fixed code. Never reply with only the result. Put any code between ``` lines):'
+      : source === 'selection'
+        ? 'Question just asked (the teacher selected this text in one of your earlier answers, listed above, and wants it as the next question. If it is a statement or a term rather than a question, explain it in more depth, with an example. It is always a real question: never reply SKIP):'
+        : source === 'typed'
+          ? 'Question just asked (the teacher typed it; it may be only a few keywords. Work out what they most likely want to know about those keywords in this class and answer that. It is always a real question: never reply SKIP):'
+          : source === 'corrected'
+            ? 'Question just asked (the teacher corrected the wording of a question that was heard or read wrongly. This corrected text is exactly what was meant: answer it. It is always a real question: never reply SKIP):'
+            : 'Question just asked:',
     question,
   ].join('\n');
 }
@@ -89,6 +114,7 @@ class Answerer {
   }
   setModel(model) { this.model = model || DEFAULT_MODEL; this.fallbackRejected = false; }
   setSubject(subject) { this.subject = subject || ''; }
+  setProfile(profile) { this.profile = profile || null; }   // topics and resume from the admin dashboard
   get ready() { return !!this.client; }
 
   /** "Test connection": does a tiny question work with the selected model? */
@@ -107,17 +133,39 @@ class Answerer {
     if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
     const message = await this.client.messages.create({
       model: this.model, max_tokens: 600, system: EXTRACT_PROMPT,
-      messages: [{ role: 'user', content: buildExtractMessage({ subject: this.subject, context, text, previous }) }],
+      messages: [{ role: 'user', content: buildExtractMessage({ subject: this.subject, profile: this.profile, context, text, previous }) }],
     }, { signal });
     return parseQuestionList(message.content.filter(b => b.type === 'text').map(b => b.text).join(''));
   }
 
-  _params(question, context, previous) {
+  /** One plain request, whole reply as text (used by the mock interviewer for questions and feedback). */
+  async complete({ system, user, maxTokens = 2000, signal } = {}) {
+    if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
+    const message = await this.client.messages.create({
+      model: this.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }],
+    }, { signal });
+    return message.content.filter(b => b.type === 'text').map(b => b.text).join('');
+  }
+
+  /** Screen capture: copy the question(s) out of a screenshot (base64). Returns a list (may be empty), or null. */
+  async readScreen({ image, mimeType = 'image/png', previous = [], signal } = {}) {
+    if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
+    const message = await this.client.messages.create({
+      model: this.model, max_tokens: 2000, system: SCREEN_PROMPT,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: image } },
+        { type: 'text', text: buildScreenMessage({ subject: this.subject, profile: this.profile, previous }) },
+      ] }],
+    }, { signal });
+    return parseQuestionList(message.content.filter(b => b.type === 'text').map(b => b.text).join(''));
+  }
+
+  _params(question, context, previous, source) {
     const params = {
       model: this.model,
       max_tokens: 4096, // thinking tokens count towards this, so leave plenty of room
       system: systemPromptFor(this.effort),
-      messages: [{ role: 'user', content: buildUserMessage({ subject: this.subject, context, question, previous }) }],
+      messages: [{ role: 'user', content: buildUserMessage({ subject: this.subject, profile: this.profile, context, question, previous, source }) }],
     };
     if (supportsEffort(this.model)) params.output_config = { effort: this.effort };
     return params;
@@ -137,9 +185,9 @@ class Answerer {
    * @returns {Promise<{text: string, skipped: boolean, refused: boolean}>}
    * Text is delivered through onDelta as it is generated. A reply of "SKIP" is never shown.
    */
-  async answer({ question, context = [], previous = [], onDelta = () => {}, signal } = {}) {
+  async answer({ question, context = [], previous = [], source, onDelta = () => {}, signal } = {}) {
     if (!this.client) throw Object.assign(new Error('No Anthropic API key set'), { code: 'no-key' });
-    const params = this._params(question, context, previous);
+    const params = this._params(question, context, previous, source);
 
     let text = '';
     let held = '';       // first few characters are held back until we know the reply is not "SKIP"

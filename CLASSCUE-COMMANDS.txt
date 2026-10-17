@@ -41,6 +41,22 @@ Open a terminal in that folder before running any command below.
           Starts the desktop tool (the private assistant windows).
 
 
+  AI MOCK INTERVIEWER (practice for job interviews, separate window):
+      npm run interview
+          Pick company (50 listed), role, round and experience. The AI asks
+          questions; answer by voice or typing; get a score out of 10, what was
+          good, what to improve and a stronger answer; report at the end
+          (Save report -> DocumentsMock Interviews). Uses the same AI key as the
+          assistant (set in its Settings). This window is NOT hidden from
+          screen sharing: it is for practice only.
+
+  LICENCE (free trial or licence key):
+      The assistant asks for a licence the first time it opens. The admin
+      server must be running (npm run admin or npm run web), because the app
+      checks licences with it (address in srclicencesettings.js).
+      Developing without a licence: set TNA_LICENCE=off before npm start
+      (works only when not installed).
+
 ---------------------------------------------------------------------
  3. RUN ONE PART AT A TIME
 ---------------------------------------------------------------------
@@ -96,6 +112,50 @@ Open a terminal in that folder before running any command below.
     Ctrl+Shift+A   "Question finished": answer everything heard so far
                    (works in manual mode, and in auto mode to skip the wait)
     Ctrl+Shift+T   put the window back to 100% visible (if you made it too faint)
+    Ctrl+Shift+Q   capture a question from the screen (draw a box around it)
+    Ctrl+Alt+Shift+Q  capture the whole screen the mouse is on
+
+  Capturing a question from the screen (a student sent it as a picture,
+  in Notepad, in the meeting chat...):
+    1. Open the question on your screen.
+    2. Press Ctrl+Shift+Q (or click "Capture" in the assistant window).
+       The screen freezes and dims. Only you see this: the students keep
+       seeing your normal screen.
+    3. Drag a box around the question. Enter = take the whole screen.
+       Esc or right-click = cancel.
+    4. The AI reads the question from the picture; it appears in the list with
+       a camera mark, and the solution (with code, when needed) is written
+       on the right.
+    Notes:
+    - Settings > "Screen capture AI" chooses which AI reads the picture, with
+      its own key box. Example: AI service = Groq (fast answers) and
+      Screen capture AI = Anthropic Claude (reads code and pictures best).
+      The answer still comes from the AI service. Free Groq keys usually
+      cannot read pictures.
+    - It works even before the speech engine is set up.
+    - The picture is sent to your chosen AI only; it is never saved on disk.
+    - It reads the screen the mouse is on: with two monitors, move the mouse
+      to the screen with the question before pressing the shortcut.
+    - Up to 3 questions per capture are answered; capture others separately.
+
+  Typing a question (the box under the buttons):
+    Type a question or just a few keywords (e.g. "SQL joins") and press Enter
+    or Ask. The AI works out what you most likely want to know and answers it
+    (marked with a keyboard sign in the list).
+
+  Correcting a question the AI got wrong:
+    The question above each answer is always an editable box. Click it, fix
+    the wording and press Enter: the AI answers the new wording, and the old
+    question leaves the list (the new one is marked with a pencil).
+    Shift+Enter = new line, Esc = undo your changes.
+
+  Asking about part of an answer ("Ask selected"):
+    1. In the answer on the right, select a word, a line or a few lines with
+       the mouse.
+    2. The "Ask selected" button turns on. Click it.
+    3. The selected text is answered as a new question (marked with a ?
+       in the list). If it is a statement, it is explained in more depth with
+       an example. The answer it came from is used as background.
 
   If the assistant is stuck (no answers, not listening):
     1. Click "Restart" (top of the assistant tab). It stops the sound capture and

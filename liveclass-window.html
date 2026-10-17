@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:" />
+  <title>Live Class</title>
+  <style>
+    :root {
+      --bar: rgba(24, 25, 30, 0.96); --card: rgba(30, 31, 37, 0.95); --raise: rgba(255,255,255,0.08); --raise-2: rgba(255,255,255,0.14);
+      --line: rgba(255,255,255,0.12); --ink: #f3f4f6; --muted: #9ca3af; --chip: rgba(255,255,255,0.12);
+      --accent: #60a5fa; --good: #4ade80; --star: #fbbf24; --end: #ef4444; --end-dark: #dc2626;
+      --menu: rgba(32, 33, 40, 0.98); --shadow: 0 10px 30px rgba(0,0,0,0.45);
+      --card-font: 15px;
+    }
+    :root[data-theme="light"] {
+      --bar: rgba(250, 250, 252, 0.97); --card: rgba(255, 255, 255, 0.96); --raise: rgba(0,0,0,0.05); --raise-2: rgba(0,0,0,0.1);
+      --line: rgba(0,0,0,0.12); --ink: #1f2430; --muted: #5f6675; --chip: rgba(0,0,0,0.08);
+      --accent: #2563eb; --good: #16a34a; --star: #d97706;
+      --menu: rgba(255, 255, 255, 0.99); --shadow: 0 10px 30px rgba(0,0,0,0.18);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; background: transparent; color: var(--ink); }
+    /* in a normal browser tab (not the frameless Electron window) show a backdrop so the overlay is visible */
+    body.web { background: linear-gradient(160deg, #3f6212 0%, #65a30d 45%, #a3e635 100%); }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    [hidden] { display: none !important; }
+
+    .overlay { width: min(880px, calc(100% - 24px)); margin: 12px auto 0; position: relative; transition: opacity .12s; }
+
+    /* ---- toolbar ---- */
+    .toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--bar); border: 1px solid var(--line);
+               border-radius: 14px; box-shadow: var(--shadow); white-space: nowrap; }
+    .sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
+    .tbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: 9px;
+            background: transparent; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 600; }
+    .tbtn:hover { background: var(--raise); }
+    .tbtn.boxed { border-color: var(--line); }
+    .tbtn.on { border-color: var(--accent); background: var(--raise); }
+    .tbtn svg { width: 16px; height: 16px; flex: none; }
+    .kbd { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 6px; background: var(--chip); font-size: 11px; font-weight: 600; color: var(--ink); }
+    .src { position: relative; }
+    .src .dotlive { position: absolute; left: 6px; top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--end); }
+    .src.muted .dotlive { background: var(--muted); }
+    .src.muted .micicon { opacity: .45; }
+    .caret { width: 10px !important; height: 10px !important; opacity: .7; }
+    .timer { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; padding: 0 6px; min-width: 52px; text-align: center; }
+    .handle { cursor: move; -webkit-app-region: drag; }
+    .grow { flex: 1; }
+    .end { height: 32px; padding: 0 14px; border: none; border-radius: 9px; background: var(--end); color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; }
+    .end:hover { background: var(--end-dark); }
+    .quit { width: 32px; height: 32px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--raise);
+            color: var(--ink); cursor: pointer; padding: 0; }
+    .quit:hover { background: var(--end); border-color: var(--end); color: #fff; }
+    .quit svg { width: 14px; height: 14px; }
+
+    .popover { position: absolute; z-index: 20; background: var(--menu); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 6px; }
+    .srcmenu { left: 0; top: 46px; min-width: 200px; }
+    .srcmenu button { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; width: 100%; padding: 7px 10px; border-radius: 7px; font-size: 13px; cursor: pointer; }
+    .srcmenu button:hover { background: var(--raise); }
+    .srcmenu button.sel::after { content: "✓"; color: var(--accent); }
+    .srcmenu hr { border: none; border-top: 1px solid var(--line); margin: 4px 2px; }
+
+    /* ---- transcript strip ---- */
+    .strip { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 6px 10px; background: var(--bar); border: 1px solid var(--line);
+             border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+    .bars { display: flex; align-items: center; gap: 2px; height: 16px; flex: none; }
+    .bars i { width: 3px; height: 4px; border-radius: 2px; background: var(--good); transition: height .1s; }
+    .bars.off i { background: var(--muted); }
+    .phrases { flex: 1; min-width: 0; display: flex; gap: 18px; overflow-x: auto; scrollbar-width: none; font-size: 13px; font-weight: 600; justify-content: flex-start; }
+    .phrases::-webkit-scrollbar { display: none; }
+    .phrases span { flex: none; color: var(--muted); }
+    .phrases span:last-child { color: var(--ink); }
+    .phrases span.partial { color: var(--muted); font-style: italic; opacity: .85; }
+    .phrases span.partial::after { content: " …"; }
+    .phrases span.q { cursor: pointer; }
+    .phrases span.q:hover { text-decoration: underline; }
+
+    /* ---- answer card ---- */
+    .card { margin: 8px 0 0 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+            display: flex; flex-direction: column; max-height: calc(100vh - 140px); }
+    .cardtop { display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; }
+    .navchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--raise);
+               font-size: 12px; font-weight: 600; cursor: pointer; }
+    .navchip:hover:not([disabled]) { background: var(--raise-2); }
+    .navchip[disabled] { opacity: .4; cursor: default; }
+    .pos { font-size: 12px; color: var(--muted); margin-left: 4px; }
+    .body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 6px; font-size: var(--card-font); line-height: 1.55; }
+    .qline { padding-bottom: 8px; border-bottom: 1px solid var(--line); font-weight: 600; }
+    .qline b, .aline b { font-weight: 800; }
+    .aline { margin-top: 10px; }
+    .ico { margin-right: 6px; }
+    .star { color: var(--star); }
+    .body ul { margin: 8px 0 4px; padding-left: 22px; }
+    .body li { margin: 4px 0; }
+    .pending { color: var(--muted); font-style: italic; }
+    .err { color: #f87171; }
+    .body p.line { margin: 8px 0; }
+    .body pre.code { margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line);
+                     font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre; overflow-x: auto; }
+    .gate { margin: 10px 12px 0; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--raise); font-size: 13px; display: grid; gap: 8px; }
+    .gate p { margin: 0; line-height: 1.45; }
+    .gate .row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .gate input { flex: 1; min-width: 180px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; outline: none; font: 13px ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+    .gate input:focus { border-color: var(--accent); }
+    .gate .err { font-size: 12px; }
+    .notice { margin: 8px 12px 0; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
+    .notice.warn { background: rgba(251,191,36,.18); color: #fde68a; }
+    .notice.error { background: rgba(248,113,113,.2); color: #fecaca; }
+    :root[data-theme="light"] .notice.warn { color: #92400e; }
+    :root[data-theme="light"] .notice.error { color: #991b1b; }
+    .empty { color: var(--muted); padding: 18px 0; font-size: 14px; }
+    .editwrap { display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    .editwrap textarea { width: 100%; min-height: 56px; resize: vertical; background: var(--raise); border: 1px solid var(--accent); border-radius: 8px; padding: 8px 10px; outline: none; }
+    .editwrap .row { display: flex; gap: 6px; justify-content: flex-end; }
+    .sbtn { border: 1px solid var(--line); background: var(--raise); border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+    .sbtn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .foot { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+    .thumb { border: none; background: none; cursor: pointer; padding: 2px 4px; border-radius: 6px; color: var(--muted); font-size: 14px; }
+    .thumb:hover { background: var(--raise); }
+    .thumb.on { color: var(--accent); }
+
+    .chatrow { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
+    .chatrow input { flex: 1; min-width: 0; background: var(--raise); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; outline: none; font-size: 13px; }
+    .chatrow input:focus { border-color: var(--accent); }
+
+    .overlay.collapsed .strip, .overlay.collapsed .card { display: none; }
+    .savenote { color: var(--muted); font-size: 12px; }
+    .ended { margin-top: 8px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 14px; display: flex; align-items: center; gap: 10px; }
+
+    /* ---- settings menu (kebab) ---- */
+    .settings { right: 0; top: 46px; width: 250px; display: grid; gap: 2px; }
+    .srow { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+    .srow .lbl { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .srow .lbl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .srow.link { cursor: pointer; }
+    .srow.link:hover { background: var(--raise); }
+    .srow svg { width: 15px; height: 15px; flex: none; }
+    .srow .val { font-size: 11px; color: var(--muted); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+    .ibtn { width: 26px; height: 26px; display: inline-grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--raise); cursor: pointer; font-size: 14px; line-height: 1; }
+    .ibtn:hover { background: var(--raise-2); }
+    .ibtn.sel { background: var(--ink); color: var(--bar); }
+    .settings hr { border: none; border-top: 1px solid var(--line); margin: 2px 4px; }
+    .settings select { background: var(--raise); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; font-size: 12px; }
+    .settings select option { color: #111; }
+    .switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: none; background: var(--raise-2); cursor: pointer; padding: 0; }
+    .switch::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+    .switch[aria-checked="true"] { background: var(--accent); }
+    .switch[aria-checked="true"]::after { left: 19px; }
+
+    .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--menu); border: 1px solid var(--line); color: var(--ink);
+             padding: 7px 14px; border-radius: 999px; font-size: 12px; box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+
+    @media (max-width: 760px) {
+      .toolbar { flex-wrap: wrap; row-gap: 4px; }
+      .kbd { display: none; }
+      .settings, .srcmenu { top: auto; margin-top: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="overlay">
+    <!-- top toolbar -->
+    <div class="toolbar" id="toolbar">
+      <button class="tbtn src muted" id="btnMic" title="Start listening">
+        <span class="dotlive"></span>
+        <svg class="micicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <button class="tbtn" id="btnSource" title="Choose the audio source" aria-haspopup="menu">
+        <span id="sourceLabel">Mic</span>
+        <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="sep"></div>
+      <button class="tbtn boxed" id="btnAnswer" title="Question finished: answer what was said (Ctrl+Enter)">Answer <span class="kbd">Ctrl ↵</span></button>
+      <button class="tbtn boxed" id="btnShot" title="Read the question on screen and answer it (Ctrl+Shift+Enter)">Screenshot <span class="kbd">Ctrl ⇧ ↵</span></button>
+      <button class="tbtn boxed" id="btnChat" title="Type a question (Ctrl+Shift+Space)">Chat <span class="kbd">Ctrl ⇧ ␣</span></button>
+      <div class="grow"></div>
+      <button class="tbtn handle" id="btnMove" title="Drag to move">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>
+      </button>
+      <button class="tbtn" id="btnCollapse" title="Collapse / expand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>
+      </button>
+      <span class="timer" id="timer" title="Time since the class started">00:00</span>
+      <button class="tbtn" id="btnMenu" title="Settings" aria-haspopup="menu">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+      <button class="end" id="btnEnd" title="End the class session">End</button>
+      <button class="quit" id="btnQuit" title="Quit: close Live Class (Ctrl+Q)" aria-label="Quit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <!-- audio source menu -->
+    <div class="popover srcmenu" id="srcMenu" role="menu" hidden>
+      <button data-src="mic">Microphone</button>
+      <button data-src="system">System audio (the meeting)</button>
+      <button data-src="both">Microphone + system</button>
+      <hr />
+      <button id="btnListen2">Start listening</button>
+    </div>
+
+    <!-- settings menu -->
+    <div class="popover settings" id="settings" role="menu" hidden>
+      <div class="srow">
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span id="account"></span></div>
+      </div>
+      <div class="srow" id="licenceRowWrap">
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg><span id="licenceRow">Licence: checking…</span></div>
+      </div>
+      <div class="srow" id="focusRowWrap" hidden>
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg><span id="focusRow"></span></div>
+      </div>
+      <div class="srow link" id="btnDashboard" title="Open the dashboard">
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span>Dashboard</span></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M9 7h8v8"/></svg>
+      </div>
+      <hr />
+      <div class="srow"><div class="lbl">Zoom</div><span class="val" id="zoomVal"></span>
+        <button class="ibtn" data-act="zoom+" title="Zoom in">+</button><button class="ibtn" data-act="zoom-" title="Zoom out">−</button><button class="ibtn" data-act="zoom0" title="Reset zoom">↺</button></div>
+      <div class="srow"><div class="lbl">Theme</div>
+        <button class="ibtn" id="themeLight" data-act="light" title="Light theme">☀</button><button class="ibtn" id="themeDark" data-act="dark" title="Dark theme">☾</button></div>
+      <hr />
+      <div class="srow"><div class="lbl">Opacity</div><span class="val" id="opacityVal"></span>
+        <button class="ibtn" data-act="op+" title="More opaque">+</button><button class="ibtn" data-act="op-" title="More see-through">−</button><button class="ibtn" data-act="op0" title="Reset opacity">↺</button></div>
+      <div class="srow"><div class="lbl">Font size</div><span class="val" id="fontVal"></span>
+        <button class="ibtn" data-act="font+" title="Larger text">+</button><button class="ibtn" data-act="font-" title="Smaller text">−</button><button class="ibtn" data-act="font0" title="Reset font size">↺</button></div>
+      <hr />
+      <div class="srow"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg><span>Language</span></div>
+        <select id="language" title="Spoken language">
+          <option>English</option><option>Hindi</option><option>Spanish</option><option>French</option><option>German</option>
+        </select></div>
+      <div class="srow"><div class="lbl">Auto Answer</div><button class="switch" id="autoAnswer" role="switch" aria-checked="false" title="Answer student questions as soon as they are heard"></button></div>
+      <hr />
+      <div class="srow link" id="btnEdit" title="Edit the current question">
+        <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg><span>Edit question</span></div>
+      </div>
+    </div>
+
+    <!-- live transcript -->
+    <div class="strip" id="strip">
+      <div class="bars" id="bars" title="Microphone activity"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="phrases" id="phrases"></div>
+    </div>
+
+    <!-- current question and answer -->
+    <div class="card" id="card">
+      <div class="cardtop">
+        <button class="navchip" id="btnPrev" title="Previous question (Ctrl+Left)">Ctrl ←</button>
+        <button class="navchip" id="btnNext" title="Next question (Ctrl+Right)">Ctrl →</button>
+        <span class="pos" id="pos"></span>
+      </div>
+      <div class="notice" id="notice" hidden></div>
+      <div class="gate" id="gate" hidden>
+        <p id="gateMsg"></p>
+        <div class="row">
+          <input id="gateKey" placeholder="CC-XXXX-XXXX-XXXX" maxlength="17" autocomplete="off" spellcheck="false" aria-label="Licence key" />
+          <button class="sbtn primary" id="gateActivate">Activate</button>
+          <button class="sbtn" id="gateCheck">Check again</button>
+        </div>
+        <span class="err" id="gateErr"></span>
+      </div>
+      <div class="body" id="body"></div>
+      <div class="chatrow" id="chatRow" hidden>
+        <input id="chatInput" placeholder="Type a question and press Enter…" autocomplete="off" />
+        <button class="sbtn primary" id="chatSend">Ask</button>
+      </div>
+      <div class="foot" id="foot">
+        <span>↗ Answer</span><span>·</span><span id="stamp">–</span>
+        <button class="thumb" id="thumbUp" title="Helpful">👍</button>
+        <button class="thumb" id="thumbDown" title="Not helpful">👎</button>
+        <span class="grow"></span><span id="langFoot"></span>
+      </div>
+    </div>
+
+    <div class="ended" id="ended" hidden>
+      <span>Class ended after <b id="endedTime"></b> · <span id="endedCount"></span><br /><small class="savenote" id="endedSave"></small></span>
+      <span class="grow"></span>
+      <button class="sbtn primary" id="btnRestart">Start again</button>
+      <button class="sbtn" id="btnClose">Quit</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="src/format.js"></script>
+  <script src="renderer/capture.js"></script>
+  <script src="renderer/liveclass-ui.js"></script>
+</body>
+</html>

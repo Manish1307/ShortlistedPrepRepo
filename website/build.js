@@ -15,7 +15,10 @@ const ROOT = __dirname;
 const OUT = path.join(ROOT, 'site');
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8'));
 const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'sample.json'), 'utf8'));
-const layout = fs.readFileSync(path.join(ROOT, 'layout.html'), 'utf8');
+// <!-- if:reviews --> ... <!-- endif:reviews -->: kept only when there are real reviews in data/sample.json
+const hasReviews = data.reviews.length > 0;
+const sections = text => text.replace(/<!-- if:reviews -->([\s\S]*?)<!-- endif:reviews -->/g, (m, inner) => (hasReviews ? inner : ''));
+const layout = sections(fs.readFileSync(path.join(ROOT, 'layout.html'), 'utf8'));
 const postTemplate = fs.readFileSync(path.join(ROOT, 'templates', 'post.html'), 'utf8');
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -27,9 +30,9 @@ const sampleTag = demo ? '<span class="sample-tag">Sample</span>' : '';
 
 // ---------- pieces made from the sample data ----------
 const fragments = {
-  demoBar: demo ? '<div class="demo-bar" role="note"><strong>Demo site.</strong> Reviews, numbers, prices and blog posts are sample data for the design. Sign-in and sign-up are not connected.</div>' : '',
+  demoBar: demo && config.showDemoBar !== false ? '<div class="demo-bar" role="note"><strong>Demo site.</strong> Reviews, numbers, prices and blog posts are sample data for the design. Early-access sign-ups and demo requests are real and appear in the admin portal.</div>' : '',
 
-  statsRow: `<div class="stats">${data.stats.map(s => `<div class="stat"><b>${esc(s.value)}</b><span>${esc(s.label)}</span></div>`).join('')}</div>`,
+  statsRow: !data.stats.length ? '' : `<div class="stats">${data.stats.map(s => `<div class="stat"><b>${esc(s.value)}</b><span>${esc(s.label)}</span></div>`).join('')}</div>`,
 
   platformChips: `<div class="chips">${data.platforms.map(p => `<span class="chip">${esc(p)}</span>`).join('')}</div>`,
 
@@ -104,8 +107,8 @@ const built = [];
 
 // ---------- the pages ----------
 const pagesDir = path.join(ROOT, 'pages');
-for (const file of fs.readdirSync(pagesDir).filter(f => f.endsWith('.html'))) {
-  let body = fs.readFileSync(path.join(pagesDir, file), 'utf8');
+for (const file of fs.readdirSync(pagesDir).filter(f => f.endsWith('.html') && (hasReviews || f !== 'reviews.html'))) {
+  let body = sections(fs.readFileSync(path.join(pagesDir, file), 'utf8'));
   const meta = body.match(/^<!--\s*title:\s*(.*?)\s*\|\s*description:\s*(.*?)\s*-->\s*/s);
   if (!meta) throw new Error(`${file}: first line must be <!-- title: ... | description: ... -->`);
   body = body.slice(meta[0].length);
@@ -127,7 +130,7 @@ let broken = 0;
 for (const file of built) {
   const html = fs.readFileSync(path.join(OUT, file), 'utf8');
   for (const m of html.matchAll(/(?:href|src)="([^"#:]+?)(?:#([^"]*))?"/g)) {
-    const target = m[1];
+    const target = m[1].split('?')[0];   // assets/x.js?v=2: the ?v= only makes browsers fetch a changed file again
     if (/^(https?|mailto):/.test(target) || target === '') continue;
     if (!fs.existsSync(path.join(OUT, target))) { console.error(`Broken link in ${file}: ${target}`); broken++; }
   }

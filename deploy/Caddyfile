@@ -1,0 +1,21 @@
+# Caddy: HTTPS (free Let's Encrypt certificates, renewed automatically) in front of the admin server.
+# deploy/setup.sh replaces __API_HOST__ and __ADMIN_HOST__ and installs this as /etc/caddy/Caddyfile.
+
+# Public API for the desktop app and the website: only /api/ is reachable here.
+__API_HOST__ {
+	# not the AI proxy: compressing would hold back the first words of a streamed answer
+	@compress not path /api/ai/*
+	encode @compress gzip
+	@notApi not path /api/*
+	respond @notApi 404
+	reverse_proxy 127.0.0.1:4180
+}
+
+# The admin dashboard. To allow only your own internet address, uncomment the two lines below
+# and put your IP address in (find it at https://ifconfig.me).
+__ADMIN_HOST__ {
+	encode gzip
+	# @blocked not remote_ip YOUR.IP.ADDRESS.HERE
+	# respond @blocked 403
+	reverse_proxy 127.0.0.1:4180
+}

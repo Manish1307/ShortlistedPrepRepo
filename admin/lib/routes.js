@@ -4,6 +4,13 @@
 const { now, transaction } = require('./db');
 const auth = require('./auth');
 const licences = require('./licence');
+const aikeys = require('./aikeys');
+const aiproxy = require('./aiproxy');
+const conversations = require('./conversations');
+const profiles = require('./profiles');
+const accounts = require('./accounts');
+const career = require('./career');
+const jobs = require('./jobs');
 const { ApiError, text, email, integer, likeTerm } = require('./http');
 
 const TOPICS = ['Support', 'Schools and teams', 'AI-included plan', 'Billing', 'Feedback'];
@@ -37,6 +44,39 @@ function buildRoutes(ctx) {
   };
   add('POST', '/api/licence/activate', { public: true }, licenceCall(true));
   add('POST', '/api/licence/validate', { public: true }, licenceCall(false));
+  // "Start free trial" in the app (TRIAL_DAYS, default 7). Trials are limited per address as well as per computer and email.
+  add('POST', '/api/licence/trial', { public: true }, (req, res, { body, ip }) => {
+    if (ctx.limiters.trial.blocked(ip)) throw new ApiError(429, 'Too many trial requests. Please try again later.');
+    ctx.limiters.trial.hit(ip);
+    const days = Math.max(1, Math.min(60, Number(process.env.TRIAL_DAYS) || 7));
+    const result = transaction(db, () => licences.startTrial(db, signer, body, { days }));
+    if (result.ok) audit(null, 'trial.started', String(body.email || '').trim().toLowerCase(), String(body.deviceName || '').slice(0, 100));
+    return { status: result.ok ? 200 : 403, body: result };
+  });
+  // The app's start-up call: the licence check (signed, as for /validate) plus the AI keys this licence should use
+  // (its own key per service, or the service's default). Only an active licence on an activated computer gets keys.
+  add('POST', '/api/app/config', { public: true }, (req, res, { body, ip }) => {
+    ctx.limiters.licence.hit(ip);
+    if (ctx.limiters.licence.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');
+    const result = licences.checkLicence(db, signer, body, { register: false });
+    if (!result.ok) return { status: 403, body: result };
+    const lic = one('SELECT id FROM licences WHERE key = ?', String(body.key || '').trim().toUpperCase());
+    const profile = profiles.profileForLicence(db, lic.id);   // the customer's topics and resume, for the AI
+    // An app that can use the AI proxy (body.proxy) gets an access token instead of the keys, which stay here.
+    // AI_KEY_HANDOUT=off stops sending keys to older apps too.
+    if (body.proxy === true && ctx.tokens) {
+      const grant = ctx.tokens.issue({ licenceId: lic.id, deviceId: String(body.deviceId || '').trim().slice(0, 100) });
+      return { body: { ...result, ai: {}, aiProxy: { ...grant, services: aiproxy.services(db, lic.id) }, profile } };
+    }
+    const handout = process.env.AI_KEY_HANDOUT !== 'off';
+    return { body: { ...result, ai: handout ? aikeys.keysForApp(db, ctx.vault, lic.id) : {}, profile } };
+  });
+  if (ctx.tokens) aiproxy.addRoutes({ ...ctx, add });
+  conversations.addRoutes({ ...ctx, add, audit, one, all });   // Live Class conversations (saved by the app, read in the dashboard)
+  profiles.addRoutes({ ...ctx, add, audit, one, all });        // topics and resume per customer (sent to the app above)
+  accounts.addRoutes({ ...ctx, add, audit, one, all });        // customer logins for the website's My account page
+  career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)
+  jobs.addRoutes({ ...ctx, add, audit, one, all });            // Find jobs: real openings from company career sites, scored by the AI
   add('POST', '/api/licence/deactivate', { public: true }, (req, res, { body, ip }) => {
     ctx.limiters.licence.hit(ip);
     if (ctx.limiters.licence.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');
@@ -56,6 +96,58 @@ function buildRoutes(ctx) {
     db.prepare('INSERT INTO messages (name, email, topic, body, created_at) VALUES (?,?,?,?,?)')
       .run(text(body.name, 100, { required: true, field: 'Name' }), email(body.email), topic, text(body.message, 5000, { required: true, field: 'Message' }), now());
     ctx.limiters.contact.hit(ip);
+    return { status: 201, body: { ok: true } };
+  });
+
+  // ---- website visits (no cookies, no IP address stored: only a random id the browser keeps) ----
+  const BOT = /bot|crawl|spider|slurp|preview|monitor|curl|wget|python|axios|headless|lighthouse|facebookexternalhit/i;
+  const deviceOf = ua => (/ipad|tablet/i.test(ua) ? 'tablet' : /mobi|android|iphone/i.test(ua) ? 'mobile' : 'desktop');
+  const hostOnly = s => { try { return new URL(String(s)).hostname.replace(/^www\./, '').slice(0, 100); } catch (_) { return ''; } };
+  add('POST', '/api/track', { public: true }, (req, res, { body, ip }) => {
+    const ua = String(req.headers['user-agent'] || '');
+    if (!ua || BOT.test(ua)) return { body: { ok: true } };
+    if (ctx.limiters.track.blocked(ip)) return { body: { ok: true } };
+    ctx.limiters.track.hit(ip);
+    const visitor = String(body.visitor || '');
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(visitor)) throw new ApiError(400, 'Bad visitor id');
+    const pagePath = String(body.path || '/').split(/[?#]/)[0].slice(0, 200) || '/';
+    const referrer = hostOnly(body.referrer);
+    const at = now();
+    db.prepare('INSERT INTO visits (at, day, visitor, path, referrer, source, device) VALUES (?,?,?,?,?,?,?)')
+      .run(at, at.slice(0, 10), visitor, pagePath, referrer, String(body.source || '').replace(/[^\w.-]/g, '').slice(0, 40), deviceOf(ua));
+    return { body: { ok: true } };
+  });
+
+  // ---- "Watch demo", "Get early access", contact: every one becomes an opportunity in the admin portal ----
+  const KINDS = ['demo', 'interest', 'signup', 'contact'];
+  const KIND_RANK = { signup: 1, interest: 1, contact: 2, demo: 3 };
+  add('POST', '/api/opportunity', { public: true }, (req, res, { body, ip }) => {
+    if (ctx.limiters.opportunity.blocked(ip)) throw new ApiError(429, 'You have sent several requests already. Please try again later.');
+    if (body.website) return { status: 201, body: { ok: true } };   // hidden field that only bots fill in
+    const kind = KINDS.includes(body.kind) ? body.kind : 'interest';
+    const f = {
+      name: text(body.name, 100, { field: 'Name' }), email: email(body.email), phone: text(body.phone, 40, { field: 'Phone' }),
+      company: text(body.company, 150, { field: 'Company or college' }), role: text(body.role, 100, { field: 'Role' }),
+      message: text(body.message, 2000, { field: 'Message' }), page: text(String(body.page || '').split(/[?#]/)[0], 200, { field: 'Page' }),
+      visitor: /^[A-Za-z0-9-]{8,64}$/.test(String(body.visitor || '')) ? String(body.visitor) : '',
+    };
+    if (kind === 'demo' && !f.name) throw new ApiError(400, 'Please tell us your name');
+    ctx.limiters.opportunity.hit(ip);
+    const stamp = now();
+    const existing = one("SELECT * FROM opportunities WHERE email = ? AND status NOT IN ('won','lost') ORDER BY id DESC LIMIT 1", f.email);
+    if (existing) {
+      // the same person asking again is one opportunity with a longer history, not a second row
+      transaction(db, () => {
+        const upgrade = (KIND_RANK[kind] || 0) > (KIND_RANK[existing.kind] || 0) ? kind : existing.kind;
+        db.prepare('UPDATE opportunities SET kind = ?, name = ?, phone = ?, company = ?, role_interest = ?, updated_at = ? WHERE id = ?')
+          .run(upgrade, existing.name || f.name, existing.phone || f.phone, existing.company || f.company, existing.role_interest || f.role, stamp, existing.id);
+        db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)')
+          .run(existing.id, 'website', `Asked again (${kind}) from ${f.page || 'the website'}${f.message ? ': ' + f.message : ''}`, stamp);
+      });
+      return { status: 201, body: { ok: true } };
+    }
+    db.prepare(`INSERT INTO opportunities (kind, name, email, phone, company, role_interest, message, source_page, visitor, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(kind, f.name, f.email, f.phone, f.company, f.role, f.message, f.page, f.visitor, stamp, stamp);
     return { status: 201, body: { ok: true } };
   });
 
@@ -125,6 +217,13 @@ function buildRoutes(ctx) {
       refundedTotal: all("SELECT currency, SUM(amount_cents) AS cents FROM orders WHERE status = 'refunded' GROUP BY currency"),
       trialConversion: { trialCustomers, converted, percent: trialCustomers ? Math.round((converted / trialCustomers) * 100) : 0 },
       openMessages: one("SELECT COUNT(*) AS n FROM messages WHERE status = 'open'").n,
+      website: {
+        today: one('SELECT COUNT(DISTINCT visitor) AS n FROM visits WHERE day = ?', iso(at).slice(0, 10)).n,
+        visitors7Days: one('SELECT COUNT(DISTINCT visitor) AS n FROM visits WHERE day >= ?', iso(new Date(at.getTime() - 6 * day)).slice(0, 10)).n,
+        visitors30Days: one('SELECT COUNT(DISTINCT visitor) AS n FROM visits WHERE day >= ?', iso(new Date(at.getTime() - 29 * day)).slice(0, 10)).n,
+        newOpportunities: one("SELECT COUNT(*) AS n FROM opportunities WHERE status = 'new'").n,
+        demoRequests30Days: one("SELECT COUNT(*) AS n FROM opportunities WHERE kind = 'demo' AND created_at >= ?", iso(new Date(at.getTime() - 29 * day))).n,
+      },
       signupSeries,
       recentOrders: all('SELECT o.*, c.email AS customer_email FROM orders o JOIN customers c ON c.id = o.customer_id ORDER BY o.id DESC LIMIT 5'),
       recentMessages: all('SELECT id, name, email, topic, status, created_at FROM messages ORDER BY id DESC LIMIT 5'),
@@ -192,7 +291,7 @@ function buildRoutes(ctx) {
   add('GET', '/admin/api/licences/:id', { admin: true }, (req, res, { params }) => {
     const l = one('SELECT l.*, c.email AS customer_email, c.name AS customer_name FROM licences l JOIN customers c ON c.id = l.customer_id WHERE l.id = ?', params.id);
     if (!l) throw new ApiError(404, 'Licence not found');
-    return { licence: present(l), devices: all('SELECT * FROM devices WHERE licence_id = ? ORDER BY last_seen DESC', l.id) };
+    return { licence: present(l), devices: all('SELECT * FROM devices WHERE licence_id = ? ORDER BY last_seen DESC', l.id), aiKeys: aiKeysOf(l.id) };
   });
 
   add('POST', '/admin/api/licences', { admin: true, perm: 'licence.major' }, (req, res, { body, admin }) => {
@@ -231,6 +330,78 @@ function buildRoutes(ctx) {
 
     audit(admin, `licence.${action}`, lic.key, body.days ? `${body.days} days` : '');
     return { licence: present(one('SELECT * FROM licences WHERE id = ?', lic.id)) };
+  });
+
+  // ===================== admin: AI keys (Groq for answers, Gemini for screenshots) =====================
+
+  const aiKeysOf = licenceId => {
+    const assigned = Object.fromEntries(all('SELECT provider, api_key_id FROM licence_api_keys WHERE licence_id = ?', licenceId).map(r => [r.provider, r.api_key_id]));
+    return Object.fromEntries(Object.entries(aikeys.resolveForLicence(db, licenceId)).map(([provider, r]) =>
+      [provider, { source: r.source, assignedId: assigned[provider] || null, assignedDisabled: !!r.assignedDisabled, key: r.row ? aikeys.present(r.row) : null }]));
+  };
+  const providerOf = value => {
+    if (!aikeys.PROVIDERS[value]) throw new ApiError(400, 'Choose a service: groq or gemini');
+    return value;
+  };
+  const keyText = (provider, value) => {
+    const key = String(value || '').trim();
+    if (!aikeys.PROVIDERS[provider].pattern.test(key) || key.length > 300) throw new ApiError(400, `That does not look like a ${aikeys.PROVIDERS[provider].label} key. ${aikeys.PROVIDERS[provider].hint}.`);
+    return key;
+  };
+
+  add('GET', '/admin/api/ai-keys', { admin: true }, () => ({
+    keys: aikeys.listKeys(db),
+    providers: Object.entries(aikeys.PROVIDERS).map(([id, p]) => ({ id, label: p.label, use: p.use })),
+  }));
+
+  add('POST', '/admin/api/ai-keys', { admin: true, perm: 'aikeys.write' }, (req, res, { body, admin }) => {
+    const provider = providerOf(body.provider);
+    const label = text(body.label, 80, { required: true, field: 'Name' });
+    const row = aikeys.addKey(db, ctx.vault, { provider, label, key: keyText(provider, body.key), makeDefault: !!body.makeDefault, by: admin.email });
+    audit(admin, 'aikey.added', `${provider}: ${label}`, '••••' + row.key_last4);
+    return { status: 201, body: { key: aikeys.present(one('SELECT * FROM api_keys WHERE id = ?', row.id)) } };
+  });
+
+  add('PATCH', '/admin/api/ai-keys/:id', { admin: true, perm: 'aikeys.write' }, (req, res, { params, body, admin }) => {
+    const row = one('SELECT * FROM api_keys WHERE id = ?', params.id);
+    if (!row) throw new ApiError(404, 'Key not found');
+    const action = String(body.action || '');
+    if (action === 'default') {
+      if (row.disabled) throw new ApiError(400, 'Turn the key on before making it the default');
+      transaction(db, () => aikeys.setDefault(db, row.id));
+    } else if (action === 'disable') db.prepare('UPDATE api_keys SET disabled = 1, is_default = 0 WHERE id = ?').run(row.id);
+    else if (action === 'enable') db.prepare('UPDATE api_keys SET disabled = 0 WHERE id = ?').run(row.id);
+    else if (action === 'rename') db.prepare('UPDATE api_keys SET label = ? WHERE id = ?').run(text(body.label, 80, { required: true, field: 'Name' }), row.id);
+    else if (action === 'replace') {
+      const key = keyText(row.provider, body.key);
+      db.prepare('UPDATE api_keys SET key_enc = ?, key_last4 = ? WHERE id = ?').run(ctx.vault.encrypt(key), key.slice(-4), row.id);
+    } else throw new ApiError(400, 'Unknown action');
+    audit(admin, `aikey.${action}`, `${row.provider}: ${row.label}`);
+    return { key: aikeys.present(one('SELECT * FROM api_keys WHERE id = ?', row.id)) };
+  });
+
+  // Licences that used this key go back to the service's default.
+  add('DELETE', '/admin/api/ai-keys/:id', { admin: true, perm: 'aikeys.write' }, (req, res, { params, admin }) => {
+    const row = one('SELECT * FROM api_keys WHERE id = ?', params.id);
+    if (!row) throw new ApiError(404, 'Key not found');
+    db.prepare('DELETE FROM api_keys WHERE id = ?').run(row.id);
+    audit(admin, 'aikey.deleted', `${row.provider}: ${row.label}`);
+    return { ok: true };
+  });
+
+  // Give a licence its own key for one service, or apiKeyId null to use the default again.
+  add('POST', '/admin/api/licences/:id/ai-keys', { admin: true, perm: 'aikeys.write' }, (req, res, { params, body, admin }) => {
+    const lic = one('SELECT * FROM licences WHERE id = ?', params.id);
+    if (!lic) throw new ApiError(404, 'Licence not found');
+    const provider = providerOf(body.provider);
+    const apiKeyId = body.apiKeyId === null || body.apiKeyId === '' || body.apiKeyId === undefined ? null : integer(body.apiKeyId, { min: 1, field: 'Key' });
+    if (apiKeyId !== null) {
+      const k = one('SELECT * FROM api_keys WHERE id = ?', apiKeyId);
+      if (!k || k.provider !== provider) throw new ApiError(400, `Choose a ${aikeys.PROVIDERS[provider].label} key`);
+    }
+    aikeys.assign(db, { licenceId: lic.id, provider, apiKeyId });
+    audit(admin, 'licence.aikey', lic.key, `${provider}: ${apiKeyId === null ? 'default' : 'key #' + apiKeyId}`);
+    return { aiKeys: aiKeysOf(lic.id) };
   });
 
   // ===================== admin: orders =====================
@@ -318,6 +489,87 @@ function buildRoutes(ctx) {
     db.prepare('UPDATE messages SET status = ?, note = ? WHERE id = ?').run(status, note, m.id);
     audit(admin, 'message.updated', `#${m.id}`, status);
     return { message: one('SELECT * FROM messages WHERE id = ?', m.id) };
+  });
+
+  // ===================== admin: website visits =====================
+
+  add('GET', '/admin/api/analytics', { admin: true }, (req, res, { query }) => {
+    const days = Math.max(1, Math.min(365, Number(query.get('days')) || 30));
+    const day = 86400000;
+    const dayStr = offset => new Date(Date.now() - offset * day).toISOString().slice(0, 10);
+    const since = dayStr(days - 1);
+    const total = one('SELECT COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE day >= ?', since);
+    const rows = all('SELECT day, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE day >= ? GROUP BY day', since);
+    const byDay = new Map(rows.map(r => [r.day, r]));
+    const series = Array.from({ length: days }, (_, i) => { const d = dayStr(days - 1 - i); const r = byDay.get(d); return { date: d, views: r ? r.views : 0, visitors: r ? r.visitors : 0 }; });
+    const people = d => one('SELECT COUNT(DISTINCT visitor) AS n FROM visits WHERE day >= ?', d).n;
+    const leads = one('SELECT COUNT(*) AS n FROM opportunities WHERE created_at >= ?', since + 'T00:00:00').n;
+    return {
+      days, views: total.views, visitors: total.visitors,
+      today: { views: one('SELECT COUNT(*) AS n FROM visits WHERE day = ?', dayStr(0)).n, visitors: people(dayStr(0)) },
+      last7Visitors: people(dayStr(6)),
+      opportunities: leads, conversionPercent: total.visitors ? Math.round((leads / total.visitors) * 1000) / 10 : 0,
+      series,
+      topPages: all('SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE day >= ? GROUP BY path ORDER BY views DESC LIMIT 12', since),
+      referrers: all("SELECT CASE WHEN referrer = '' THEN '(direct or unknown)' ELSE referrer END AS name, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE day >= ? GROUP BY name ORDER BY visitors DESC LIMIT 10", since),
+      sources: all("SELECT source AS name, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE day >= ? AND source <> '' GROUP BY source ORDER BY visitors DESC LIMIT 10", since),
+      devices: all('SELECT device AS name, COUNT(DISTINCT visitor) AS visitors FROM visits WHERE day >= ? GROUP BY device ORDER BY visitors DESC', since),
+      returning: one('SELECT COUNT(*) AS n FROM (SELECT visitor FROM visits WHERE day >= ? GROUP BY visitor HAVING COUNT(DISTINCT day) > 1)', since).n,
+    };
+  });
+
+  // ===================== admin: opportunities (demo requests and interest) =====================
+
+  const STAGES = ['new', 'contacted', 'qualified', 'won', 'lost'];
+  add('GET', '/admin/api/opportunities', { admin: true }, (req, res, { query }) => {
+    const term = likeTerm(query.get('q'));
+    const status = STAGES.includes(query.get('status')) ? query.get('status') : null;
+    const kind = KINDS.includes(query.get('kind')) ? query.get('kind') : null;
+    const rows = all(`SELECT o.*, (SELECT COUNT(*) FROM opportunity_notes n WHERE n.opportunity_id = o.id) AS note_count FROM opportunities o
+        WHERE (o.email LIKE ? ESCAPE '\\' OR o.name LIKE ? ESCAPE '\\' OR o.company LIKE ? ESCAPE '\\')
+        ${status ? 'AND o.status = ?' : ''} ${kind ? 'AND o.kind = ?' : ''} ORDER BY o.id DESC LIMIT 500`,
+      term, term, term, ...(status ? [status] : []), ...(kind ? [kind] : []));
+    const counts = Object.fromEntries(STAGES.map(s => [s, 0]));
+    for (const r of all('SELECT status, COUNT(*) AS n FROM opportunities GROUP BY status')) counts[r.status] = r.n;
+    return { opportunities: rows, counts };
+  });
+
+  add('GET', '/admin/api/opportunities/:id', { admin: true }, (req, res, { params }) => {
+    const opportunity = one('SELECT * FROM opportunities WHERE id = ?', params.id);
+    if (!opportunity) throw new ApiError(404, 'Opportunity not found');
+    const pages = opportunity.visitor ? all('SELECT at, path, referrer, source FROM visits WHERE visitor = ? ORDER BY id DESC LIMIT 30', opportunity.visitor) : [];
+    return { opportunity, notes: all('SELECT * FROM opportunity_notes WHERE opportunity_id = ? ORDER BY id DESC', opportunity.id), pages };
+  });
+
+  add('PATCH', '/admin/api/opportunities/:id', { admin: true, perm: 'opportunities.write' }, (req, res, { params, body, admin }) => {
+    const o = one('SELECT * FROM opportunities WHERE id = ?', params.id);
+    if (!o) throw new ApiError(404, 'Opportunity not found');
+    const status = body.status === undefined ? o.status : (STAGES.includes(body.status) ? body.status : (() => { throw new ApiError(400, 'Unknown stage'); })());
+    const owner = body.owner === undefined ? o.owner : text(body.owner, 100, { field: 'Owner' });
+    const followUp = body.followUp === undefined ? o.follow_up : text(body.followUp, 10, { field: 'Follow-up date' });
+    if (followUp && !/^\d{4}-\d{2}-\d{2}$/.test(followUp)) throw new ApiError(400, 'Follow-up date must look like 2026-11-30');
+    const value = body.valueCents === undefined ? o.value_cents : integer(body.valueCents, { min: 0, max: 100000000, field: 'Value' });
+    transaction(db, () => {
+      db.prepare('UPDATE opportunities SET status = ?, owner = ?, follow_up = ?, value_cents = ?, updated_at = ? WHERE id = ?').run(status, owner, followUp, value, now(), o.id);
+      const note = body.note === undefined ? '' : text(body.note, 2000, { field: 'Note' });
+      if (note) db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)').run(o.id, admin.email, note, now());
+      if (status !== o.status) db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)').run(o.id, admin.email, `Stage changed: ${o.status} → ${status}`, now());
+    });
+    audit(admin, 'opportunity.updated', `#${o.id} ${o.email}`, status);
+    return { opportunity: one('SELECT * FROM opportunities WHERE id = ?', o.id) };
+  });
+
+  add('POST', '/admin/api/opportunities/:id/customer', { admin: true, perm: 'customers.write' }, (req, res, { params, admin }) => {
+    const o = one('SELECT * FROM opportunities WHERE id = ?', params.id);
+    if (!o) throw new ApiError(404, 'Opportunity not found');
+    let customer = one('SELECT * FROM customers WHERE email = ?', o.email);
+    if (!customer) {
+      const r = db.prepare('INSERT INTO customers (email, name, organisation, country, notes, created_at) VALUES (?,?,?,?,?,?)').run(o.email, o.name, o.company, '', `From a ${o.kind} request on the website`, now());
+      customer = one('SELECT * FROM customers WHERE id = ?', r.lastInsertRowid);
+    }
+    db.prepare('UPDATE opportunities SET customer_id = ?, updated_at = ? WHERE id = ?').run(customer.id, now(), o.id);
+    audit(admin, 'opportunity.customer', `#${o.id}`, o.email);
+    return { customer };
   });
 
   // ===================== admin: audit log and team =====================

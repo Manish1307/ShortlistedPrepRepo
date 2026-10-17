@@ -1,15 +1,17 @@
 {
-  "name": "ShortlistedPrep",
-  "tagline": "Interview preparation with a friendly AI coach",
-  "supportEmail": "support@example.com",
+  "name": "ShortlistPrep",
+  "tagline": "AI interview preparation: practise today, get hired tomorrow",
+  "supportEmail": "support@shortlistprep.com",
   "version": "0.1.0",
   "downloadUrl": "",
   "trialDays": "14",
   "priceAmount": "12",
   "priceCurrency": "$",
   "priceYearly": "99",
-  "company": "Your Company Name",
-  "address": "Your registered business address",
-  "lastUpdated": "10 October 2026",
-  "demoContent": true
+  "company": "ShortlistPrep Technologies Pvt Ltd",
+  "address": "Sector 16B, Noida, Uttar Pradesh 201318, India",
+  "lastUpdated": "16 October 2026",
+  "demoContent": false,
+  "showDemoBar": false,
+  "apiUrl": "https://api.34-61-176-96.sslip.io"
 }

@@ -172,6 +172,33 @@ CREATE TABLE IF NOT EXISTS token_claims (
   status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT NOT NULL DEFAULT '', decided_by TEXT NOT NULL DEFAULT '', decided_at TEXT, created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_token_claims ON token_claims(status, customer_id);
+CREATE TABLE IF NOT EXISTS pricing_plans (
+  id INTEGER PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, tagline TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '',
+  price_paise INTEGER NOT NULL DEFAULT 0, mrp_paise INTEGER NOT NULL DEFAULT 0, duration_days INTEGER NOT NULL DEFAULT 30, billing TEXT NOT NULL DEFAULT 'one_time',
+  features_json TEXT NOT NULL DEFAULT '[]', limits_json TEXT NOT NULL DEFAULT '{}', badge TEXT NOT NULL DEFAULT '', cta TEXT NOT NULL DEFAULT '',
+  active INTEGER NOT NULL DEFAULT 0, featured INTEGER NOT NULL DEFAULT 0, sort INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS pricing_price_history (
+  id INTEGER PRIMARY KEY, plan_id INTEGER NOT NULL REFERENCES pricing_plans(id) ON DELETE CASCADE,
+  old_paise INTEGER NOT NULL, new_paise INTEGER NOT NULL, old_mrp_paise INTEGER NOT NULL DEFAULT 0, new_mrp_paise INTEGER NOT NULL DEFAULT 0,
+  changed_by TEXT NOT NULL DEFAULT '', changed_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS plan_orders (
+  id INTEGER PRIMARY KEY, number TEXT NOT NULL DEFAULT '', customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  plan_id INTEGER, plan_code TEXT NOT NULL DEFAULT '', plan_name TEXT NOT NULL DEFAULT '', snapshot_json TEXT NOT NULL DEFAULT '{}',
+  amount_paise INTEGER NOT NULL, base_paise INTEGER NOT NULL DEFAULT 0, gst_paise INTEGER NOT NULL DEFAULT 0, gst_rate INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'INR',
+  status TEXT NOT NULL DEFAULT 'created', gateway TEXT NOT NULL DEFAULT 'manual', payment_mode TEXT NOT NULL DEFAULT '', gateway_order_id TEXT NOT NULL DEFAULT '',
+  gateway_payment_id TEXT NOT NULL DEFAULT '', reference TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', decided_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, paid_at TEXT, starts_at TEXT, ends_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_plan_orders ON plan_orders(customer_id, status);
+CREATE TABLE IF NOT EXISTS customer_plans (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE, plan_id INTEGER, order_id INTEGER,
+  plan_code TEXT NOT NULL DEFAULT '', plan_name TEXT NOT NULL DEFAULT '', limits_json TEXT NOT NULL DEFAULT '{}',
+  starts_at TEXT NOT NULL, ends_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_customer_plans ON customer_plans(customer_id, status);
 CREATE INDEX IF NOT EXISTS idx_jobs_active ON jobs(active, company_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at);
 CREATE INDEX IF NOT EXISTS idx_career_versions ON career_versions(customer_id);

@@ -13,6 +13,7 @@ const career = require('./career');
 const jobs = require('./jobs');
 const candidates = require('./candidates');
 const aiTokens = require('./tokens');
+const pricing = require('./pricing');
 const { ApiError, text, email, integer, likeTerm } = require('./http');
 
 const TOPICS = ['Support', 'Schools and teams', 'AI-included plan', 'Billing', 'Feedback'];
@@ -80,7 +81,8 @@ function buildRoutes(ctx) {
   career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)
   jobs.addRoutes({ ...ctx, add, audit, one, all });            // AI Job search: live openings from career sites, scored by the AI
   candidates.addRoutes({ ...ctx, add, audit, one, all });      // Candidates: progress, documents and activity in the Career toolkit
-  aiTokens.addRoutes({ ...ctx, add, audit, one, all });          // AI tokens: daily allowance per customer, packs and requests for more
+  aiTokens.addRoutes({ ...ctx, add, audit, one, all });
+  pricing.addRoutes({ ...ctx, add, audit, one, all });          // Pricing: plans master, active plans, payment settings, plan orders          // AI tokens: daily allowance per customer, packs and requests for more
   add('POST', '/api/licence/deactivate', { public: true }, (req, res, { body, ip }) => {
     ctx.limiters.licence.hit(ip);
     if (ctx.limiters.licence.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');

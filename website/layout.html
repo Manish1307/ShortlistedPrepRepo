@@ -5,15 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{title}} · {{name}}</title>
   <meta name="description" content="{{description}}">
+  <link rel="canonical" href="{{canonical}}">
+  <meta name="robots" content="{{robots}}">
+  <meta property="og:type" content="{{ogType}}">
+  <meta property="og:site_name" content="{{name}}">
+  <meta property="og:locale" content="en_IN">
+  <meta property="og:url" content="{{canonical}}">
   <meta property="og:title" content="{{title}} · {{name}}">
   <meta property="og:description" content="{{description}}">
+  <meta property="og:image" content="{{siteUrl}}/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{name}}: from resume to offer letter, with AI">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{title}} · {{name}}">
+  <meta name="twitter:description" content="{{description}}">
+  <meta name="twitter:image" content="{{siteUrl}}/assets/og-image.png">
+  <meta name="theme-color" content="#7d2ae8">
+{{jsonLd}}
   <meta name="api-url" content="{{apiUrl}}">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"></noscript>
   <link rel="stylesheet" href="assets/styles.css?v=2">
-  <link rel="stylesheet" href="assets/home.css?v=5">
+  <link rel="stylesheet" href="assets/home.css?v=7">
   <script>
     // signed in? (the token kept by account.js) — set before the page draws, so the menu never flashes "Sign in"
     (function () {

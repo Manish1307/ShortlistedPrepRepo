@@ -153,3 +153,12 @@ details summary { cursor: pointer; font-weight: 600; margin: 14px 0 8px; }
 .tok-bar i.warn { background: var(--warn); } .tok-bar i.out { background: var(--bad); }
 .tok-left.warn { color: var(--warn); font-weight: 600; } .tok-left.out { color: var(--bad); font-weight: 600; }
 .cand-links { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+
+/* ---------- Pricing ---------- */
+.price-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.price-card { position: relative; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--panel); }
+.price-card.featured { border: 2px solid var(--accent); }
+.price-card ul { margin: 8px 0 0; padding-left: 16px; }
+.price-badge { position: absolute; top: -10px; right: 10px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.price-amount { font-size: 22px; font-weight: 700; margin-top: 6px; }
+.pay-methods { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; font-weight: 400; }

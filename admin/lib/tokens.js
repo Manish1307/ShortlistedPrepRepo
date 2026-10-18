@@ -27,8 +27,20 @@ const settings = db => ({ dailyDefault: setting(db, 'token_daily_default', DEFAU
 function account(db, customerId) {
   return db.prepare('SELECT * FROM token_accounts WHERE customer_id = ?').get(customerId) || { customer_id: customerId, daily_quota: null, daily_until: null, bonus: 0 };
 }
+/** The customer's active plan (Pricing), or null. */
+function planOf(db, customerId) {
+  try {
+    const p = db.prepare("SELECT plan_name, limits_json, ends_at FROM customer_plans WHERE customer_id = ? AND status = 'active' AND ends_at > ? ORDER BY ends_at DESC LIMIT 1").get(customerId, now());
+    if (!p) return null;
+    const limits = JSON.parse(p.limits_json || '{}');
+    return { name: p.plan_name, endsAt: p.ends_at, dailyTokens: Number(limits.dailyTokens) > 0 ? Number(limits.dailyTokens) : null };
+  } catch (_) { return null; }
+}
+/** The day's allowance: a bigger allowance the admin gave > the active plan's > the admin's default. */
 function dailyFor(db, acc, day = tokenDay()) {
-  return acc.daily_quota != null && (!acc.daily_until || acc.daily_until >= day) ? acc.daily_quota : settings(db).dailyDefault;
+  if (acc.daily_quota != null && (!acc.daily_until || acc.daily_until >= day)) return acc.daily_quota;
+  const plan = planOf(db, acc.customer_id);
+  return plan && plan.dailyTokens ? plan.dailyTokens : settings(db).dailyDefault;
 }
 const usedOn = (db, customerId, day) => (db.prepare('SELECT tokens FROM token_usage WHERE customer_id = ? AND day = ?').get(customerId, day) || { tokens: 0 }).tokens;
 
@@ -39,7 +51,9 @@ function status(db, customerId) {
   const left = Math.max(0, daily - used) + bonus;
   const pct = daily ? Math.min(100, Math.round((used / daily) * 100)) : 100;
   const { warnPct } = settings(db);
+  const plan = planOf(db, customerId);
   return { day, used, daily, bonus, left, pct, warnPct, level: left <= 0 ? 'out' : (pct >= warnPct && bonus === 0) ? 'warn' : 'ok',
+    plan: plan ? { name: plan.name, endsAt: plan.endsAt } : null,
     dailyUntil: acc.daily_quota != null && acc.daily_until && acc.daily_until >= day ? acc.daily_until : null };
 }
 

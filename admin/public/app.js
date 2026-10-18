@@ -62,7 +62,7 @@
   const moneyList = list => (list && list.length ? list.map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'USD'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
-    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
+    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
 
   const STATUS_PILL = { default: 'good', approved: 'good', rejected: 'bad', pending: 'warn', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '' };
@@ -142,7 +142,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['candidates', 'Candidates'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['tokens', 'AI tokens'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
+    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['candidates', 'Candidates'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['tokens', 'AI tokens'], ['pricing', 'Pricing'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
     ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
   ];
 
@@ -978,6 +978,153 @@
         ], d.customers, null, 'No AI use yet.')));
   }
 
+  // ---------- Pricing: plans master, active pricing (the website), payment settings, plan orders ----------
+  const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const ORDER_PILL = { created: '', pending: 'warn', paid: 'good', failed: 'bad', cancelled: '', refunded: 'warn' };
+  const LIMIT_LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Prepare plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
+
+  async function pricingPage(el) {
+    const d = await get('/admin/api/pricing');
+    const write = can('pricing.write');
+    const reload = () => pricingPage(el);
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const act = (p, action, msg) => guard(async () => { await post(`/admin/api/pricing/plans/${p.id}/action`, { action }); if (msg) toast(msg); reload(); });
+
+    // --- plan form (master) ---
+    const planForm = existing => {
+      const p = existing || { name: '', code: '', tagline: '', description: '', price: 0, mrp: 0, durationDays: 30, billing: 'one_time', features: [], limits: { dailyTokens: 100000 }, badge: '', cta: '', sort: 100 };
+      const f = h('div', {},
+        h('div', { class: 'row2' }, field('Plan name', { name: 'name', required: true, value: p.name, maxlength: 60, placeholder: 'e.g. Interview Pass' }),
+          field('Code (stays the same; used in orders)', { name: 'code', value: p.code, maxlength: 40, placeholder: 'interview-30' })),
+        field('Tagline (under the name)', { name: 'tagline', value: p.tagline, maxlength: 120 }),
+        h('div', { class: 'row2' }, field('Price (₹, including GST unless set otherwise)', { name: 'price', type: 'number', value: p.price, min: 0 }),
+          field('Strike-through price (₹, 0 = none)', { name: 'mrp', type: 'number', value: p.mrp, min: 0 })),
+        h('div', { class: 'row2' }, field('Length (days)', { name: 'durationDays', type: 'number', value: p.durationDays, min: 1 }),
+          field('Billing', { name: 'billing', type: 'select', value: p.billing, options: [{ value: 'one_time', label: 'One-time pass (does not renew)' }, { value: 'subscription', label: 'Subscription (renews, needs an online gateway)' }] })),
+        field('What is included (one line each)', { name: 'features', type: 'textarea', value: (p.features || []).join('\n'), maxlength: 2000 }),
+        h('h3', { style: 'margin:10px 0 4px' }, 'Limits'),
+        h('p', { class: 'small muted' }, 'AI tokens a day is enforced now (the token meter). The other limits are shown and kept for later enforcement.'),
+        h('div', { class: 'row2' }, ...Object.keys(LIMIT_LABELS).map(k => field(LIMIT_LABELS[k], { name: 'limit_' + k, type: 'number', value: p.limits && p.limits[k] != null ? p.limits[k] : '', min: 0 }))),
+        h('div', { class: 'row2' }, field('Badge (e.g. Most popular)', { name: 'badge', value: p.badge, maxlength: 30 }), field('Button text', { name: 'cta', value: p.cta, maxlength: 40, placeholder: 'Get this plan' })),
+        field('Order on the page (smaller first)', { name: 'sort', type: 'number', value: p.sort, min: 0 }));
+      dialog(existing ? `Edit plan: ${p.name}` : 'New plan', f, [{ label: 'Save plan', kind: 'primary', run: async () => {
+        const v = values(f);
+        const limits = {}; Object.keys(LIMIT_LABELS).forEach(k => { limits[k] = v['limit_' + k]; });
+        const ok = await guard(async () => { await post('/admin/api/pricing/plans', { ...v, id: existing && existing.id, limits, features: v.features }); return true; });
+        if (!ok) return true; toast(existing ? 'Plan saved' : 'Plan added (not shown on the website until you activate it)'); reload();
+      } }]).el.classList.add('wide');
+    };
+
+    // --- active pricing: what the website shows, in order ---
+    const active = d.plans.filter(p => p.active && !p.archived);
+    const preview = h('div', { class: 'price-preview' }, active.length ? active.map(p => h('div', { class: 'price-card' + (p.featured ? ' featured' : '') },
+      p.badge ? h('span', { class: 'price-badge' }, p.badge) : null,
+      h('b', {}, p.name), h('div', { class: 'small muted' }, p.tagline || ''),
+      h('div', { class: 'price-amount' }, p.price ? inr(p.price) : 'Free', p.mrp ? h('s', { class: 'muted small' }, ' ' + inr(p.mrp)) : null,
+        h('span', { class: 'small muted' }, p.price ? ` / ${p.durationDays} days` : '')),
+      h('ul', { class: 'small' }, (p.features || []).slice(0, 4).map(x => h('li', {}, x))))) : h('p', { class: 'muted' }, 'No active plans: the website shows a "plans coming soon" message.'));
+
+    // --- payment settings ---
+    const c = d.config;
+    const pay = h('div', {},
+      h('div', { class: 'row2' },
+        field('Payment gateway', { name: 'provider', type: 'select', value: c.provider, options: d.gateways.map(g => ({ value: g.id, label: g.name + (g.online && !c.adapterReady.includes(g.id) ? ' (not connected yet)' : '') })) }),
+        field('Mode', { name: 'mode', type: 'select', value: c.mode, options: [{ value: 'test', label: 'Test (sandbox)' }, { value: 'live', label: 'Live (real money)' }] })),
+      h('div', { class: 'field' }, 'Payment methods offered', h('div', { class: 'pay-methods' }, d.methods.map(m => h('label', { class: 'check' },
+        Object.assign(h('input', { type: 'checkbox', name: 'm_' + m }), { checked: !!c.methods[m] }), ' ' + c.methodNames[m])))),
+      h('div', { class: 'row2' },
+        field('GST rate (%)', { name: 'gstRate', type: 'select', value: String(c.gstRate), options: [0, 5, 12, 18, 28].map(r => ({ value: String(r), label: r + '%' })) }),
+        field('Prices on the website', { name: 'pricesIncludeGst', type: 'select', value: c.pricesIncludeGst ? 'yes' : 'no', options: [{ value: 'yes', label: 'Include GST (recommended for consumers)' }, { value: 'no', label: 'GST added at checkout' }] })),
+      h('div', { class: 'row2' }, field('GSTIN (optional)', { name: 'gstin', value: c.gstin, maxlength: 15, placeholder: '09ABCDE1234F1Z5' }), field('Order number prefix', { name: 'invoicePrefix', value: c.invoicePrefix, maxlength: 8 })),
+      h('h3', { style: 'margin:12px 0 4px' }, 'UPI and bank transfer (used until a gateway is connected)'),
+      h('div', { class: 'row2' }, field('UPI ID', { name: 'upiId', value: c.manual.upiId, maxlength: 60, placeholder: 'shortlistprep@icici' }), field('Payee name', { name: 'payeeName', value: c.manual.payeeName, maxlength: 80 })),
+      h('div', { class: 'row2' }, field('Bank name', { name: 'bankName', value: c.manual.bankName, maxlength: 80 }), field('Account name', { name: 'accountName', value: c.manual.accountName, maxlength: 80 })),
+      h('div', { class: 'row2' }, field('Account number', { name: 'accountNumber', value: c.manual.accountNumber, maxlength: 30 }), field('IFSC', { name: 'ifsc', value: c.manual.ifsc, maxlength: 11 })),
+      field('Instructions shown to the customer', { name: 'instructions', type: 'textarea', value: c.manual.instructions, maxlength: 500 }),
+      h('h3', { style: 'margin:12px 0 4px' }, 'Gateway keys (for later)'),
+      h('p', { class: 'small muted' }, c.connected ? 'Online payments are connected.' : 'Online payments are not connected yet: save the keys now; the gateway goes live when its connector is added.'),
+      h('div', { class: 'row2' }, field('Key ID / App ID (public)', { name: 'keyId', value: c.keyId, maxlength: 120 }),
+        field(`Key secret ${c.secrets.keySecret ? '(saved ✓, leave empty to keep)' : ''}`, { name: 'keySecret', type: 'password', maxlength: 300 })),
+      field(`Webhook secret ${c.secrets.webhookSecret ? '(saved ✓, leave empty to keep)' : ''}`, { name: 'webhookSecret', type: 'password', maxlength: 300 }, 'Gateway webhook address: https://<your API address>/api/payments/webhook/' + c.provider),
+      write ? h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => guard(async () => {
+        const v = values(pay);
+        const methods = {}; d.methods.forEach(m => { methods[m] = v['m_' + m]; });
+        await post('/admin/api/pricing/config', { provider: v.provider, mode: v.mode, methods, gstRate: Number(v.gstRate), pricesIncludeGst: v.pricesIncludeGst === 'yes', gstin: v.gstin, invoicePrefix: v.invoicePrefix,
+          keyId: v.keyId, keySecret: v.keySecret, webhookSecret: v.webhookSecret,
+          manual: { upiId: v.upiId, payeeName: v.payeeName, bankName: v.bankName, accountName: v.accountName, accountNumber: v.accountNumber, ifsc: v.ifsc, instructions: v.instructions } });
+        toast('Payment settings saved'); reload();
+      }) }, 'Save payment settings')) : null);
+
+    // --- orders ---
+    const decide = (o, action) => {
+      if (action === 'mark-paid') {
+        const f = h('div', {}, h('p', { class: 'small' }, `${o.customer.name || o.customer.email} · ${o.planName} · ${inr(o.amount)} · ${o.number}`),
+          o.reference ? h('p', { class: 'small' }, h('b', {}, 'Customer reference: '), `${(o.paymentMode || '').toUpperCase()} ${o.reference}`) : h('p', { class: 'small muted' }, 'The customer has not entered a reference yet.'),
+          h('p', { class: 'small' }, 'Check the money arrived in your bank or UPI app before confirming. Confirming starts the plan now.'),
+          field('Payment method', { name: 'method', type: 'select', value: o.paymentMode || 'upi', options: d.methods.map(m => ({ value: m, label: c.methodNames[m] })) }),
+          field('Reference (UTR), if different', { name: 'reference', maxlength: 80 }), field('Note (optional)', { name: 'note', maxlength: 300 }));
+        dialog('Confirm payment and start the plan', f, [{ label: 'Payment received: start plan', kind: 'primary', run: async () => {
+          const ok = await guard(async () => { await post(`/admin/api/pricing/orders/${o.id}`, { action, ...values(f) }); return true; }); if (!ok) return true; toast('Plan started'); reload();
+        } }]);
+        return;
+      }
+      const note = prompt(action === 'refund' ? 'Refund note (e.g. refunded by UPI on ...)' : 'Reason (optional)') ;
+      if (note === null) return;
+      guard(async () => { await post(`/admin/api/pricing/orders/${o.id}`, { action, note }); toast('Done'); reload(); });
+    };
+
+    el.replaceChildren(
+      head('Pricing', write ? h('button', { class: 'btn primary', onclick: () => planForm(null) }, '+ New plan') : null),
+      h('p', { class: 'muted' }, 'All prices are in INR. The plans master holds every plan; active plans are shown on the website\'s pricing page in this order. Payments are by UPI or bank transfer, confirmed by you, until an online gateway is connected.'),
+      h('div', { class: 'cards' }, stat('Plans on the website', d.stats.activePlans), stat('Payments to confirm', d.stats.pending),
+        stat('Paid this month', inr(d.stats.paidMonth.t / 100), `${d.stats.paidMonth.n} orders`), stat('Customers on a plan', d.stats.subscribers)),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Active pricing (what the website shows)'), preview,
+        h('p', { class: 'small muted', style: 'margin-top:8px' }, 'Show or hide plans, change the order and the featured plan in the plans master below. Changes appear on the website at once.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, `Payments to confirm and orders (${d.orders.length})`),
+        table([
+          { label: 'Order', render: o => h('span', {}, h('b', {}, o.number), h('br'), h('span', { class: 'small muted' }, dateTime(o.createdAt))) },
+          { label: 'Customer', render: o => h('span', {}, o.customer.name || o.customer.email, h('br'), h('span', { class: 'small muted' }, o.customer.email)) },
+          { label: 'Plan', render: o => o.planName },
+          { label: 'Amount', render: o => h('span', {}, h('b', {}, inr(o.amount)), o.gst ? h('div', { class: 'small muted' }, `incl. GST ${inr(o.gst)}`) : null) },
+          { label: 'Paid by', render: o => (o.reference ? h('span', { class: 'small' }, `${(o.paymentMode || '').toUpperCase()} · ${o.reference}`) : h('span', { class: 'small muted' }, '—')) },
+          { label: 'Status', render: o => h('span', {}, h('span', { class: 'pill ' + (ORDER_PILL[o.status] || '') }, o.status === 'pending' ? 'to confirm' : o.status),
+            o.endsAt && o.status === 'paid' ? h('div', { class: 'small muted' }, 'until ' + date(o.endsAt)) : null, o.note ? h('div', { class: 'small muted' }, o.note) : null) },
+          { label: '', render: o => (write ? h('span', { class: 'tools' },
+            ['created', 'pending', 'failed'].includes(o.status) ? h('button', { class: 'btn sm primary', onclick: e => { e.stopPropagation(); decide(o, 'mark-paid'); } }, 'Confirm payment') : null,
+            ['created', 'pending'].includes(o.status) ? h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); decide(o, 'reject'); } }, 'Not received') : null,
+            o.status === 'paid' ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); decide(o, 'refund'); } }, 'Mark refunded') : null) : '') },
+        ], d.orders, null, 'No orders yet. They appear when a customer buys a plan on the pricing page.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Plans master'),
+        table([
+          { label: '', render: p => (write && !p.archived ? h('span', { class: 'tools' }, h('button', { class: 'btn sm', title: 'Move up', onclick: e => { e.stopPropagation(); act(p, 'up'); } }, '↑'),
+            h('button', { class: 'btn sm', title: 'Move down', onclick: e => { e.stopPropagation(); act(p, 'down'); } }, '↓')) : '') },
+          { label: 'Plan', render: p => h('span', {}, h('b', {}, p.name), p.featured ? h('span', { class: 'pill good', style: 'margin-left:6px' }, '★ featured') : null, h('br'), h('span', { class: 'small muted' }, `${p.code} · ${p.tagline || ''}`)), wrap: true },
+          { label: 'Price', render: p => h('span', {}, h('b', {}, p.price ? inr(p.price) : 'Free'), p.mrp ? h('s', { class: 'small muted' }, ' ' + inr(p.mrp)) : null) },
+          { label: 'Length', render: p => `${p.durationDays} days${p.billing === 'subscription' ? ' · renews' : ''}` },
+          { label: 'AI tokens a day', render: p => (p.limits.dailyTokens ? Number(p.limits.dailyTokens).toLocaleString('en-IN') : 'default') },
+          { label: 'On website', render: p => (p.archived ? pill('archived') : p.active ? pill('on') : pill('off')) },
+          { label: '', render: p => (write ? h('span', { class: 'tools' },
+            h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); planForm(p); } }, 'Edit'),
+            !p.archived ? h('button', { class: 'btn sm' + (p.active ? '' : ' primary'), onclick: e => { e.stopPropagation(); act(p, p.active ? 'deactivate' : 'activate', p.active ? 'Hidden from the website' : 'Shown on the website'); } }, p.active ? 'Hide' : 'Show on website') : null,
+            !p.archived && p.active && !p.featured ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(p, 'feature', 'Featured'); } }, '★ Feature') : null,
+            p.featured ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(p, 'unfeature'); } }, 'Unfeature') : null,
+            p.archived ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(p, 'restore', 'Restored'); } }, 'Restore')
+              : h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Archive "${p.name}"? It is hidden from the website; past orders keep it.`)) act(p, 'archive', 'Archived'); } }, 'Archive')) : '') },
+        ], d.plans, null, 'No plans yet.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Payment settings'), pay),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Price history'),
+        table([
+          { label: 'When', render: x => dateTime(x.at) }, { label: 'Plan', render: x => x.planName },
+          { label: 'Price', render: x => `${inr(x.oldPrice)} → ${inr(x.newPrice)}` },
+          { label: 'Strike-through', render: x => (x.oldMrp || x.newMrp ? `${inr(x.oldMrp)} → ${inr(x.newMrp)}` : '—') }, { label: 'By', render: x => x.by },
+        ], d.history, null, 'No price changes yet.')));
+  }
+
   // ---------- AI Job search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
   async function jobs(el) {
     const d = await get('/admin/api/jobs');
@@ -1108,7 +1255,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, aikeys, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

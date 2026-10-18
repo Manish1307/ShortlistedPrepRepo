@@ -74,7 +74,8 @@ const PERMISSIONS = {
   'profiles.write': ['owner', 'admin', 'support'],  // a customer's topics and resume (what the AI focuses on)
   'accounts.write': ['owner', 'admin'],             // a customer's website login: new password, turn off / on
   'jobs.write': ['owner', 'admin'],                 // AI Job search: the master prompt
-  'tokens.write': ['owner', 'admin'],               // AI tokens: daily allowance, packs, approve requests, grant tokens
+  'tokens.write': ['owner', 'admin'],
+  'pricing.write': ['owner', 'admin'],              // plans and prices, payment settings, confirming payments               // AI tokens: daily allowance, packs, approve requests, grant tokens
   'team.read': ['owner'],
   'team.write': ['owner'],
 };

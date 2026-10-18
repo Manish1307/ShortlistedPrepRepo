@@ -428,3 +428,21 @@ html:not([data-auth="member"]) [data-member] { display: none !important; }
   .gap-mx th:nth-child(4), .gap-mx td:nth-child(4) { display: none; }
 }
 .road li a { color: inherit; text-decoration: none; }
+
+.hd-panel picture { display: block; height: 100%; }
+
+/* ---------- pricing page: plans from Admin → Pricing, and paying ---------- */
+.pr-grid { grid-template-columns: repeat(3, 1fr); align-items: stretch; }
+.pr-grid.pr-n1 { grid-template-columns: minmax(0, 420px); justify-content: center; }
+.pr-grid.pr-n2 { grid-template-columns: repeat(2, minmax(0, 420px)); justify-content: center; }
+.pr-grid.pr-n4 { grid-template-columns: repeat(4, 1fr); }
+.pr-tagline { margin: 2px 0 0; }
+.plan.featured .pr-tagline, .plan.featured .pr-perday { color: #e9ddff; }
+.pr-mrp { font-size: 18px; font-weight: 600; opacity: .6; margin-left: 8px; }
+.pr-perday { margin: 4px 0 0; }
+.pr-current { margin: 0 auto 26px; max-width: 760px; text-align: center; }
+.pr-dialog .stack { display: grid; gap: 12px; }
+.pr-pay { border: 1px solid var(--bd); border-radius: 14px; padding: 12px 14px; }
+.pr-ref { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 8px 0; }
+@media (max-width: 1060px) { .pr-grid, .pr-grid.pr-n4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 680px) { .pr-grid, .pr-grid.pr-n2, .pr-grid.pr-n4 { grid-template-columns: 1fr; } .pr-ref { grid-template-columns: 1fr; } }

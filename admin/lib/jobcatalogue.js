@@ -41,6 +41,35 @@ const CATALOGUE = [
   ['Target', 'https://target.wd5.myworkdayjobs.com/targetcareers'], ['Wells Fargo', 'https://wellsfargo.wd1.myworkdayjobs.com/WellsFargoJobs'],
   ['Citi', 'https://citi.wd5.myworkdayjobs.com/2'], ['Baker Hughes', 'https://bakerhughes.wd5.myworkdayjobs.com/BakerHughes'],
   ['Autodesk', 'https://autodesk.wd1.myworkdayjobs.com/Ext'], ['Workday', 'https://workday.wd5.myworkdayjobs.com/Workday'],
-].map(([name, url]) => ({ name, url }));
+].map(([name, url]) => ({ name, url })).concat([
+  // Indian IT services firms and big employers in India (their sites list jobs worldwide: kept to India)
+  { name: 'Accenture', url: 'https://accenture.wd103.myworkdayjobs.com/accenturecareers', country: 'India' },
+  { name: 'HCLTech', url: 'https://careers.hcltech.com', board: { provider: 'sfunified', board: 'careers.hcltech.com', facets: { custCountryRegion: ['India'] } } },
+  { name: 'Wipro', url: 'https://careers.wipro.com', board: { provider: 'sfunified', board: 'careers.wipro.com', location: 'India' } },
+  { name: 'Capgemini', url: 'https://careers.capgemini.com' },
+  { name: 'EY', url: 'https://careers.ey.com/ey', board: { provider: 'sfclassic', board: 'careers.ey.com/ey', location: 'India' } },
+  { name: 'LTIMindtree', url: 'https://careers.ltm.com', board: { provider: 'sfclassic', board: 'careers.ltm.com' } },
+  { name: 'KPMG India', url: 'https://ejgk.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX' },
+  { name: 'Hexaware', url: 'https://fa-etqo-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX' },
+  { name: 'Zensar', url: 'https://fa-etvl-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX' },
+  { name: 'Amazon', url: 'https://www.amazon.jobs' },
+]);
 
-module.exports = { CATALOGUE };
+/**
+ * Big employers whose careers sites cannot be read automatically: candidates get a link to search there, and on
+ * Naukri and LinkedIn, next to the results. {name, url} with {q} for the role and {l} for the city or country.
+ */
+const SEARCH_ELSEWHERE = [
+  { name: 'TCS', url: 'https://ibegin.tcs.com/iBegin/jobs/search' },
+  { name: 'Infosys', url: 'https://career.infosys.com/joblist' },
+  { name: 'Cognizant', url: 'https://careers.cognizant.com/global-en/jobs/' },
+  { name: 'Tech Mahindra', url: 'https://careers.techmahindra.com/' },
+  { name: 'Deloitte India', url: 'https://southasiacareers.deloitte.com/' },
+  { name: 'Microsoft', url: 'https://jobs.careers.microsoft.com/global/en/search?q={q}&lc={l}' },
+  { name: 'Google', url: 'https://www.google.com/about/careers/applications/jobs/results/?q={q}&location={l}' },
+  { name: 'IBM', url: 'https://www.ibm.com/careers/search' },
+  { name: 'Persistent', url: 'https://careers.persistent.com/' },
+  { name: 'Mphasis', url: 'https://careers.mphasis.com/home.html' },
+];
+
+module.exports = { CATALOGUE, SEARCH_ELSEWHERE };

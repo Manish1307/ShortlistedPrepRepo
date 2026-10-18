@@ -46,13 +46,48 @@ async function fakeBoards() {
       if (u.pathname === '/wd/wday/cxs/woodgrove/External/jobs') {
         const body = JSON.parse(raw || '{}');
         const all = Array.from({ length: 25 }, (_, i) => ({ title: 'Cloud Engineer ' + i, externalPath: '/job/Pune/Cloud_' + i, locationsText: 'Pune, India', postedOn: i === 0 ? 'Posted Today' : i === 1 ? 'Posted Yesterday' : 'Posted 30+ Days Ago', bulletFields: ['R' + i] }));
-        return send({ total: body.offset === 0 ? 25 : 0, jobPostings: all.slice(body.offset, body.offset + body.limit) });
+        const india = body.appliedFacets && body.appliedFacets.locationCountry && body.appliedFacets.locationCountry[0] === 'IN1';
+        const list = india ? all.slice(0, 3) : all;
+        return send({ total: body.offset === 0 ? list.length : 0, jobPostings: list.slice(body.offset, body.offset + body.limit),
+          facets: [{ facetParameter: 'locationMainGroup', values: [{ descriptor: 'Country', facetParameter: 'locationCountry', values: [{ descriptor: 'India', id: 'IN1', count: 3 }] }] }] });
+      }
+      if (u.pathname === '/sf/careers.example.com/services/recruiting/v1/jobs') {
+        const body = JSON.parse(raw || '{}');
+        const all = Array.from({ length: 23 }, (_, i) => ({ response: { id: String(500 + i), unifiedStandardTitle: 'Data Analyst ' + i, urlTitle: 'Data-Analyst-' + i,
+          unifiedStandardStart: '10/1' + (i % 9) + '/26', custprimecity: 'Noida', custCountryRegion: ['India'] } }));
+        const list = body.facetFilters && body.facetFilters.custCountryRegion ? all : [];
+        return send({ totalJobs: list.length, jobSearchResult: list.slice(body.pageNumber * 10, body.pageNumber * 10 + 10) });
+      }
+      if (u.pathname === '/sfc/careers.example.com/ey/search/') {
+        const start = Number(u.searchParams.get('startrow'));
+        const rows = Array.from({ length: 30 }, (_, i) => i).slice(start, start + 25).map(i =>
+          `<tr class="data-row"><td><span class="jobTitle"><a href="/ey/job/Pune-Consultant-${i}/90${i}/" class="jobTitle-link">Consultant &amp; Analyst ${i}</a></span>
+           <a class="jobTitle-link" href="/ey/job/Pune-Consultant-${i}/90${i}/">Consultant &amp; Analyst ${i}</a></td>
+           <td><span class="jobLocation"> Pune, MH, IN, 411001 <small>+2 more&hellip;</small></span></td><td><span class="jobDate">Oct 1${i % 9}, 2026</span></td></tr>`).join('');
+        res.setHeader('Content-Type', 'text/html');
+        return res.end(`<p>Results <b>${start + 1} – ${Math.min(start + 25, 30)}</b> of <b>30</b></p><table>${rows}</table>`);
+      }
+      if (u.pathname === '/orc/fa-x.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions') {
+        const offset = Number((/offset=(\d+)/.exec(u.search) || [])[1]);
+        const all = Array.from({ length: 30 }, (_, i) => ({ Id: 'R' + i, Title: 'Tax Consultant ' + i, PostedDate: '2026-10-1' + (i % 9), PrimaryLocation: 'Gurugram, Haryana, India', PrimaryLocationCountry: 'IN' }));
+        return send({ items: [{ TotalJobsCount: 30, requisitionList: all.slice(offset, offset + 25) }] });
+      }
+      if (u.pathname === '/amazon/en/search.json') {
+        const offset = Number(u.searchParams.get('offset'));
+        const all = Array.from({ length: 120 }, (_, i) => ({ id_icims: String(1000 + i), title: 'SDE ' + i, location: 'IN, KA, Bengaluru', posted_date: 'October 16, 2026', job_path: '/en/jobs/' + (1000 + i) + '/sde', description_short: 'Build things' }));
+        return send({ hits: 120, jobs: u.searchParams.get('country') === 'IND' ? all.slice(offset, offset + 100) : [] });
+      }
+      if (u.pathname === '/cg/api/job-search') {
+        const page = Number(u.searchParams.get('page'));
+        const all = Array.from({ length: 130 }, (_, i) => ({ id: 'C' + i, title: 'SAP Consultant ' + i, location: 'Pune, Mumbai', updated_at: '2026-10-18T10:00:00Z',
+          apply_job_url: 'https://careers.capgemini.com/job/Pune-SAP/' + i + '/?feedId=1&utm_source=CareerSite&tcsource=apply', description_stripped: 'SAP FICO' }));
+        return send({ total: 130, data: all.slice((page - 1) * 100, page * 100) });
       }
       res.statusCode = 404; res.end('{}');
     });
   });
   const base = await listen(server);
-  return { state, base, sourceBase: { greenhouse: base + '/gh', lever: base + '/lever', smartrecruiters: base + '/sr', ashby: base + '/ashby', workday: base + '/wd' }, close: () => new Promise(r => server.close(r)) };
+  return { state, base, sourceBase: { greenhouse: base + '/gh', lever: base + '/lever', smartrecruiters: base + '/sr', ashby: base + '/ashby', workday: base + '/wd', sfunified: base + '/sf', sfclassic: base + '/sfc', oraclehcm: base + '/orc', amazon: base + '/amazon', capgemini: base + '/cg' }, close: () => new Promise(r => server.close(r)) };
 }
 
 /** Fake Gemini: the analysis step returns a profile; the scoring step scores every job id it is shown, plus one made-up id that must be ignored. */
@@ -152,6 +187,9 @@ test('careers URLs are recognised for each job board', () => {
   assert.deepEqual(sources.parseBoardUrl('https://careers.smartrecruiters.com/Northwind'), { provider: 'smartrecruiters', board: 'Northwind' });
   assert.deepEqual(sources.parseBoardUrl('https://jobs.ashbyhq.com/tailspin'), { provider: 'ashby', board: 'tailspin' });
   assert.deepEqual(sources.parseBoardUrl('https://woodgrove.wd5.myworkdayjobs.com/en-US/External'), { provider: 'workday', board: 'woodgrove/External', tenant: 'woodgrove', wd: 'wd5', site: 'External' });
+  assert.deepEqual(sources.parseBoardUrl('https://ejgk.fa.em2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/jobs'), { provider: 'oraclehcm', board: 'ejgk.fa.em2.oraclecloud.com/CX' });
+  assert.deepEqual(sources.parseBoardUrl('https://www.amazon.jobs/en/search'), { provider: 'amazon', board: 'IND' });
+  assert.deepEqual(sources.parseBoardUrl('https://careers.capgemini.com/job/x'), { provider: 'capgemini', board: 'in-en' });
   assert.equal(sources.parseBoardUrl('https://www.linkedin.com/jobs'), null);
   assert.equal(sources.parseBoardUrl('not a url'), null);
 });
@@ -364,4 +402,37 @@ test('Prepare for this job: gaps to a full fit with search links, made once and 
     assert.ok(remade.json.prep.matrix);
     assert.equal(remade.json.usage.used, used + 1);
   });
+});
+
+test('Indian employers: SuccessFactors (new and classic), Oracle Recruiting Cloud, Amazon, Capgemini, and a Workday country filter', async () => {
+  const boards = await fakeBoards();
+  try {
+    const opts = { base: boards.sourceBase };
+    const hcl = await sources.fetchJobs({ provider: 'sfunified', board: 'careers.example.com', facets: { custCountryRegion: ['India'] } }, opts);
+    assert.equal(hcl.length, 23);                                                                     // three pages of 10
+    assert.deepEqual([hcl[0].title, hcl[0].location, hcl[0].country, hcl[0].postedAt.slice(0, 10)], ['Data Analyst 0', 'Noida', 'India', '2026-10-10']);
+    assert.equal(hcl[0].url, 'https://careers.example.com/job/Data-Analyst-0/500-en_US');
+    const ey = await sources.fetchJobs({ provider: 'sfclassic', board: 'careers.example.com/ey', location: 'India' }, opts);
+    assert.equal(ey.length, 30);                                                                      // two pages, each job listed once
+    assert.deepEqual([ey[0].title, ey[0].location, ey[0].country], ['Consultant & Analyst 0', 'Pune, MH, IN', 'India']);
+    assert.equal(ey[0].url, 'https://careers.example.com/ey/job/Pune-Consultant-0/900/');
+    const kpmg = await sources.fetchJobs({ provider: 'oraclehcm', board: 'fa-x.oraclecloud.com/CX' }, opts);
+    assert.equal(kpmg.length, 30);
+    assert.deepEqual([kpmg[0].country, kpmg[0].url], ['India', 'https://fa-x.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/R0']);
+    const amazon = await sources.fetchJobs({ provider: 'amazon', board: 'IND' }, opts);
+    assert.deepEqual([amazon.length, amazon[0].country, amazon[0].url], [120, 'India', 'https://www.amazon.jobs/en/jobs/1000/sde']);
+    const cg = await sources.fetchJobs({ provider: 'capgemini', board: 'in-en' }, opts);
+    assert.equal(cg.length, 130);
+    assert.deepEqual([cg[0].country, cg[0].url], ['India', 'https://careers.capgemini.com/job/Pune-SAP/0/']);   // tracking parameters removed
+    const acn = await sources.fetchJobs({ provider: 'workday', board: 'woodgrove/External', wd: 'wd5', country: 'India' }, opts);
+    assert.deepEqual([acn.length, acn[0].country], [3, 'India']);                                    // the site's own India filter
+  } finally { await boards.close(); }
+});
+
+test('the built-in list includes Indian IT employers, and links to search the ones that cannot be read', () => {
+  const { CATALOGUE, SEARCH_ELSEWHERE } = require('../admin/lib/jobcatalogue');
+  const names = CATALOGUE.map(c => c.name);
+  for (const n of ['Accenture', 'HCLTech', 'Wipro', 'Capgemini', 'EY', 'KPMG India', 'Amazon']) assert.ok(names.includes(n), n);
+  for (const c of CATALOGUE) assert.ok(c.board || sources.parseBoardUrl(c.url), c.name + ' has a readable board');
+  assert.ok(SEARCH_ELSEWHERE.some(c => c.name === 'TCS') && SEARCH_ELSEWHERE.every(c => c.url.startsWith('https://')));
 });

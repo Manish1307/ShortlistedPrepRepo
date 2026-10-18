@@ -391,3 +391,12 @@
 .pp-gap.flash { animation: pp-flash 2.6s ease; }
 @keyframes pp-flash { 0%, 60% { box-shadow: 0 0 0 3px #7d2ae8; background: #f6f0ff; } 100% { box-shadow: none; background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .pp-gap.flash { animation: none; outline: 3px solid #7d2ae8; } }
+
+/* ---------- the same jobs on other sites ---------- */
+.je-links { font-size: 12px; color: var(--muted); white-space: nowrap; text-align: center; }
+.je-links a { color: var(--purple); font-weight: 600; }
+.je-box { margin-top: 20px; border: 1px solid var(--bd); background: #fff; border-radius: 16px; padding: 14px 16px; }
+.je-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.je-row b { min-width: 180px; color: var(--ink); font-size: 14px; }
+.je-firms { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { .je-links { text-align: left; } .je-row b { min-width: 0; width: 100%; } }

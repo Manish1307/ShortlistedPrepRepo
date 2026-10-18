@@ -542,6 +542,39 @@
   }
   function fmt(n) { return Math.round(n * 10) / 10 % 1 ? (Math.round(n * 10) / 10).toFixed(1) : String(Math.round(n)); }
 
+  // ---------- other job sites: searches on Naukri, LinkedIn, Indeed and big employers' own careers sites ----------
+  var ELSEWHERE = [];   // big employers we cannot read automatically (from the server)
+  function slug(t) { return String(t || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  function naukriUrl(q, l) { return 'https://www.naukri.com/' + (slug(q) || 'it') + '-jobs' + (l ? '-in-' + slug(l) : ''); }
+  function linkedinUrl(q, l) { return 'https://www.linkedin.com/jobs/search/?keywords=' + encodeURIComponent(q || '') + '&location=' + encodeURIComponent(l || 'India'); }
+  function indeedUrl(q, l) { return 'https://in.indeed.com/jobs?q=' + encodeURIComponent(q || '') + '&l=' + encodeURIComponent(l || ''); }
+  function fill(url, q, l) { return url.replace('{q}', encodeURIComponent(q || '')).replace('{l}', encodeURIComponent(l || '')); }
+  /** "Same job elsewhere" links for one job: Naukri and LinkedIn searches for its title at that company. */
+  function jobElsewhere(j) {
+    var city = String(j.location || '').split(/[,;|]/)[0].trim();
+    var q = j.title + ' ' + j.company;
+    return h('div', { class: 'je-links' }, h('span', {}, 'Also on: '),
+      h('a', { href: naukriUrl(j.title, city), target: '_blank', rel: 'noopener noreferrer', title: 'Search Naukri for this role' }, 'Naukri'), ' · ',
+      h('a', { href: linkedinUrl(q, city || j.country), target: '_blank', rel: 'noopener noreferrer', title: 'Search LinkedIn for this job' }, 'LinkedIn'));
+  }
+  /** Under the results: more places to search for the same roles. */
+  function searchElsewhere(params, profile) {
+    var roles = [params.role].concat(profile.targetRoles || []).filter(Boolean).slice(0, 3);
+    var where = params.city || params.country || 'India';
+    if (!roles.length) return null;
+    return h('div', { class: 'je-box' },
+      h('div', { class: 'ac-subhead' }, '🔎 Search other job sites too'),
+      h('p', { class: 'ac-muted js-small' }, 'More openings for your best-fit roles on job portals and at big employers whose careers sites we cannot read automatically. These open a search on their site.'),
+      roles.map(function (r) {
+        return h('div', { class: 'je-row' }, h('b', {}, r),
+          h('a', { class: 'pp-link', href: naukriUrl(r, params.city), target: '_blank', rel: 'noopener noreferrer' }, 'Naukri'),
+          h('a', { class: 'pp-link', href: linkedinUrl(r, where), target: '_blank', rel: 'noopener noreferrer' }, 'LinkedIn'),
+          h('a', { class: 'pp-link', href: indeedUrl(r, params.city || params.country), target: '_blank', rel: 'noopener noreferrer' }, 'Indeed'));
+      }),
+      ELSEWHERE.length ? h('div', { class: 'je-firms' }, h('span', { class: 'ac-muted js-small' }, 'Careers sites of: '),
+        ELSEWHERE.map(function (c) { return h('a', { class: 'pp-link', href: fill(c.url, roles[0], where), target: '_blank', rel: 'noopener noreferrer' }, c.name + ' ↗'); })) : null);
+  }
+
   /** Under each job: its Skill Gap Matrix (from the search), folded until opened. */
   function gapMatrixRow(j, cols, openPrep) {
     var m = j.matrix;
@@ -587,7 +620,7 @@
           h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
             j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
           withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
-          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle)), gapMatrixRow(j, head.length, openPrep)];
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle, jobElsewhere(j))), gapMatrixRow(j, head.length, openPrep)];
       }))));
   }
 
@@ -619,6 +652,7 @@
         n += list.length;
         return block;
       }),
+      searchElsewhere(s.params, p),
       p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),
         h('ol', { class: 'cr-list' }, p.resumeFixes.map(function (f) { return h('li', {}, f); }))) : null,
       notes.length ? h('ul', { class: 'js-notes' }, notes.map(function (x) { return h('li', {}, x); })) : null,
@@ -663,6 +697,7 @@
       clearTimeout(pollTimer);
       if (gen !== cardGen) return;
       call('GET', '/api/career/jobsearch/' + id).then(function (d) {
+        if (d.elsewhere) ELSEWHERE = d.elsewhere;
         var s = d.search;
         if (s.status === 'running') { setRunning(true); showStatus(s.progress || 'Searching…', 'busy'); pollTimer = setTimeout(function () { poll(id); }, 2500); return; }
         setRunning(false);
@@ -683,6 +718,7 @@
 
     function loadHistory() {
       return call('GET', '/api/career/jobsearch').then(function (d) {
+        if (d.elsewhere) ELSEWHERE = d.elsewhere;
         searches = d.searches;
         if (d.builtInCompanies) hint.textContent = 'Leave "Companies" empty to search ' + d.builtInCompanies + ' well-known companies hiring in India and worldwide.';
         var past = searches.filter(function (s) { return s.status !== 'running'; });

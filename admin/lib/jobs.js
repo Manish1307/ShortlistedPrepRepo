@@ -13,7 +13,7 @@ const { now, transaction } = require('./db');
 const { signedInCustomer } = require('./accounts');
 const { completeJson } = require('./careerai');
 const sources = require('./jobsources');
-const { CATALOGUE } = require('./jobcatalogue');
+const { CATALOGUE, SEARCH_ELSEWHERE } = require('./jobcatalogue');
 const { logActivity } = require('./activity');
 const jobprep = require('./jobprep');
 const aiTokens = require('./tokens');
@@ -89,7 +89,7 @@ async function syncCompany(db, company, opts = {}, list = null) {
   const stamp = now();
   try {
     const extra = parse(company.extra) || {};
-    if (!list) list = await sources.fetchJobs({ provider: company.provider, board: company.board, wd: extra.wd, defaultCountry: company.default_country }, opts);
+    if (!list) list = await sources.fetchJobs({ ...extra, provider: company.provider, board: company.board, defaultCountry: company.default_country }, opts);
     transaction(db, () => {
       const upsert = db.prepare(`INSERT INTO jobs (company_id, external_id, title, location, country, department, employment_type, posted_at, url, description, active, first_seen, last_seen)
         VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?)
@@ -157,6 +157,11 @@ function scheduleSync(db) {
 
 // ===================== companies typed by the candidate → career sites =====================
 
+/** The settings a board needs besides provider/board, kept in job_companies.extra: Workday's wd, a country or location filter. */
+const boardExtra = b => Object.fromEntries(['wd', 'country', 'location', 'facets'].filter(k => b[k] != null && b[k] !== '').map(k => [k, b[k]]));
+/** A built-in company's board: given directly (SuccessFactors sites have no recognisable address) or read from its URL. */
+const catalogueBoard = c => ({ ...(c.board || sources.parseBoardUrl(c.url)), ...(c.country ? { country: c.country } : {}) });
+
 const CAREERS_URL = { greenhouse: b => `https://boards.greenhouse.io/${b}`, lever: b => `https://jobs.lever.co/${b}`, ashby: b => `https://jobs.ashbyhq.com/${b}`, smartrecruiters: b => `https://careers.smartrecruiters.com/${b}` };
 
 /** "Infosys, https://jobs.lever.co/acme\nTCS" → up to MAX_COMPANIES distinct entries. */
@@ -196,8 +201,9 @@ function addRoutes(ctx) {
   function boardRow(name, board, url) {
     const stamp = now();
     db.prepare(`INSERT INTO job_companies (name, careers_url, provider, board, extra, created_at, last_used) VALUES (?,?,?,?,?,?,?)
-                ON CONFLICT (provider, board) DO UPDATE SET last_used = excluded.last_used`)
-      .run(name, url, board.provider, board.board, JSON.stringify(board.wd ? { wd: board.wd } : {}), stamp, stamp);
+                ON CONFLICT (provider, board) DO UPDATE SET last_used = excluded.last_used,
+                  extra = CASE WHEN excluded.extra <> '{}' THEN excluded.extra ELSE job_companies.extra END`)   // keep a built-in country filter
+      .run(name, url, board.provider, board.board, JSON.stringify(boardExtra(board)), stamp, stamp);
     return one('SELECT * FROM job_companies WHERE provider = ? AND board = ?', board.provider, board.board);
   }
 
@@ -210,7 +216,7 @@ function addRoutes(ctx) {
     }
     const key = norm(entry);
     const known = catalogue.find(c => norm(c.name) === key);
-    if (known) return { name: entry, row: boardRow(known.name, sources.parseBoardUrl(known.url), known.url) };
+    if (known) return { name: entry, row: boardRow(known.name, catalogueBoard(known), known.url) };
     const cached = all('SELECT * FROM job_companies').find(c => norm(c.name) === key && !c.last_error && c.job_count > 0);
     if (cached) return { name: entry, row: boardRow(cached.name, { provider: cached.provider, board: cached.board, ...(parse(cached.extra) || {}) }, cached.careers_url) };
     // try the name as a board on each system; the first that lists jobs wins
@@ -257,7 +263,7 @@ function addRoutes(ctx) {
       const typed = companyList(p.companies);
       step(typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : 'Getting ready to search…');
       const resolved = typed.length ? await Promise.all(typed.map(resolve))
-        : catalogue.map(c => ({ name: c.name, row: boardRow(c.name, sources.parseBoardUrl(c.url), c.url), builtIn: true }));
+        : catalogue.map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url), builtIn: true }));
       const rows = resolved.filter(r => r.row).map(r => r.row);
       if (!rows.length) throw new ApiError(400, 'None of those companies could be found. Check the names, or paste the link of their careers page.');
       const { loading } = await gather(db, rows, fetchOpts, (done, total) => step(`Reading live openings from career sites: ${done} of ${total}…`), budget);
@@ -405,14 +411,14 @@ function addRoutes(ctx) {
 
   add('GET', '/api/career/jobsearch', { public: true }, req => {
     const c = me(req);
-    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length };
+    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length, elsewhere: SEARCH_ELSEWHERE };
   });
 
   add('GET', '/api/career/jobsearch/:id', { public: true }, (req, res, { params }) => {
     const c = me(req);
     const row = searchRow(params.id, c.id);
     if (!row) throw new ApiError(404, 'Search not found');
-    return { search: presentSearch(row, true), usage: require('./career').usage(db, c.id) };
+    return { search: presentSearch(row, true), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
   });
 
   // "Prepare for this job": the skill gaps to a full fit, learning links, revision topics and interview questions.

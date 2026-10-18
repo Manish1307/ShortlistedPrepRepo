@@ -205,9 +205,14 @@
     if (!u) return;
     state.usage = u;
     var el = document.getElementById('cr-usage');
+    var t = u.tokens;
+    if (!t) return;
     el.hidden = false;
-    el.textContent = 'AI actions left today: ' + Math.max(0, u.limit - u.used) + ' of ' + u.limit;
+    el.className = 'ac-badge plain cr-tokens ' + t.level;
+    el.textContent = '⚡ AI tokens left today: ' + shortTokens(t.left) + (t.bonus ? ' (incl. ' + shortTokens(t.bonus) + ' extra)' : ' of ' + shortTokens(t.daily));
+    if (window.spTokens) window.spTokens.update(t);   // the meter at the bottom of the page (site.js)
   }
+  function shortTokens(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? Math.round(n / 100) / 10 + 'k' : String(n); }
   function load() {
     return call('GET', '/api/career').then(function (d) { state = d; render(); setUsage(d.usage); })
       .catch(function (e) { content.replaceChildren(); showError(e.message); });
@@ -485,6 +490,7 @@
   var MATRIX_STATUS = { match: ['✓', 'Match', 'good'], partial: ['◐', 'Partial', 'warn'], missing: ['✕', 'Missing', 'bad'] };
   function matrixView(m, fit) {
     var missingTotal = m.rows.reduce(function (n, r) { return n + r.missing; }, 0);
+    var showEv = m.rows.some(function (r) { return r.evidence; });   // the quick matrix from the search has no evidence
     return h('div', {},
       h('div', { class: 'mx-summary' },
         h('span', { class: 'mx-chip good' }, '✓ ' + m.counts.match + ' match'),
@@ -492,27 +498,38 @@
         h('span', { class: 'mx-chip bad' }, '✕ ' + m.counts.missing + ' missing'),
         h('span', { class: 'mx-score' }, 'Weighted skill score ', h('b', {}, m.score + '/100'))),
       h('div', { class: 'mx-scroll' }, h('table', { class: 'mx-table' },
-        h('thead', {}, h('tr', {}, ['Required for this job', 'Weight', 'You', 'Evidence in your resume', 'Score', 'Gap'].map(function (t) { return h('th', {}, t); }))),
+        h('thead', {}, h('tr', {}, ['Required for this job', 'Weight', 'You'].concat(showEv ? ['Evidence in your resume'] : []).concat(['Score', 'Gap']).map(function (t) { return h('th', {}, t); }))),
         h('tbody', {}, m.rows.map(function (r) {
           var s = MATRIX_STATUS[r.status];
           return h('tr', { class: 'mx-' + r.status },
             h('td', { 'data-label': 'Required' }, h('b', {}, r.skill)),
             h('td', { 'data-label': 'Weight', class: 'mx-num' }, r.weight + '%'),
             h('td', { 'data-label': 'You' }, h('span', { class: 'mx-status ' + s[2] }, s[0] + ' ' + s[1])),
-            h('td', { 'data-label': 'Evidence', class: 'mx-ev' }, r.evidence || (r.status === 'missing' ? 'Not in your resume' : '—')),
+            showEv ? h('td', { 'data-label': 'Evidence', class: 'mx-ev' }, r.evidence || (r.status === 'missing' ? 'Not in your resume' : '—')) : null,
             h('td', { 'data-label': 'Score', class: 'mx-num' },
               h('div', { class: 'mx-bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + (r.weight ? r.earned / r.weight * 100 : 0) + '%' })),
               h('span', {}, fmt(r.earned) + ' / ' + r.weight)),
             h('td', { 'data-label': 'Gap', class: 'mx-num mx-gap' }, r.missing ? '−' + fmt(r.missing) : '—'));
         })),
         h('tfoot', {}, h('tr', {},
-          h('td', {}, h('b', {}, 'Total')), h('td', { class: 'mx-num' }, h('b', {}, '100%')), h('td'), h('td'),
+          h('td', {}, h('b', {}, 'Total')), h('td', { class: 'mx-num' }, h('b', {}, '100%')), h('td'), showEv ? h('td') : null,
           h('td', { class: 'mx-num' }, h('b', {}, m.score + ' / 100')), h('td', { class: 'mx-num mx-gap' }, h('b', {}, '−' + fmt(missingTotal))))))),
       h('p', { class: 'ac-muted pp-intro mx-note' }, 'Weight = how much each requirement matters for this job (all add up to 100). A match earns the full weight, partial half, missing none. ' +
         'Your overall fit (' + fit + ') also counts experience level and location.'));
   }
   function fmt(n) { return Math.round(n * 10) / 10 % 1 ? (Math.round(n * 10) / 10).toFixed(1) : String(Math.round(n)); }
 
+  /** Under each job: its Skill Gap Matrix (from the search), folded until opened. */
+  function gapMatrixRow(j, cols) {
+    var m = j.matrix;
+    if (!m || !m.rows || !m.rows.length) return null;
+    return h('tr', { class: 'gm-row' }, h('td', { colspan: String(cols), class: 'gm-cell' },
+      h('details', { class: 'gm' },
+        h('summary', {}, h('span', { class: 'gm-title' }, '📊 Skill Gap Matrix'),
+          h('span', { class: 'mx-chip good' }, '✓ ' + m.counts.match), h('span', { class: 'mx-chip warn' }, '◐ ' + m.counts.partial), h('span', { class: 'mx-chip bad' }, '✕ ' + m.counts.missing),
+          h('span', { class: 'gm-score' }, 'Weighted skill score ', h('b', {}, m.score + '/100'))),
+        matrixView(m, j.score))));
+  }
   function groupTable(list, withResume, startAt, searchId) {
     var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);
     return h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table js-table' },
@@ -524,11 +541,12 @@
           var row = toggle.closest('tr');
           if (prep && prep.row.parentNode) { prep.row.remove(); toggle.setAttribute('aria-expanded', 'false'); return; }
           prep = prep || prepRow(searchId, j, head.length);
-          row.parentNode.insertBefore(prep.row, row.nextSibling);
+          var after = row.nextSibling && row.nextSibling.classList.contains('gm-row') ? row.nextSibling : row;   // below the Skill Gap Matrix
+          row.parentNode.insertBefore(prep.row, after.nextSibling);
           toggle.setAttribute('aria-expanded', 'true');
           prep.load();
         });
-        return h('tr', {},
+        return [h('tr', {},
           h('td', { class: 'js-num', 'data-label': '#' }, String(startAt + i + 1)),
           h('td', { 'data-label': 'Role' }, h('b', {}, j.title)),
           h('td', { 'data-label': 'Company' }, j.company),
@@ -538,7 +556,7 @@
           h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
             j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
           withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
-          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle));
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle)), gapMatrixRow(j, head.length)];
       }))));
   }
 

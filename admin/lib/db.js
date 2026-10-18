@@ -145,6 +145,26 @@ CREATE TABLE IF NOT EXISTS career_activity (
   at TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_career_activity ON career_activity(customer_id, id);
+CREATE TABLE IF NOT EXISTS token_usage (
+  customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE, day TEXT NOT NULL,
+  tokens INTEGER NOT NULL DEFAULT 0, calls INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (customer_id, day)
+);
+CREATE TABLE IF NOT EXISTS token_accounts (
+  customer_id INTEGER PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+  daily_quota INTEGER, daily_until TEXT, bonus INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS token_packs (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'topup', tokens INTEGER NOT NULL, days INTEGER NOT NULL DEFAULT 0,
+  price INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'INR', description TEXT NOT NULL DEFAULT '',
+  active INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS token_claims (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  pack_id INTEGER, pack_name TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, tokens INTEGER NOT NULL, days INTEGER NOT NULL DEFAULT 0,
+  price INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'INR', message TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT NOT NULL DEFAULT '', decided_by TEXT NOT NULL DEFAULT '', decided_at TEXT, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_token_claims ON token_claims(status, customer_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_active ON jobs(active, company_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_posted ON jobs(posted_at);
 CREATE INDEX IF NOT EXISTS idx_career_versions ON career_versions(customer_id);

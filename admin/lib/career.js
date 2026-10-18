@@ -14,12 +14,12 @@ const profiles = require('./profiles');
 const { completeJson } = require('./careerai');
 const { buildDocx, resumeParagraphs, letterParagraphs } = require('./docx');
 const { logActivity } = require('./activity');
+const tokens = require('./tokens');
 
 const MAX_RESUME = 20000;
 const MAX_JD = 12000;
 const MAX_VERSIONS = 8;
 const MAX_MATCHES = 50;
-const dailyLimit = () => Math.max(1, Number(process.env.CAREER_DAILY_LIMIT) || 20);   // AI actions per customer per day
 
 const RESUME_SHAPE = `{
   "name": "", "headline": "short professional title",
@@ -105,24 +105,23 @@ const strList = (v, max, len = 200) => (Array.isArray(v) ? v.slice(0, max).map(x
 const parse = s => { try { return JSON.parse(s); } catch (_) { return null; } };
 const fileSafe = s => String(s || 'resume').replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'resume';
 
-// ---- the daily AI limit per customer: every AI action (career toolkit and Find jobs) counts ----
+// ---- AI use per customer: the daily AI tokens (tokens.js) are the limit; actions are counted for the dashboard ----
 const today = () => now().slice(0, 10);
 const usedToday = (db, id) => (db.prepare('SELECT count FROM career_usage WHERE customer_id = ? AND day = ?').get(id, today()) || { count: 0 }).count;
 const quota = {
-  checkQuota(db, id) {
-    if (usedToday(db, id) >= dailyLimit()) throw new ApiError(429, `You have used today's ${dailyLimit()} AI actions. Please come back tomorrow.`, 'quota');
-  },
+  checkQuota(db, id) { tokens.check(db, id); },
   countUse(db, id) {
     db.prepare(`INSERT INTO career_usage (customer_id, day, count) VALUES (?,?,1)
                 ON CONFLICT (customer_id, day) DO UPDATE SET count = count + 1`).run(id, today());
   },
-  usage(db, id) { return { used: usedToday(db, id), limit: dailyLimit() }; },
+  usage(db, id) { return { used: usedToday(db, id), tokens: tokens.status(db, id) }; },
 };
 
 function addRoutes(ctx) {
   const { db, add, one, all } = ctx;
   const ai = { db, vault: ctx.vault, upstream: ctx.upstream };
   const me = req => signedInCustomer(db, req).customer;
+  const aiFor = customerId => ({ ...ai, meter: tokens.meter(db, customerId) });   // counts the tokens against the customer
 
   // ---- daily AI limit per customer (shared with Find jobs, jobs.js) ----
   const checkQuota = id => quota.checkQuota(db, id);
@@ -166,7 +165,7 @@ function addRoutes(ctx) {
     const data = String(body.data || '').replace(/\s+/g, '');
     if (!data || !/^[A-Za-z0-9+/=]+$/.test(data)) throw new ApiError(400, 'Choose a PDF file');
     if (data.length * 0.75 > 6 * 1024 * 1024) throw new ApiError(400, 'The PDF is larger than 6 MB');
-    const out = await profiles.readPdf({ db, vault: ctx.vault, data, upstream: (ctx.upstream && ctx.upstream.gemini) || undefined });
+    const out = await profiles.readPdf({ db, vault: ctx.vault, data, upstream: (ctx.upstream && ctx.upstream.gemini) || undefined, meter: tokens.meter(db, c.id) });
     countUse(c.id);
     logActivity(db, c.id, 'resume.pdf_read', 'PDF read by the AI');
     return { text: out.slice(0, MAX_RESUME) };
@@ -177,7 +176,7 @@ function addRoutes(ctx) {
     const c = me(req);
     const r = requireResume(c.id);
     checkQuota(c.id);
-    const out = await completeJson(ai, { system: ATS_PROMPT, user: 'RESUME:\n' + r.source_text, maxTokens: 8000 });
+    const out = await completeJson(aiFor(c.id), { system: ATS_PROMPT, user: 'RESUME:\n' + r.source_text, maxTokens: 8000 });
     const result = {
       score: score(out.score), verdict: String(out.verdict || '').slice(0, 300),
       checks: (Array.isArray(out.checks) ? out.checks.slice(0, 14) : []).map(k => ({
@@ -205,7 +204,7 @@ function addRoutes(ctx) {
     checkQuota(c.id);
     const ats = parse(r.ats_json);
     const base = ats && ats.resume ? resumeText(ats.resume) : r.source_text;   // start from the improved version when there is one
-    const out = await completeJson(ai, { system: ROLE_PROMPT, user: `TARGET ROLE: ${role}\n\nRESUME:\n${base}`, maxTokens: 8000 });
+    const out = await completeJson(aiFor(c.id), { system: ROLE_PROMPT, user: `TARGET ROLE: ${role}\n\nRESUME:\n${base}`, maxTokens: 8000 });
     const content = { fitScore: score(out.fitScore), fitNote: String(out.fitNote || '').slice(0, 500), resume: cleanResume(out.resume) };
     const id = Number(db.prepare('INSERT INTO career_versions (customer_id, role, content_json, created_at) VALUES (?,?,?,?)')
       .run(c.id, role, JSON.stringify(content), now()).lastInsertRowid);
@@ -240,7 +239,7 @@ function addRoutes(ctx) {
     const user = [`JOB TITLE: ${jobTitle || '(not given)'}`, `COMPANY: ${company || '(not given)'}`, '', 'JOB DESCRIPTION:', jd, '',
       'CANDIDATE RESUME:', resume, '', 'CANDIDATE RESUME VERSIONS (id: role):',
       versions.length ? versions.map(v => `${v.id}: ${v.role}`).join('\n') : '(none)'].join('\n');
-    const out = await completeJson(ai, { system: MATCH_PROMPT, user, maxTokens: 4000 });
+    const out = await completeJson(aiFor(c.id), { system: MATCH_PROMPT, user, maxTokens: 4000 });
     const best = chosen ? chosen.id : versions.some(v => v.id === Number(out.bestVersionId)) ? Number(out.bestVersionId) : null;
     const result = {
       score: score(out.score), verdict: String(out.verdict || '').slice(0, 300),

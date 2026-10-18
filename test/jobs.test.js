@@ -81,7 +81,8 @@ async function fakeGemini() {
       } else {
         const label = (/labels: ([^|)\n]+)/.exec(user) || [])[1];
         const ids = [...user.matchAll(/"id":(\d+)/g)].map(m => Number(m[1]));
-        const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], why: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none', resume: (label || '').trim() }));
+        const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], why: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none', resume: (label || '').trim(),
+          requirements: [{ skill: 'C#', weight: 50, status: 'match' }, { skill: 'Kubernetes', weight: 30, status: 'missing' }, { skill: 'Agile', weight: 20, status: 'partial' }] }));
         matches.push({ id: 999999, score: 99, bucket: 'high', why: 'made up' });
         out = { matches };
       }
@@ -229,6 +230,9 @@ test('AI Job search: live jobs from the built-in companies, filtered by country 
     assert.ok(!jobs.some(j => j.title === 'Data Engineer'));
     assert.equal(jobs[0].score, 88);                                             // best first
     assert.deepEqual(search.counts, { high: 20, medium: 20, stretch: 20 });
+    // every job has its Skill Gap Matrix from the same AI call
+    assert.ok(jobs.every(j => j.matrix && j.matrix.rows.length === 3));
+    assert.deepEqual([jobs[0].matrix.score, jobs[0].matrix.counts], [60, { match: 1, partial: 1, missing: 1 }]);
     assert.equal(jobs[0].resume, 'Uploaded resume');   // which resume to send, when searching with all of them
     assert.equal(search.params.resumeLabel, 'All my resumes (2)');
     assert.equal(r.json.usage.used, 1);

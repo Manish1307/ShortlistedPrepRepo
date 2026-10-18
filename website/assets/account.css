@@ -360,3 +360,25 @@
   .mx-table td[data-label="Required"]::before { content: none !important; }
   .mx-bar { display: inline-block; vertical-align: middle; margin: 0 6px 0 0; }
 }
+
+/* ---------- token badge in the Career toolkit header ---------- */
+.cr-tokens.warn { background: #fff1d6; color: #a86c00; } .cr-tokens.out { background: #fde2e7; color: #b4235e; }
+
+/* ---------- Skill Gap Matrix under each job ---------- */
+.jb-table tr.gm-row > td, .jb-table tr.gm-row:hover > td { border-top: 0; padding: 0 12px 10px; background: #fff; }
+.gm { border: 1px dashed var(--bd); border-radius: 12px; background: #fcfbff; }
+.gm > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; font-size: 13.5px; }
+.gm > summary::-webkit-details-marker { display: none; }
+.gm > summary::after { content: "▸ Show"; margin-left: auto; color: var(--purple); font-weight: 700; font-size: 13px; }
+.gm[open] > summary::after { content: "▾ Hide"; }
+.gm[open] > summary { border-bottom: 1px solid var(--line); }
+.gm-title { font-weight: 800; color: var(--ink); margin-right: 4px; }
+.gm .mx-chip { padding: 2px 9px; font-size: 12px; }
+.gm-score { color: var(--body); font-weight: 600; } .gm-score b { color: var(--purple); }
+.gm > div { padding: 10px 12px 12px; }
+.gm .mx-summary { display: none; }
+@media (max-width: 640px) {
+  .jb-table tr.gm-row { border: 0; padding: 0; margin: -6px 0 12px; background: transparent; }
+  .jb-table tr.gm-row > td { padding: 0; }
+  .gm > summary::after { margin-left: 0; }
+}

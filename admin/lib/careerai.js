@@ -32,7 +32,7 @@ async function post(url, headers, body) {
 }
 
 /**
- * Ask the AI for a JSON object. ctx: { db, vault, upstream? }. Throws ApiError when no key is set up or the
+ * Ask the AI for a JSON object. ctx: { db, vault, upstream?, meter? } (meter(tokens): the customer's AI tokens, tokens.js). Throws ApiError when no key is set up or the
  * service fails, with a message that can be shown to the customer.
  */
 async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
@@ -42,6 +42,8 @@ async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
   const groq = defaultKey(db, 'groq');
   if (!gemini && !groq) throw new ApiError(503, 'The AI service is not set up yet. Please try again later.', 'no-key');
   let busy = false;
+  // the tokens the service reports, or about 4 characters a token when it does not
+  const spend = (reported, reply) => { if (ctx.meter) ctx.meter(Number(reported) || Math.ceil((system.length + user.length + String(reply || '').length) / 4)); };
 
   if (gemini) {
     const key = vault.decrypt(gemini.key_enc);
@@ -56,8 +58,9 @@ async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
       if (!res.ok) break;   // e.g. a rejected key: try Groq
       db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(now(), gemini.id);
       const parts = (((json.candidates || [])[0] || {}).content || {}).parts || [];
-      const out = parseJson(parts.map(p => p.text || '').join(''));
-      if (out) return out;
+      const reply = parts.map(p => p.text || '').join('');
+      const out = parseJson(reply);
+      if (out) { spend(json.usageMetadata && json.usageMetadata.totalTokenCount, reply); return out; }
       busy = true;
     }
   }
@@ -70,8 +73,9 @@ async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
     if (res && res.ok) {
       const json = await res.json().catch(() => ({}));
       db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(now(), groq.id);
-      const out = parseJson((((json.choices || [])[0] || {}).message || {}).content);
-      if (out) return out;
+      const reply = (((json.choices || [])[0] || {}).message || {}).content;
+      const out = parseJson(reply);
+      if (out) { spend(json.usage && json.usage.total_tokens, reply); return out; }
     }
     busy = true;
   }

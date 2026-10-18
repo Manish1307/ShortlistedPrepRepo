@@ -16,6 +16,7 @@ const sources = require('./jobsources');
 const { CATALOGUE } = require('./jobcatalogue');
 const { logActivity } = require('./activity');
 const jobprep = require('./jobprep');
+const aiTokens = require('./tokens');
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const FRESH_FOR = 6 * HOUR;       // a company's jobs fetched within this time are used as they are
@@ -65,8 +66,10 @@ const SCORING_RULES = `RULES (always apply):
 - Score ONLY the job postings listed below, using their exact "id". Never invent companies, jobs or links.
 - Never claim the candidate has skills or experience the resume does not show.
 - Reply with ONLY a JSON object:
-{ "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "why": "one sentence", "gap": "short phrase or none", "resume": "label of the best resume to send" } ] }
-Include every listed job in "matches".`;
+{ "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "why": "one sentence", "gap": "short phrase or none", "resume": "label of the best resume to send",
+                 "requirements": [ { "skill": "2-5 words", "weight": 0-100, "status": "match" | "partial" | "missing" } ] } ] }
+Include every listed job in "matches". "requirements" is the job's skill gap matrix: its 4-6 most important requirements, with
+weights that add up to 100 and whether the resume shows each one (match), partly (partial) or not at all (missing).`;
 
 const parse = s => { try { return JSON.parse(s); } catch (_) { return null; } };
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -265,7 +268,7 @@ function addRoutes(ctx) {
       const prompt = masterPrompt(db).prompt;
       const resumeBlock = resumes.map(r => `=== RESUME: ${r.label} ===\n${r.text.slice(0, resumes.length > 1 ? 8000 : 20000)}`).join('\n\n').slice(0, 40000);
       const wishes = [`Country: ${p.country || 'any'}`, `City: ${p.city || 'any'}`, `Role or keywords: ${p.role || '(let the AI decide)'}`, `Level: ${p.level || '(let the AI decide from the resume)'}`].join('\n');
-      const a = await completeJson(ai, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
+      const a = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
       const profile = { level: String(a.level || '').slice(0, 100), summary: String(a.summary || '').slice(0, 400), strengths: strings(a.strengths, 6, 120),
         targetRoles: strings(a.targetRoles, 6, 80), resumeFixes: strings(a.resumeFixes, 6, 300) };
 
@@ -297,10 +300,10 @@ function addRoutes(ctx) {
       const lines = batch.map(j => JSON.stringify({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country,
         posted: (j.posted_at || '').slice(0, 10), summary: String(j.description || '').replace(/\s+/g, ' ').slice(0, 350) }));
       const labels = resumes.map(r => r.label);
-      const out = await completeJson(ai, {
+      const out = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, {
         system: prompt + '\n\n' + SCORING_RULES,
         user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE PROFILE: ${profile.level}. ${profile.summary}\n\nCANDIDATE RESUME(S) (labels: ${labels.join(' | ')}):\n${resumeBlock}\n\nJOB POSTINGS (one JSON object per line):\n${lines.join('\n')}`,
-        maxTokens: 12000,
+        maxTokens: 24000,
       });
       const byId = new Map(batch.map(j => [j.id, j]));
       const seen = new Set();
@@ -310,7 +313,7 @@ function addRoutes(ctx) {
         return { id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.posted_at, url: j.url, score,
           bucket: BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch',
           why: String(m.why || m.reason || '').slice(0, 300), gap: String(m.gap || '').slice(0, 160),
-          resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '' };
+          resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '', matrix: jobprep.skillMatrix(m.requirements) };
       }).sort((x, y) => y.score - x.score);
       // nothing usable (e.g. the AI answered with made-up ids only): an error, not counted against today's limit
       if (!jobs.length) throw new ApiError(502, 'The AI could not score the jobs this time. Please try again.', 'ai');
@@ -414,7 +417,7 @@ function addRoutes(ctx) {
     const resumes = resumesFor(c.id, 'all');
     const resume = resumes.find(r => r.label === job.resume) || resumes[0];
     const posting = one('SELECT department, employment_type, description FROM jobs WHERE id = ?', job.id) || {};
-    const out = await completeJson(ai, {
+    const out = await completeJson({ ...ai, meter: aiTokens.meter(db, c.id) }, {
       system: jobprep.PREP_PROMPT,
       user: [`JOB: ${job.title} at ${job.company} (${job.location || job.country || 'location not given'})`,
         posting.department ? `TEAM: ${posting.department}` : '', `CURRENT FIT SCORE: ${job.score}/100`,

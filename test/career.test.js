@@ -50,7 +50,7 @@ async function fakeAi() {
         const parts = body.contents[0].parts;
         if (parts[0].inline_data) return res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: RESUME }] } }] }));   // PDF -> text
         const out = reply(body.systemInstruction.parts[0].text);
-        return res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: '```json\n' + JSON.stringify(out) + '\n```' }] } }] }));
+        return res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: '```json\n' + JSON.stringify(out) + '\n```' }] } }], usageMetadata: { totalTokenCount: 5000 } }));
       }
       if (req.url === '/groq/chat/completions') {
         return res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(reply(body.messages[0].content)) } }] }));
@@ -123,7 +123,7 @@ test('upload, ATS check, role resume, job match, and Word downloads', async () =
     assert.deepEqual(ats.json.ats.checks.map(c => c.status), ['pass', 'fail', 'warn']);    // unknown status -> warn
     assert.deepEqual(ats.json.ats.suggestedRoles, ['.NET Developer', 'Scrum Master']);
     assert.equal(ats.json.ats.resume.name, 'Asha Rao');
-    assert.deepEqual(ats.json.usage, { used: 1, limit: 20 });
+    assert.deepEqual([ats.json.usage.used, ats.json.usage.tokens.used, ats.json.usage.tokens.daily], [1, 5000, 100000]);   // actions today, and the tokens the AI reported
 
     const v = await asha.post('/api/career/versions', { role: 'Scrum Master' });
     assert.equal(v.status, 201);
@@ -171,20 +171,27 @@ test('a customer only sees and changes their own documents', async () => {
   });
 });
 
-test('the daily AI limit, the version limit, and a missing AI key', async () => {
-  const before = process.env.CAREER_DAILY_LIMIT;
-  process.env.CAREER_DAILY_LIMIT = '2';
-  try {
-    await withServer(async s => {
-      const asha = await s.site('asha@example.com');
-      await asha.post('/api/career/resume', { text: RESUME });
-      assert.equal((await asha.post('/api/career/ats')).status, 200);
-      assert.equal((await asha.post('/api/career/versions', { role: '.NET Developer' })).status, 201);
-      const third = await asha.post('/api/career/versions', { role: 'Scrum Master' });
-      assert.equal(third.status, 429);
-      assert.match(third.json.error, /today's 2 AI actions/);
-    });
-  } finally { if (before === undefined) delete process.env.CAREER_DAILY_LIMIT; else process.env.CAREER_DAILY_LIMIT = before; }
+test('the daily AI tokens, extra tokens, and a missing AI key', async () => {
+  await withServer(async s => {
+    s.app.db.prepare("INSERT INTO job_settings (key, value, updated_at) VALUES ('token_daily_default', '8000', datetime('now'))").run();
+    const asha = await s.site('asha@example.com');
+    await asha.post('/api/career/resume', { text: RESUME });
+    const ats = await asha.post('/api/career/ats');
+    assert.equal(ats.status, 200);
+    assert.deepEqual([ats.json.usage.tokens.used, ats.json.usage.tokens.left, ats.json.usage.tokens.level], [5000, 3000, 'ok']);   // the AI reported 5,000 tokens (62%, below the warning)
+    const v = await asha.post('/api/career/versions', { role: '.NET Developer' });
+    assert.equal(v.status, 201);                                                                   // allowed: tokens were left before it
+    assert.deepEqual([v.json.usage.tokens.used, v.json.usage.tokens.left, v.json.usage.tokens.level], [10000, 0, 'out']);
+    const third = await asha.post('/api/career/versions', { role: 'Scrum Master' });
+    assert.equal(third.status, 429);
+    assert.match(third.json.error, /today's AI tokens/);
+    // extra tokens are spent once the day's allowance is gone
+    const id = s.app.db.prepare("SELECT id FROM customers WHERE email = 'asha@example.com'").get().id;
+    require('../admin/lib/tokens').grant(s.app.db, id, { kind: 'topup', tokens: 6000 });
+    const fourth = await asha.post('/api/career/versions', { role: 'Scrum Master' });
+    assert.equal(fourth.status, 201);
+    assert.deepEqual([fourth.json.usage.tokens.used, fourth.json.usage.tokens.bonus], [15000, 1000]);
+  });
 
   await withServer({ keys: [] }, async s => {
     const asha = await s.site('asha@example.com');

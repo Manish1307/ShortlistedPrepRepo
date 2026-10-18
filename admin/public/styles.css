@@ -146,3 +146,9 @@ details summary { cursor: pointer; font-weight: 600; margin: 14px 0 8px; }
 .cand-bar i { width: 100%; max-width: 26px; background: var(--accent); border-radius: 5px 5px 2px 2px; }
 .cand-bar span { font-weight: 700; } .cand-bar small { color: var(--muted); }
 @media (max-width: 900px) { .cand-track { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- AI tokens ---------- */
+.tok-bar { width: 110px; height: 6px; border-radius: 4px; background: var(--grey-bg); overflow: hidden; margin-top: 4px; }
+.tok-bar i { display: block; height: 100%; background: var(--good); }
+.tok-bar i.warn { background: var(--warn); } .tok-bar i.out { background: var(--bad); }
+.tok-left.warn { color: var(--warn); font-weight: 600; } .tok-left.out { color: var(--bad); font-weight: 600; }

@@ -334,3 +334,31 @@ html:not([data-auth="member"]) [data-member] { display: none !important; }
   .hd-step .ic { width: 34px; height: 34px; font-size: 16px; }
   .hd-step em { grid-column: 2; justify-self: start; }
 }
+
+/* ---------- AI tokens: meter at the bottom of the page, warning, asking for more ---------- */
+.tok-foot { margin-top: 18px; }
+.tok-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: #fff; border: 1px solid var(--bd); border-radius: 16px; padding: 12px 16px; font-size: 14.5px; color: var(--body); box-shadow: var(--shadow-s); }
+.tok-line b { color: var(--ink); }
+.tok-line.warn { border-color: #ecd29a; background: #fffaf0; } .tok-line.out { border-color: #f4b7c6; background: #fff5f7; }
+.tok-meter { flex: 0 1 220px; min-width: 120px; height: 8px; border-radius: 6px; background: #ece6fb; overflow: hidden; }
+.tok-meter i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #0a8a5c, #22b07d); }
+.tok-meter i.warn { background: linear-gradient(90deg, #d98e04, #a86c00); } .tok-meter i.out { background: #b4235e; }
+.tok-sub { color: var(--muted); }
+.tok-more { margin-left: auto; }
+.tok-alert { position: fixed; z-index: 60; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 32px)); display: grid; gap: 6px; background: #fff; border: 1px solid #ecd29a; border-left: 5px solid #d98e04; border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow-l); font-size: 14.5px; color: var(--body); }
+.tok-alert.out { border-color: #f4b7c6; border-left-color: #b4235e; }
+.tok-alert b { color: var(--ink); font-size: 15.5px; }
+.tok-alert-actions { display: flex; gap: 8px; margin-top: 4px; }
+.tok-dialog .stack { display: grid; gap: 12px; }
+.tok-packs { display: grid; gap: 8px; }
+.tok-pack { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--bd); border-radius: 14px; padding: 10px 12px; cursor: pointer; }
+.tok-pack:has(input:checked) { border-color: var(--purple); background: var(--tint); }
+.tok-pack b { display: block; color: var(--ink); }
+.tok-pack-what { display: block; font-size: 13.5px; color: var(--body); }
+.tok-pack small { display: block; color: var(--muted); }
+.tok-price { font-weight: 800; color: var(--purple-d); white-space: nowrap; }
+.tok-custom { display: grid; gap: 4px; font-weight: 600; font-size: 14px; }
+.tok-claims { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px; }
+.tok-claim { display: flex; justify-content: space-between; gap: 10px; }
+.tok-status { font-weight: 700; } .tok-status.pending { color: #a86c00; } .tok-status.approved { color: #0a8a5c; } .tok-status.rejected { color: #b4235e; }
+@media (max-width: 560px) { .tok-more { margin-left: 0; width: 100%; } .tok-meter { flex-basis: 100%; } }

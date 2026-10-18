@@ -45,7 +45,7 @@ function profileForLicence(db, licenceId) {
 }
 
 /** Plain text from a resume PDF: Gemini reads it, with the default Gemini key from the AI keys page. */
-async function readPdf({ db, vault, data, upstream = GEMINI }) {
+async function readPdf({ db, vault, data, upstream = GEMINI, meter }) {
   const key = db.prepare("SELECT * FROM api_keys WHERE provider = 'gemini' AND is_default = 1 AND disabled = 0").get();
   if (!key) throw new ApiError(400, 'Reading a PDF needs a default Gemini key (AI keys page). You can paste the resume text instead.');
   const body = JSON.stringify({
@@ -68,6 +68,7 @@ async function readPdf({ db, vault, data, upstream = GEMINI }) {
     const parts = (((json.candidates || [])[0] || {}).content || {}).parts || [];
     const out = parts.map(p => p.text || '').join('').trim();
     if (!out) throw new ApiError(422, 'No text was found in the PDF. Paste the resume text instead.');
+    if (meter) meter((json.usageMetadata && json.usageMetadata.totalTokenCount) || Math.ceil(data.length * 0.75 / 1000 * 258 / 3 + out.length / 4));   // about 258 tokens a page
     return out.slice(0, MAX_RESUME);
   }
   throw new ApiError(502, lastError);

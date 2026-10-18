@@ -62,10 +62,10 @@
   const moneyList = list => (list && list.length ? list.map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'USD'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
-    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
+    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
 
-  const STATUS_PILL = { default: 'good', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '' };
+  const STATUS_PILL = { default: 'good', approved: 'good', rejected: 'bad', pending: 'warn', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '' };
   const pill = text => h('span', { class: 'pill ' + (STATUS_PILL[text] || '') }, text);
 
   // ---------- dialogs and forms ----------
@@ -142,7 +142,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['candidates', 'Candidates'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
+    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['candidates', 'Candidates'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['tokens', 'AI tokens'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
     ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
   ];
 
@@ -690,7 +690,7 @@
     login: '🔑 Signed in', 'resume.uploaded': '📄 Uploaded resume', 'resume.pdf_read': '📄 PDF read', 'ats.checked': '✅ ATS check',
     'version.created': '🧩 Role resume created', 'version.deleted': '🗑 Role resume deleted', 'match.created': '✉️ Job match & cover letter',
     'match.deleted': '🗑 Job match deleted', 'jobsearch.started': '🎯 AI job search started', 'jobsearch.done': '🎯 AI job search finished',
-    'jobsearch.failed': '⚠️ AI job search failed', 'jobprep.created': '📘 Prepared for a job', download: '⬇️ Downloaded',
+    'jobsearch.failed': '⚠️ AI job search failed', 'jobprep.created': '📘 Prepared for a job', 'tokens.claimed': '⚡ Asked for more AI tokens', 'tokens.granted': '⚡ Got AI tokens', download: '⬇️ Downloaded',
   };
   const scorePill = n => (n == null ? '—' : h('span', { class: 'pill ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)));
   const progressDots = steps => h('span', { class: 'cand-dots', title: STEP_NAMES.map(([k, l]) => `${steps[k] ? '✓' : '·'} ${l}`).join('\n') },
@@ -819,6 +819,125 @@
           d.usage.length ? h('div', { class: 'cand-bars' }, d.usage.map(u => h('div', { class: 'cand-bar', title: `${date(u.day)}: ${u.count}` },
             h('i', { style: `height:${Math.max(6, u.count / maxUse * 100)}%` }), h('span', {}, String(u.count)), h('small', {}, u.day.slice(5)))))
             : h('p', { class: 'muted small' }, 'No AI actions in the last 30 days.'))));
+  }
+
+  // ---------- AI tokens: daily allowance per customer, token packs, requests for more ----------
+  const tok = n => { n = Number(n) || 0; return n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n); };
+  const priceText = (p, cur) => (p ? `${cur === 'INR' ? '₹' : cur + ' '}${Number(p).toLocaleString('en-IN')}` : 'Free / to quote');
+  const kindText = (kind, tokens, days) => (kind === 'daily' ? `${tok(tokens)} a day for ${days} days` : `${tok(tokens)} extra tokens`);
+  const LEVEL_PILL = { ok: 'good', warn: 'warn', out: 'bad' };
+
+  async function tokens(el) {
+    const d = await get('/admin/api/tokens');
+    const write = can('tokens.write');
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const reload = () => tokens(el);
+
+    const daily = h('input', { type: 'number', min: 0, step: 1000, value: d.settings.dailyDefault, 'aria-label': 'Daily tokens per customer' });
+    const warn = h('input', { type: 'number', min: 10, max: 99, value: d.settings.warnPct, 'aria-label': 'Warn at per cent' });
+    const settingsCard = h('div', { class: 'card', style: 'margin-top:14px' },
+      h('h2', {}, 'Daily allowance'),
+      h('p', { class: 'muted small' }, `Every customer gets this many AI tokens a day (the day changes at midnight India time), unless you give them more. Customers see their tokens at the bottom of the website and are warned from the level below. Today is ${d.day}.`),
+      h('div', { class: 'row2' },
+        h('label', { class: 'field' }, 'Tokens per customer per day', daily, h('span', { class: 'hint' }, 'An ATS check uses about 8,000 tokens; an AI job search 20,000 to 30,000.')),
+        h('label', { class: 'field' }, 'Warn customers at (% of the day used)', warn)),
+      write ? h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => guard(async () => { await post('/admin/api/tokens/settings', { dailyDefault: daily.value, warnPct: warn.value }); toast('Saved'); reload(); }) }, 'Save')) : null);
+
+    const decide = (k, action) => {
+      if (action === 'reject') {
+        const note = h('textarea', { maxlength: 500, placeholder: 'Reason (optional, for your records)' });
+        dialog(`Reject request from ${k.customer.email}?`, h('div', {}, note), [{ label: 'Reject', kind: 'danger', run: async () => {
+          const ok = await guard(async () => { await post(`/admin/api/tokens/claims/${k.id}`, { action: 'reject', note: note.value }); return true; });
+          if (!ok) return true; toast('Rejected'); reload();
+        } }]);
+        return;
+      }
+      const f = h('div', {},
+        h('p', { class: 'small' }, h('b', {}, k.customer.name || k.customer.email), ` asked for ${k.packName}: ${kindText(k.kind, k.tokens, k.days)}${k.price ? `, ${priceText(k.price, k.currency)}` : ''}.`, k.message ? h('span', { class: 'muted' }, ` "${k.message}"`) : null),
+        field('Give', { name: 'kind', type: 'select', value: k.kind, options: [{ value: 'topup', label: 'Extra tokens (used after the daily allowance)' }, { value: 'daily', label: 'A bigger daily allowance for some days' }] }),
+        h('div', { class: 'row2' }, field('Tokens', { name: 'tokens', type: 'number', value: k.tokens, min: 1000 }), field('Days (daily allowance only)', { name: 'days', type: 'number', value: k.days || 30, min: 1 })),
+        field('Price agreed', { name: 'price', type: 'number', value: k.price, min: 0 }, `In ${k.currency}. Record what the customer paid or will pay.`),
+        field('Note (optional)', { name: 'note', type: 'textarea', maxlength: 500 }));
+      dialog('Approve token request', f, [{ label: 'Approve and give tokens', kind: 'primary', run: async () => {
+        const ok = await guard(async () => { await post(`/admin/api/tokens/claims/${k.id}`, { action: 'approve', ...values(f) }); return true; });
+        if (!ok) return true; toast('Approved: tokens given'); reload();
+      } }]);
+    };
+
+    const packForm = existing => {
+      const p = existing || { kind: 'topup', tokens: 200000, days: 30, price: 0, currency: 'INR', active: true, sort: 0 };
+      const f = h('div', {},
+        field('Name', { name: 'name', required: true, value: p.name || '', maxlength: 80, placeholder: 'e.g. Job hunt booster' }),
+        field('Type', { name: 'kind', type: 'select', value: p.kind, options: [{ value: 'topup', label: 'Extra tokens (one time)' }, { value: 'daily', label: 'Bigger daily allowance for some days' }] }),
+        h('div', { class: 'row2' }, field('Tokens', { name: 'tokens', type: 'number', value: p.tokens, min: 1000 }), field('Days (daily type only)', { name: 'days', type: 'number', value: p.days || 30, min: 1 })),
+        h('div', { class: 'row2' }, field('Price', { name: 'price', type: 'number', value: p.price, min: 0 }), field('Currency', { name: 'currency', value: p.currency, maxlength: 8 })),
+        field('Description (shown to customers)', { name: 'description', value: p.description || '', maxlength: 300 }),
+        h('div', { class: 'row2' }, field('Order', { name: 'sort', type: 'number', value: p.sort || 0, min: 0 }),
+          field('Offered to customers', { name: 'active', type: 'select', value: p.active ? 'yes' : 'no', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No (hidden)' }] })));
+      dialog(existing ? 'Edit token pack' : 'New token pack', f, [{ label: 'Save', kind: 'primary', run: async () => {
+        const v = values(f);
+        const ok = await guard(async () => { await post('/admin/api/tokens/packs', { ...v, id: existing && existing.id, active: v.active === 'yes' }); return true; });
+        if (!ok) return true; toast('Saved'); reload();
+      } }]);
+    };
+
+    const grantForm = c => {
+      const f = h('div', {},
+        h('p', { class: 'small' }, `${c.name || c.email} has used ${tok(c.used)} of ${tok(c.daily)} today and has ${tok(c.bonus)} extra tokens.`),
+        field('Give', { name: 'kind', type: 'select', options: [{ value: 'topup', label: 'Extra tokens' }, { value: 'daily', label: 'A bigger daily allowance' }] }),
+        h('div', { class: 'row2' }, field('Tokens', { name: 'tokens', type: 'number', value: 100000, min: 1000 }), field('Days (daily allowance only)', { name: 'days', type: 'number', value: 30, min: 1 })));
+      dialog(`Give tokens to ${c.email}`, f, [
+        { label: 'Give tokens', kind: 'primary', run: async () => { const ok = await guard(async () => { await post(`/admin/api/tokens/customers/${c.id}`, values(f)); return true; }); if (!ok) return true; toast('Tokens given'); reload(); } },
+        c.dailyUntil ? { label: 'Back to the default daily allowance', run: async () => { await guard(() => post(`/admin/api/tokens/customers/${c.id}`, { action: 'reset-daily' })); reload(); } } : null,
+      ].filter(Boolean));
+    };
+
+    const pending = d.claims.filter(k => k.status === 'pending');
+    el.replaceChildren(
+      head('AI tokens', write ? h('button', { class: 'btn', onclick: () => packForm(null) }, '+ New token pack') : null),
+      h('p', { class: 'muted' }, 'AI tokens used by website customers (Career toolkit, AI Job search, Prepare for this job). Set the daily allowance, offer token packs, and answer requests for more.'),
+      h('div', { class: 'cards' },
+        stat('Tokens used today', tok(d.totals.today.t), `${d.totals.today.c} AI calls by ${d.totals.today.n} customers`),
+        stat('Tokens in 7 days', tok(d.totals.week.t), `${d.totals.week.c} AI calls`),
+        stat('Requests waiting', d.totals.pending),
+        stat('Daily allowance', tok(d.settings.dailyDefault), `warn at ${d.settings.warnPct}%`)),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, `Requests for more tokens${pending.length ? ` (${pending.length} waiting)` : ''}`),
+        table([
+          { label: 'Customer', render: k => h('span', {}, h('b', {}, k.customer.name || k.customer.email), h('br'), h('span', { class: 'small muted' }, k.customer.email)) },
+          { label: 'Asked for', render: k => h('span', {}, h('b', {}, k.packName), h('br'), h('span', { class: 'small' }, kindText(k.kind, k.tokens, k.days))) },
+          { label: 'Price', render: k => priceText(k.price, k.currency) },
+          { label: 'Message', render: k => h('span', { class: 'small' }, k.message || '—'), wrap: true },
+          { label: 'When', render: k => dateTime(k.createdAt) },
+          { label: 'Status', render: k => h('span', {}, pill(k.status), k.decidedBy ? h('div', { class: 'small muted' }, `${k.decidedBy}${k.adminNote ? ': ' + k.adminNote : ''}`) : null) },
+          { label: '', render: k => (write && k.status === 'pending' ? h('span', { class: 'tools' },
+            h('button', { class: 'btn sm primary', onclick: e => { e.stopPropagation(); decide(k, 'approve'); } }, 'Approve'),
+            h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); decide(k, 'reject'); } }, 'Reject')) : '') },
+        ], d.claims, null, 'No requests yet. Customers ask for more tokens from the bottom of the website.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Token packs offered to customers'),
+        table([
+          { label: 'Pack', render: p => h('span', {}, h('b', {}, p.name), p.description ? h('div', { class: 'small muted' }, p.description) : null), wrap: true },
+          { label: 'Gives', render: p => kindText(p.kind, p.tokens, p.days) },
+          { label: 'Price', render: p => priceText(p.price, p.currency) },
+          { label: 'Shown', render: p => pill(p.active ? 'on' : 'off') },
+          { label: '', render: p => (write ? h('span', { class: 'tools' },
+            h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); packForm(p); } }, 'Edit'),
+            h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Delete the pack "${p.name}"?`)) guard(async () => { await del(`/admin/api/tokens/packs/${p.id}`); reload(); }); } }, 'Delete')) : '') },
+        ], d.packs, null, 'No packs yet. Add one (for example 2 lakh extra tokens for ₹99). Customers can always send a custom request too.')),
+
+      settingsCard,
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Customers'),
+        table([
+          { label: 'Customer', render: c => h('span', {}, h('b', {}, c.name || c.email), h('br'), h('span', { class: 'small muted' }, c.email)) },
+          { label: 'Today', render: c => h('span', {}, `${tok(c.used)} / ${tok(c.daily)}`, h('div', { class: 'tok-bar' }, h('i', { class: c.level, style: `width:${c.pct}%` }))) },
+          { label: 'Extra tokens', render: c => tok(c.bonus) },
+          { label: 'Left today', render: c => h('span', { class: 'tok-left ' + c.level }, tok(c.left), c.level !== 'ok' ? h('span', { class: 'small' }, c.level === 'out' ? ' · used up' : ' · running low') : null) },
+          { label: 'Daily allowance', render: c => (c.dailyUntil ? h('span', { class: 'small' }, `${tok(c.daily)} until ${date(c.dailyUntil)}`) : h('span', { class: 'small muted' }, 'default')) },
+          { label: '7 days', render: c => tok(c.week) },
+          { label: '', render: c => (write ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); grantForm(c); } }, 'Give tokens') : '') },
+        ], d.customers, null, 'No AI use yet.')));
   }
 
   // ---------- AI Job search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
@@ -951,7 +1070,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, aikeys, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

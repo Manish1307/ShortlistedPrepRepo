@@ -409,7 +409,7 @@ function addRoutes(ctx) {
     if (!result) throw new ApiError(404, 'Search not found');
     const job = result.jobs.find(j => j.id === Number(body.jobId));
     if (!job) throw new ApiError(404, 'Job not found in this search');
-    if (job.prep) return { prep: job.prep, usage: require('./career').usage(db, c.id) };
+    if (job.prep && !(body.refresh && !job.prep.matrix)) return { prep: job.prep, usage: require('./career').usage(db, c.id) };   // refresh: only an older panel without the skill matrix
     require('./career').checkQuota(db, c.id);
     const resumes = resumesFor(c.id, 'all');
     const resume = resumes.find(r => r.label === job.resume) || resumes[0];

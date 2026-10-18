@@ -416,7 +416,7 @@
       return h('a', { class: 'pp-link ' + l.kind, href: l.url, target: '_blank', rel: 'noopener noreferrer' }, (LINK_ICON[l.kind] || '↗') + ' ' + l.label);
     }));
   }
-  function prepView(p, job) {
+  function prepView(p, job, refresh) {
     var reach = Math.min(100, p.fit + p.gapPoints);
     var section = function (cls, icon, title, intro, body) {
       return h('section', { class: 'pp-sec ' + cls }, h('h4', {}, h('span', { 'aria-hidden': 'true' }, icon), ' ', title), intro ? h('p', { class: 'ac-muted pp-intro' }, intro) : null, body);
@@ -427,6 +427,11 @@
           h('i', { class: 'now', style: 'width:' + p.fit + '%' }), h('i', { class: 'gain', style: 'left:' + p.fit + '%;width:' + (reach - p.fit) + '%' })),
         h('div', { class: 'pp-scores' }, h('span', {}, 'Fit now ', h('b', {}, String(p.fit))), h('span', {}, 'After closing the gaps ', h('b', { class: 'up' }, String(reach)))),
         p.summary ? h('p', { class: 'pp-summary' }, p.summary) : null),
+
+      section('matrix', '📊', 'Skill matrix: what this job requires vs. what you have', null,
+        p.matrix ? matrixView(p.matrix, p.fit)
+          : h('div', { class: 'mx-absent' }, h('span', { class: 'ac-muted' }, 'This plan was made before the skill matrix was added.'),
+            h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: refresh }, 'Add the skill matrix (uses 1 AI action)'))),
 
       h('div', { class: 'pp-grid' },
         section('gaps', '🎯', 'Close the gaps to reach ' + reach + '/100',
@@ -462,19 +467,51 @@
   function prepRow(searchId, job, cols) {
     var cell = h('td', { colspan: String(cols), class: 'pp-cell' });
     var row = h('tr', { class: 'pp-row' }, cell);
-    function load() {
-      if (job.prep) { cell.replaceChildren(prepView(job.prep, job)); return; }
+    function load(refresh) {
+      if (job.prep && refresh !== true) { cell.replaceChildren(prepView(job.prep, job, function () { load(true); })); return; }
       var status = h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, 'Finding your skill gaps and the best ways to learn them… (about 20 seconds)')));
       cell.replaceChildren(status);
-      call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id }).then(function (d) {
-        job.prep = d.prep; setUsage(d.usage); cell.replaceChildren(prepView(d.prep, job));
+      call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id, refresh: refresh === true }).then(function (d) {
+        job.prep = d.prep; setUsage(d.usage); cell.replaceChildren(prepView(d.prep, job, function () { load(true); }));
       }).catch(function (e) {
-        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: load }, 'Try again');
+        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh); } }, 'Try again');
         cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', retry));
       });
     }
     return { row: row, load: load };
   }
+
+  /** Required vs. what the candidate has: each requirement's weight, status, evidence and the points earned. */
+  var MATRIX_STATUS = { match: ['✓', 'Match', 'good'], partial: ['◐', 'Partial', 'warn'], missing: ['✕', 'Missing', 'bad'] };
+  function matrixView(m, fit) {
+    var missingTotal = m.rows.reduce(function (n, r) { return n + r.missing; }, 0);
+    return h('div', {},
+      h('div', { class: 'mx-summary' },
+        h('span', { class: 'mx-chip good' }, '✓ ' + m.counts.match + ' match'),
+        h('span', { class: 'mx-chip warn' }, '◐ ' + m.counts.partial + ' partial'),
+        h('span', { class: 'mx-chip bad' }, '✕ ' + m.counts.missing + ' missing'),
+        h('span', { class: 'mx-score' }, 'Weighted skill score ', h('b', {}, m.score + '/100'))),
+      h('div', { class: 'mx-scroll' }, h('table', { class: 'mx-table' },
+        h('thead', {}, h('tr', {}, ['Required for this job', 'Weight', 'You', 'Evidence in your resume', 'Score', 'Gap'].map(function (t) { return h('th', {}, t); }))),
+        h('tbody', {}, m.rows.map(function (r) {
+          var s = MATRIX_STATUS[r.status];
+          return h('tr', { class: 'mx-' + r.status },
+            h('td', { 'data-label': 'Required' }, h('b', {}, r.skill)),
+            h('td', { 'data-label': 'Weight', class: 'mx-num' }, r.weight + '%'),
+            h('td', { 'data-label': 'You' }, h('span', { class: 'mx-status ' + s[2] }, s[0] + ' ' + s[1])),
+            h('td', { 'data-label': 'Evidence', class: 'mx-ev' }, r.evidence || (r.status === 'missing' ? 'Not in your resume' : '—')),
+            h('td', { 'data-label': 'Score', class: 'mx-num' },
+              h('div', { class: 'mx-bar', 'aria-hidden': 'true' }, h('i', { style: 'width:' + (r.weight ? r.earned / r.weight * 100 : 0) + '%' })),
+              h('span', {}, fmt(r.earned) + ' / ' + r.weight)),
+            h('td', { 'data-label': 'Gap', class: 'mx-num mx-gap' }, r.missing ? '−' + fmt(r.missing) : '—'));
+        })),
+        h('tfoot', {}, h('tr', {},
+          h('td', {}, h('b', {}, 'Total')), h('td', { class: 'mx-num' }, h('b', {}, '100%')), h('td'), h('td'),
+          h('td', { class: 'mx-num' }, h('b', {}, m.score + ' / 100')), h('td', { class: 'mx-num mx-gap' }, h('b', {}, '−' + fmt(missingTotal))))))),
+      h('p', { class: 'ac-muted pp-intro mx-note' }, 'Weight = how much each requirement matters for this job (all add up to 100). A match earns the full weight, partial half, missing none. ' +
+        'Your overall fit (' + fit + ') also counts experience level and location.'));
+  }
+  function fmt(n) { return Math.round(n * 10) / 10 % 1 ? (Math.round(n * 10) / 10).toFixed(1) : String(Math.round(n)); }
 
   function groupTable(list, withResume, startAt, searchId) {
     var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);

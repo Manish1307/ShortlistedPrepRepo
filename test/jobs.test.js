@@ -69,6 +69,8 @@ async function fakeGemini() {
       let out;
       if (/expert career coach/.test(system)) {
         out = { summary: 'Close to a full fit.', matched: ['C#', '.NET'],
+          requirements: [{ skill: 'C# / .NET', weight: 40, status: 'match', evidence: 'Contoso, 6 years' }, { skill: 'Azure DevOps', weight: 30, status: 'partial', evidence: 'Some pipelines' },
+            { skill: 'Docker', weight: 20, status: 'missing', evidence: '' }, { skill: 'Agile', weight: 20, status: 'unknown' }],
           gaps: [{ skill: 'Docker', points: 6, importance: 'medium', why: 'Containers', howToClose: 'Build one app', hours: 10, searchQuery: 'Docker for .NET developers', provider: 'docker', certification: '' },
             { skill: 'Azure DevOps', points: 9, importance: 'high', why: 'CI/CD', howToClose: 'Set up a pipeline', hours: 12, searchQuery: 'Azure DevOps pipelines tutorial', provider: 'microsoft', certification: 'AZ-400' }],
           revise: [{ topic: 'ASP.NET Core middleware', searchQuery: 'ASP.NET Core middleware interview' }],
@@ -321,6 +323,12 @@ test('Prepare for this job: gaps to a full fit with search links, made once and 
     const prep = r.json.prep;
     assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Azure DevOps', 9], ['Docker', 6]]);      // biggest gap first
     assert.equal(prep.gapPoints, 15);
+    // the matrix: weights scaled to 100 (40/30/20/20 of 110), match = full weight, partial = half, missing or unknown = none
+    assert.deepEqual(prep.matrix.rows.map(r => [r.skill, r.weight, r.status, r.earned, r.missing]),
+      [['C# / .NET', 36, 'match', 36, 0], ['Azure DevOps', 27, 'partial', 13.5, 13.5], ['Agile', 19, 'missing', 0, 19], ['Docker', 18, 'missing', 0, 18]]);   // heaviest first
+    assert.equal(prep.matrix.rows.reduce((n, r) => n + r.weight, 0), 100);
+    assert.equal(prep.matrix.score, 50);
+    assert.deepEqual(prep.matrix.counts, { match: 1, partial: 1, missing: 2 });
     assert.equal(prep.fit, job.score);
     const ado = prep.gaps[0];
     assert.equal(ado.links.find(l => l.kind === 'youtube').url, 'https://www.youtube.com/results?search_query=Azure%20DevOps%20pipelines%20tutorial');
@@ -338,5 +346,14 @@ test('Prepare for this job: gaps to a full fit with search links, made once and 
     assert.equal(s.ai.seen.length, calls + 1);
     assert.ok((await web.get('/api/career/jobsearch/' + search.id)).json.search.result.jobs[0].prep);
     assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: 999999 })).status, 404);
+
+    // refresh makes it again only for an older plan without the matrix
+    assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id, refresh: true })).json.usage.used, used);
+    const row = s.app.db.prepare('SELECT result_json FROM career_job_searches WHERE id = ?').get(search.id);
+    const saved = JSON.parse(row.result_json); delete saved.jobs[0].prep.matrix;
+    s.app.db.prepare('UPDATE career_job_searches SET result_json = ? WHERE id = ?').run(JSON.stringify(saved), search.id);
+    const remade = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id, refresh: true });
+    assert.ok(remade.json.prep.matrix);
+    assert.equal(remade.json.usage.used, used + 1);
   });
 });

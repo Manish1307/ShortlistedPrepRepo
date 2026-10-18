@@ -18,10 +18,15 @@ RULES:
 - "provider" is the company that owns the official documentation for the skill: one of
   microsoft, aws, google, oracle, salesforce, sap, servicenow, atlassian, ibm, redhat, kubernetes, python, java, scrum, pmi, other.
 - "certification" is the official certification that proves the skill, if a well-known one exists (e.g. "PL-600"), else "".
+- "requirements" is the skill matrix: EVERY important requirement of the job (6-12 rows: skills, tools, experience,
+  domain, certifications), each with "weight" = how much it matters for this job (all weights add up to 100),
+  "status" = "match" (the resume clearly shows it), "partial" (some or related experience) or "missing", and
+  "evidence" = where the resume shows it, in a few words ("" when missing).
 - Keep every text short and practical.
 Reply with ONLY a JSON object:
 {
   "summary": "one sentence: where the candidate stands for this job",
+  "requirements": [ { "skill": "...", "weight": 0-100, "status": "match" | "partial" | "missing", "evidence": "..." } ],
   "matched": ["skills from the job the resume already shows"],
   "gaps": [ { "skill": "...", "points": 0-50, "importance": "high" | "medium" | "low", "why": "why this job needs it",
               "howToClose": "the fastest honest way to close it", "hours": estimated study hours, "searchQuery": "...",
@@ -59,6 +64,30 @@ function learningLinks(query, provider) {
 const str = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const list = (v, n, max) => (Array.isArray(v) ? v : []).map(x => str(x, max)).filter(Boolean).slice(0, n);
 
+const CREDIT = { match: 1, partial: 0.5, missing: 0 };
+
+/**
+ * The required-vs-gap matrix: each requirement with its weight (scaled so all weights add up to 100), the
+ * candidate's status, the points earned (weight × 1 / ½ / 0) and the points missing. null when the AI gave none.
+ */
+function skillMatrix(requirements) {
+  const rows = (Array.isArray(requirements) ? requirements : []).slice(0, 14).map(r => ({
+    skill: str(r && r.skill, 90), weight: Math.max(0, Number(r && r.weight) || 0),
+    status: Object.prototype.hasOwnProperty.call(CREDIT, r && r.status) ? r.status : 'missing', evidence: str(r && r.evidence, 160),
+  })).filter(r => r.skill);
+  if (!rows.length) return null;
+  const total = rows.reduce((n, r) => n + r.weight, 0) || rows.length;
+  let left = 100;
+  rows.forEach((r, i) => {   // whole-number weights that add up to exactly 100
+    r.weight = i === rows.length - 1 ? left : Math.round(((r.weight || 1) / total) * 100);
+    left -= r.weight;
+  });
+  rows.forEach(r => { r.weight = Math.max(0, r.weight); r.earned = Math.round(r.weight * CREDIT[r.status] * 10) / 10; r.missing = Math.round((r.weight - r.earned) * 10) / 10; });
+  rows.sort((a, b) => b.weight - a.weight);
+  const score = Math.round(rows.reduce((n, r) => n + r.earned, 0));
+  return { rows, score, counts: { match: rows.filter(r => r.status === 'match').length, partial: rows.filter(r => r.status === 'partial').length, missing: rows.filter(r => r.status === 'missing').length } };
+}
+
 /** The AI's answer, checked and with the links added. */
 function cleanPrep(out, fit) {
   const gaps = (Array.isArray(out.gaps) ? out.gaps : []).slice(0, 8).map(g => {
@@ -76,7 +105,7 @@ function cleanPrep(out, fit) {
     };
   }).filter(Boolean).sort((a, b) => b.points - a.points);
   return {
-    fit, summary: str(out.summary, 300), matched: list(out.matched, 20, 60), gaps,
+    fit, summary: str(out.summary, 300), matrix: skillMatrix(out.requirements), matched: list(out.matched, 20, 60), gaps,
     gapPoints: gaps.reduce((n, g) => n + g.points, 0),
     revise: (Array.isArray(out.revise) ? out.revise : []).slice(0, 8).map(r => {
       const topic = str(r && r.topic, 80);
@@ -87,4 +116,4 @@ function cleanPrep(out, fit) {
   };
 }
 
-module.exports = { PREP_PROMPT, learningLinks, cleanPrep };
+module.exports = { PREP_PROMPT, learningLinks, cleanPrep, skillMatrix };

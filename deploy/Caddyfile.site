@@ -4,7 +4,8 @@ __SITE_HOST__ {
 	encode gzip
 	root * /opt/classcue/website
 	try_files {path} {path}.html {path}/index.html
-	header /assets/* Cache-Control "public, max-age=3600"
+	# browsers keep the files for 30 days; .css/.js are versioned with ?v=, so changes still arrive
+	header /assets/* Cache-Control "public, max-age=2592000"
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin

@@ -92,8 +92,39 @@ function fill(text, extra = {}) {
   });
 }
 
-function render(body, title, description) {
-  return fill(layout.replace('{{content}}', () => fill(body)), { title, description: esc(description) });
+// ---------- search engines: canonical address, noindex, structured data (schema.org JSON-LD) ----------
+const SITE = String(config.siteUrl || '').replace(/\/+$/, '');
+const pageUrl = file => `${SITE}/${file === 'index.html' ? '' : file}`;
+const ldScript = obj => `  <script type="application/ld+json">${JSON.stringify(obj).replace(/</g, '\\u003c')}</script>`;
+const organization = {
+  '@type': 'Organization', '@id': `${SITE}/#organization`, name: config.name, legalName: config.company, url: `${SITE}/`,
+  logo: `${SITE}/assets/favicon.svg`, email: config.supportEmail,
+  address: { '@type': 'PostalAddress', streetAddress: 'Sector 16B', addressLocality: 'Noida', addressRegion: 'Uttar Pradesh', postalCode: '201318', addressCountry: 'IN' },
+};
+function structuredData(file, { title, description, post }) {
+  if (file === 'index.html') {
+    return ldScript({ '@context': 'https://schema.org', '@graph': [
+      organization,
+      { '@type': 'WebSite', '@id': `${SITE}/#website`, name: config.name, url: `${SITE}/`, publisher: { '@id': `${SITE}/#organization` }, inLanguage: 'en-IN' },
+      { '@type': 'SoftwareApplication', name: config.name, applicationCategory: 'BusinessApplication', operatingSystem: 'Web, Windows', url: `${SITE}/`, description,
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'INR', description: 'Free to start' }, publisher: { '@id': `${SITE}/#organization` } },
+    ] });
+  }
+  if (file === 'faq.html' && data.faq.length) {
+    return ldScript({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: data.faq.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) });
+  }
+  if (post) {
+    return ldScript({ '@context': 'https://schema.org', '@type': 'BlogPosting', headline: post.title, description: post.summary, datePublished: post.date, dateModified: post.date,
+      mainEntityOfPage: pageUrl(file), author: { '@id': `${SITE}/#organization` }, publisher: organization, image: `${SITE}/assets/og-image.png`, inLanguage: 'en-IN' });
+  }
+  return ldScript({ '@context': 'https://schema.org', '@type': 'WebPage', name: title, description, url: pageUrl(file), isPartOf: { '@type': 'WebSite', name: config.name, url: `${SITE}/` } });
+}
+
+function render(body, title, description, { file, noindex = false, post = null } = {}) {
+  return fill(layout.replace('{{content}}', () => fill(body)), {
+    title, description: esc(description), canonical: esc(pageUrl(file)), robots: noindex ? 'noindex, nofollow' : 'index, follow, max-image-preview:large',
+    ogType: post ? 'article' : 'website', jsonLd: noindex ? '' : structuredData(file, { title, description, post }),
+  });
 }
 
 fs.rmSync(OUT, { recursive: true, force: true });
@@ -104,16 +135,20 @@ for (const f of fs.readdirSync(path.join(ROOT, 'assets'))) fs.copyFileSync(path.
 if (fs.existsSync(path.join(ROOT, 'designs'))) fs.cpSync(path.join(ROOT, 'designs'), path.join(OUT, 'designs'), { recursive: true, filter: src => !src.includes('previews') });   // the preview images are for you, not for the site
 
 const built = [];
+const sitemap = [];   // indexable pages: {file, lastmod}
 
 // ---------- the pages ----------
 const pagesDir = path.join(ROOT, 'pages');
 for (const file of fs.readdirSync(pagesDir).filter(f => f.endsWith('.html') && (hasReviews || f !== 'reviews.html'))) {
   let body = sections(fs.readFileSync(path.join(pagesDir, file), 'utf8'));
-  const meta = body.match(/^<!--\s*title:\s*(.*?)\s*\|\s*description:\s*(.*?)\s*-->\s*/s);
+  // first line: <!-- title: ... | description: ... --> or, for private pages, <!-- title: ... | description: ... | noindex -->
+  const meta = body.match(/^<!--\s*title:\s*(.*?)\s*\|\s*description:\s*(.*?)\s*(\|\s*noindex\s*)?-->\s*/s);
   if (!meta) throw new Error(`${file}: first line must be <!-- title: ... | description: ... -->`);
   body = body.slice(meta[0].length);
-  fs.writeFileSync(path.join(OUT, file), render(body, fill(meta[1]), fill(meta[2])));
+  const noindex = !!meta[3];
+  fs.writeFileSync(path.join(OUT, file), render(body, fill(meta[1]), fill(meta[2]), { file, noindex }));
   built.push(file);
+  if (!noindex) sitemap.push({ file, lastmod: fs.statSync(path.join(pagesDir, file)).mtime.toISOString().slice(0, 10) });
 }
 
 // ---------- one page per blog post ----------
@@ -121,8 +156,26 @@ for (const post of data.posts) {
   const bodyHtml = post.body.map(b => (typeof b === 'string' ? `<p>${esc(b)}</p>` : `<h2>${esc(b.h)}</h2>`)).join('\n');
   const page = fill(postTemplate, { postTitle: esc(post.title), postDate: esc(prettyDate(post.date)), postRead: String(post.readMinutes), postBody: bodyHtml, postSummary: esc(post.summary) });
   const file = `blog-${post.slug}.html`;
-  fs.writeFileSync(path.join(OUT, file), render(page, post.title, post.summary));
+  fs.writeFileSync(path.join(OUT, file), render(page, post.title, post.summary, { file, post }));
   built.push(file);
+  sitemap.push({ file, lastmod: post.date });
+}
+
+// ---------- robots.txt and sitemap.xml (private pages are kept out with their noindex tag, which robots.txt must not hide) ----------
+if (SITE) {
+  const priority = f => (f === 'index.html' ? '1.0' : /^(features|pricing|how-it-works|use-cases)\.html$/.test(f) ? '0.8' : f.startsWith('blog') ? '0.6' : '0.5');
+  fs.writeFileSync(path.join(OUT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${sitemap.sort((a, b) => (a.file === 'index.html' ? -1 : b.file === 'index.html' ? 1 : a.file.localeCompare(b.file))).map(p =>
+  `  <url><loc>${esc(pageUrl(p.file))}</loc><lastmod>${p.lastmod}</lastmod><priority>${priority(p.file)}</priority></url>`).join('\n')}
+</urlset>
+`);
+  fs.writeFileSync(path.join(OUT, 'robots.txt'), `User-agent: *
+Allow: /
+Disallow: /designs/
+
+Sitemap: ${SITE}/sitemap.xml
+`);
 }
 
 // every internal link must point at a page or asset that exists
@@ -140,5 +193,5 @@ for (const file of built) {
   }
   if (/\{\{\w+\}\}/.test(html)) { console.error(`Unfilled placeholder in ${file}`); broken++; }
 }
-console.log(`Built ${built.length} pages into ${OUT}: ${built.sort().join(', ')}`);
+console.log(`Built ${built.length} pages into ${OUT} (${sitemap.length} in sitemap.xml): ${built.sort().join(', ')}`);
 if (broken) { console.error(`${broken} problem(s)`); process.exit(1); }

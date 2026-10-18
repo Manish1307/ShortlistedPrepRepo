@@ -15,6 +15,7 @@ const { completeJson } = require('./careerai');
 const sources = require('./jobsources');
 const { CATALOGUE } = require('./jobcatalogue');
 const { logActivity } = require('./activity');
+const jobprep = require('./jobprep');
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const FRESH_FOR = 6 * HOUR;       // a company's jobs fetched within this time are used as they are
@@ -397,6 +398,41 @@ function addRoutes(ctx) {
     const row = searchRow(params.id, c.id);
     if (!row) throw new ApiError(404, 'Search not found');
     return { search: presentSearch(row, true), usage: require('./career').usage(db, c.id) };
+  });
+
+  // "Prepare for this job": the skill gaps to a full fit, learning links, revision topics and interview questions.
+  // Made once per job (one AI action) and kept with the search.
+  add('POST', '/api/career/jobsearch/:id/prep', { public: true }, async (req, res, { params, body }) => {
+    const c = me(req);
+    const row = searchRow(params.id, c.id);
+    const result = row && parse(row.result_json);
+    if (!result) throw new ApiError(404, 'Search not found');
+    const job = result.jobs.find(j => j.id === Number(body.jobId));
+    if (!job) throw new ApiError(404, 'Job not found in this search');
+    if (job.prep) return { prep: job.prep, usage: require('./career').usage(db, c.id) };
+    require('./career').checkQuota(db, c.id);
+    const resumes = resumesFor(c.id, 'all');
+    const resume = resumes.find(r => r.label === job.resume) || resumes[0];
+    const posting = one('SELECT department, employment_type, description FROM jobs WHERE id = ?', job.id) || {};
+    const out = await completeJson(ai, {
+      system: jobprep.PREP_PROMPT,
+      user: [`JOB: ${job.title} at ${job.company} (${job.location || job.country || 'location not given'})`,
+        posting.department ? `TEAM: ${posting.department}` : '', `CURRENT FIT SCORE: ${job.score}/100`,
+        job.why ? `WHY THIS SCORE: ${job.why}` : '', job.gap ? `MAIN GAP NOTED: ${job.gap}` : '',
+        `JOB DESCRIPTION:\n${String(posting.description || '').slice(0, 5000) || '(the careers site gave no description: use the job title, company and what such roles usually need)'}`,
+        `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 15000)}`].filter(Boolean).join('\n'),
+      maxTokens: 3500,
+    });
+    const prep = jobprep.cleanPrep(out, job.score);
+    if (!prep.gaps.length && !prep.interviewQuestions.length) throw new ApiError(502, 'The AI could not prepare this job this time. Please try again.', 'ai');
+    // save it with the search (read again: another job may have been prepared meanwhile)
+    const fresh = parse(one('SELECT result_json FROM career_job_searches WHERE id = ?', row.id).result_json);
+    const target = fresh.jobs.find(j => j.id === job.id);
+    if (target) target.prep = prep;
+    db.prepare('UPDATE career_job_searches SET result_json = ? WHERE id = ?').run(JSON.stringify(fresh), row.id);
+    require('./career').countUse(db, c.id);
+    logActivity(db, c.id, 'jobprep.created', `${job.title} at ${job.company} · ${prep.gaps.length} gaps`);
+    return { prep, usage: require('./career').usage(db, c.id) };
   });
 
   add('POST', '/api/career/jobsearch/:id/delete', { public: true }, (req, res, { params }) => {

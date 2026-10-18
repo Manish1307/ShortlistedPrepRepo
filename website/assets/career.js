@@ -409,11 +409,88 @@
     return [p.role || 'Roles from my resume', [p.city, p.country].filter(Boolean).join(', ') || 'Any location', p.level, p.companies ? p.companies.split(/[\n,;]+/).filter(function (x) { return x.trim(); }).length + ' companies' : 'Well-known companies', p.resumeLabel].filter(Boolean).join(' · ');
   }
 
-  function groupTable(list, withResume, startAt) {
+  // ---------- "Prepare for this job": gaps to a full fit, learning links, revision and interview prep ----------
+  var LINK_ICON = { youtube: '▶', 'udemy-free': '🎓', 'udemy-paid': '🎓', coursera: '📘', official: '🏛', articles: '📰', cert: '🏅' };
+  function linkRow(links) {
+    return h('div', { class: 'pp-links' }, links.map(function (l) {
+      return h('a', { class: 'pp-link ' + l.kind, href: l.url, target: '_blank', rel: 'noopener noreferrer' }, (LINK_ICON[l.kind] || '↗') + ' ' + l.label);
+    }));
+  }
+  function prepView(p, job) {
+    var reach = Math.min(100, p.fit + p.gapPoints);
+    var section = function (cls, icon, title, intro, body) {
+      return h('section', { class: 'pp-sec ' + cls }, h('h4', {}, h('span', { 'aria-hidden': 'true' }, icon), ' ', title), intro ? h('p', { class: 'ac-muted pp-intro' }, intro) : null, body);
+    };
+    return h('div', { class: 'pp' },
+      h('div', { class: 'pp-head' },
+        h('div', { class: 'pp-meter', role: 'img', 'aria-label': 'Fit now ' + p.fit + ', up to ' + reach + ' after closing the gaps' },
+          h('i', { class: 'now', style: 'width:' + p.fit + '%' }), h('i', { class: 'gain', style: 'left:' + p.fit + '%;width:' + (reach - p.fit) + '%' })),
+        h('div', { class: 'pp-scores' }, h('span', {}, 'Fit now ', h('b', {}, String(p.fit))), h('span', {}, 'After closing the gaps ', h('b', { class: 'up' }, String(reach)))),
+        p.summary ? h('p', { class: 'pp-summary' }, p.summary) : null),
+
+      h('div', { class: 'pp-grid' },
+        section('gaps', '🎯', 'Close the gaps to reach ' + reach + '/100',
+          p.gaps.length ? 'What this job wants that your resume does not show yet, biggest first, with where to learn it.' : null,
+          p.gaps.length ? h('div', { class: 'pp-gaps' }, p.gaps.map(function (g) {
+            return h('div', { class: 'pp-gap ' + g.importance },
+              h('div', { class: 'pp-gap-head' }, h('b', {}, g.skill), h('span', { class: 'pp-pts' }, '+' + g.points + ' fit'),
+                g.hours ? h('span', { class: 'ac-muted pp-hours' }, '~' + g.hours + ' h study') : null),
+              g.why ? h('p', { class: 'pp-why' }, g.why) : null,
+              g.howToClose ? h('p', { class: 'pp-how' }, h('b', {}, 'How: '), g.howToClose) : null,
+              linkRow(g.links.concat(g.certification ? [{ kind: 'cert', label: g.certification.name + ' certification', url: g.certification.url }] : [])));
+          })) : h('p', { class: 'ac-muted' }, 'No real gaps: you already match what this job asks for.')),
+
+        h('div', { class: 'pp-side' },
+          p.matched.length ? section('match', '✅', 'You already match', null, chips(p.matched)) : null,
+          p.plan.length ? section('plan', '🗓', 'Your plan to a full fit', null, h('ol', { class: 'pp-list' }, p.plan.map(function (x) { return h('li', {}, x); }))) : null)),
+
+      p.revise.length ? section('revise', '📚', 'Revise before the interview', 'Topics you know but should brush up for this job: videos and articles.',
+        h('div', { class: 'pp-revise' }, p.revise.map(function (r) { return h('div', { class: 'pp-rev' }, h('b', {}, r.topic), linkRow(r.links)); }))) : null,
+
+      h('div', { class: 'pp-grid two' },
+        p.interviewQuestions.length ? section('questions', '🎤', 'Likely interview questions', null,
+          h('ol', { class: 'pp-list' }, p.interviewQuestions.map(function (x) { return h('li', {}, x); }))) : null,
+        section('help', '💡', 'More help', null, h('div', {},
+          p.tips.length ? h('ul', { class: 'pp-list' }, p.tips.map(function (x) { return h('li', {}, x); })) : null,
+          h('div', { class: 'pp-actions' },
+            h('a', { class: 'btn btn-sm', href: '#cr-match', onclick: function (e) { e.preventDefault(); goTo('cr-match'); } }, '✉️ Write a cover letter for this job'),
+            h('a', { class: 'btn btn-sm', href: '#cr-versions', onclick: function (e) { e.preventDefault(); goTo('cr-versions'); } }, '🧩 Make a resume for this role'),
+            h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.company + ' ' + job.title + ' interview questions'), target: '_blank', rel: 'noopener noreferrer' }, '🔎 Interview experiences at ' + job.company),
+            h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.title + ' salary India ' + job.company), target: '_blank', rel: 'noopener noreferrer' }, '₹ Salary for this role'))))),
+      h('p', { class: 'ac-muted pp-note' }, 'Links open a search on YouTube, Udemy, Coursera, official documentation and article sites, so you always see current material. Prepared ' + dateTime(p.createdAt) + '.'));
+  }
+  function prepRow(searchId, job, cols) {
+    var cell = h('td', { colspan: String(cols), class: 'pp-cell' });
+    var row = h('tr', { class: 'pp-row' }, cell);
+    function load() {
+      if (job.prep) { cell.replaceChildren(prepView(job.prep, job)); return; }
+      var status = h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, 'Finding your skill gaps and the best ways to learn them… (about 20 seconds)')));
+      cell.replaceChildren(status);
+      call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id }).then(function (d) {
+        job.prep = d.prep; setUsage(d.usage); cell.replaceChildren(prepView(d.prep, job));
+      }).catch(function (e) {
+        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: load }, 'Try again');
+        cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', retry));
+      });
+    }
+    return { row: row, load: load };
+  }
+
+  function groupTable(list, withResume, startAt, searchId) {
     var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);
     return h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table js-table' },
       h('thead', {}, h('tr', {}, head.map(function (t) { return h('th', {}, t); }))),
       h('tbody', {}, list.map(function (j, i) {
+        var prep = null;
+        var toggle = h('button', { class: 'btn btn-sm pp-toggle' + (j.prep ? ' ready' : ''), type: 'button', 'aria-expanded': 'false' }, j.prep ? '📘 Prepare ▾' : '📘 Prepare');
+        toggle.addEventListener('click', function () {
+          var row = toggle.closest('tr');
+          if (prep && prep.row.parentNode) { prep.row.remove(); toggle.setAttribute('aria-expanded', 'false'); return; }
+          prep = prep || prepRow(searchId, j, head.length);
+          row.parentNode.insertBefore(prep.row, row.nextSibling);
+          toggle.setAttribute('aria-expanded', 'true');
+          prep.load();
+        });
         return h('tr', {},
           h('td', { class: 'js-num', 'data-label': '#' }, String(startAt + i + 1)),
           h('td', { 'data-label': 'Role' }, h('b', {}, j.title)),
@@ -424,7 +501,7 @@
           h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
             j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
           withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
-          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗')));
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle));
       }))));
   }
 
@@ -452,7 +529,7 @@
         if (!list.length) return null;
         var block = h('div', { class: 'js-group ' + g[0] },
           h('div', { class: 'js-group-head' }, h('h3', {}, g[1] + ' (' + list.length + ')'), h('span', { class: 'ac-muted' }, g[2])),
-          groupTable(list, withResume, n));
+          groupTable(list, withResume, n, s.id));
         n += list.length;
         return block;
       }),

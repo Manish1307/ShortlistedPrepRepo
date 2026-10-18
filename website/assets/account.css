@@ -272,3 +272,52 @@
   .js-num { width: auto; }
   .jb-open { text-align: left; margin-top: 6px; }
 }
+
+/* ---------- Prepare for this job (AI Job search results) ---------- */
+.js-table .jb-open { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.pp-toggle { white-space: nowrap; }
+.pp-toggle[aria-expanded="true"] { background: var(--purple-l); border-color: var(--purple); color: var(--purple-d); }
+.pp-toggle.ready:not([aria-expanded="true"]) { border-color: #b98cff; }
+.jb-table tr.pp-row td, .jb-table tr.pp-row:hover td { background: #fbf9ff; padding: 0; }
+.pp-cell { border-top: 0 !important; }
+.pp { padding: 18px 20px 14px; border-left: 4px solid var(--purple); }
+.pp-head { display: grid; gap: 8px; margin-bottom: 14px; }
+.pp-meter { position: relative; height: 12px; border-radius: 8px; background: #ece6fb; overflow: hidden; }
+.pp-meter i { position: absolute; top: 0; bottom: 0; }
+.pp-meter .now { left: 0; background: #0a8a5c; border-radius: 8px 0 0 8px; }
+.pp-meter .gain { background: repeating-linear-gradient(135deg, #7d2ae8 0 6px, #a374f5 6px 12px); }
+.pp-scores { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; font-weight: 600; color: var(--body); }
+.pp-scores b { font-size: 18px; color: #0a8a5c; } .pp-scores b.up { color: var(--purple); }
+.pp-summary { margin: 0; font-weight: 600; color: var(--ink); }
+.pp-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
+.pp-grid.two { grid-template-columns: 1fr 1fr; margin-top: 16px; }
+.pp-side { display: grid; gap: 16px; }
+.pp-sec { background: #fff; border: 1px solid var(--bd); border-radius: 16px; padding: 14px 16px; min-width: 0; }
+.pp-sec h4 { margin: 0 0 6px; font-size: 15.5px; }
+.pp-intro { font-size: 13px; margin: 0 0 10px; }
+.pp-sec.revise { margin-top: 16px; }
+.pp-gaps { display: grid; gap: 10px; }
+.pp-gap { border: 1px solid var(--line); border-left: 4px solid #a86c00; border-radius: 12px; padding: 10px 12px; }
+.pp-gap.high { border-left-color: #b4235e; } .pp-gap.low { border-left-color: #0a8a5c; }
+.pp-gap-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.pp-pts { background: var(--purple-l); color: var(--purple-d); border-radius: 999px; padding: 2px 9px; font-size: 12.5px; font-weight: 800; }
+.pp-hours { font-size: 12.5px; }
+.pp-why, .pp-how { margin: 4px 0 0; font-size: 13.5px; color: var(--body); }
+.pp-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pp-link { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--bd); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.pp-link:hover { background: var(--tint); text-decoration: none; }
+.pp-link.youtube { border-color: #f5b5b5; } .pp-link.youtube:hover { background: #fff1f1; }
+.pp-link.official { border-color: #b9d3f5; } .pp-link.official:hover { background: #f0f6ff; }
+.pp-link.udemy-free, .pp-link.udemy-paid { border-color: #d9c6fb; }
+.pp-link.cert { border-color: #ecd29a; background: #fffaf0; }
+.pp-revise { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.pp-rev { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.pp-list { margin: 4px 0 0; padding-left: 20px; display: grid; gap: 5px; font-size: 14px; }
+.pp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pp-note { font-size: 12px; margin: 12px 0 0; }
+@media (max-width: 900px) { .pp-grid, .pp-grid.two { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .jb-table tr.pp-row { padding: 0; overflow: hidden; }
+  .jb-table tr.pp-row td { padding: 0; }
+  .pp { padding: 14px 12px; }
+}

@@ -67,7 +67,13 @@ async function fakeGemini() {
       seen.push(body);
       const system = body.systemInstruction.parts[0].text, user = body.contents[0].parts[0].text;
       let out;
-      if (/This step only analyses the candidate/.test(system)) {
+      if (/expert career coach/.test(system)) {
+        out = { summary: 'Close to a full fit.', matched: ['C#', '.NET'],
+          gaps: [{ skill: 'Docker', points: 6, importance: 'medium', why: 'Containers', howToClose: 'Build one app', hours: 10, searchQuery: 'Docker for .NET developers', provider: 'docker', certification: '' },
+            { skill: 'Azure DevOps', points: 9, importance: 'high', why: 'CI/CD', howToClose: 'Set up a pipeline', hours: 12, searchQuery: 'Azure DevOps pipelines tutorial', provider: 'microsoft', certification: 'AZ-400' }],
+          revise: [{ topic: 'ASP.NET Core middleware', searchQuery: 'ASP.NET Core middleware interview' }],
+          plan: ['Week 1: Azure DevOps'], interviewQuestions: ['What is middleware?'], tips: ['Lead with your API work'] };
+      } else if (/This step only analyses the candidate/.test(system)) {
         out = { level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
           searchTerms: ['.net', 'scrum master', 'backend engineer', 'qa engineer'], resumeFixes: ['Replace the [add number] markers'] };
       } else {
@@ -300,5 +306,37 @@ test('career sites nobody searched for two weeks are dropped from the cache', as
     db.prepare("INSERT INTO job_companies (name, careers_url, provider, board, created_at, last_used) VALUES ('Contoso', 'https://boards.greenhouse.io/contoso', 'greenhouse', 'contoso', ?, ?)").run(old, new Date().toISOString());
     assert.equal(await maintain(db, { base: s.boards.sourceBase }), 1);
     assert.deepEqual(db.prepare('SELECT name, job_count FROM job_companies').all().map(r => [r.name, r.job_count]), [['Contoso', 3]]);
+  });
+});
+
+test('Prepare for this job: gaps to a full fit with search links, made once and kept with the search', async () => {
+  await withServer(async s => {
+    s.addResume();
+    const web = await s.site();
+    const search = (await web.search({ resume: 'ats', country: 'India' })).json.search;
+    const job = search.result.jobs[0];
+    const calls = s.ai.seen.length;
+    const r = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id });
+    assert.equal(r.status, 200);
+    const prep = r.json.prep;
+    assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Azure DevOps', 9], ['Docker', 6]]);      // biggest gap first
+    assert.equal(prep.gapPoints, 15);
+    assert.equal(prep.fit, job.score);
+    const ado = prep.gaps[0];
+    assert.equal(ado.links.find(l => l.kind === 'youtube').url, 'https://www.youtube.com/results?search_query=Azure%20DevOps%20pipelines%20tutorial');
+    assert.match(ado.links.find(l => l.kind === 'udemy-free').url, /udemy\.com\/courses\/search\/\?q=Azure%20DevOps.*price-free/);
+    assert.match(ado.links.find(l => l.kind === 'official').url, /^https:\/\/learn\.microsoft\.com\/en-us\/search\/\?terms=/);
+    assert.equal(ado.certification.name, 'AZ-400');
+    assert.equal(prep.gaps[1].provider, 'other');                                          // an unknown provider is not trusted
+    assert.deepEqual(prep.revise[0].links.map(l => l.kind), ['youtube', 'articles']);
+    assert.match(s.ai.seen[calls].contents[0].parts[0].text, /CURRENT FIT SCORE: \d+\/100/);
+
+    // made once: opening it again uses no AI action
+    const used = r.json.usage.used;
+    const again = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id });
+    assert.equal(again.json.usage.used, used);
+    assert.equal(s.ai.seen.length, calls + 1);
+    assert.ok((await web.get('/api/career/jobsearch/' + search.id)).json.search.result.jobs[0].prep);
+    assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: 999999 })).status, 404);
   });
 });

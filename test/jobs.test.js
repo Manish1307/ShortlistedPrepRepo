@@ -342,6 +342,10 @@ test('Prepare for this job: gaps to a full fit with search links, made once and 
     assert.equal(prep.gaps[1].provider, 'other');                                          // an unknown provider is not trusted
     assert.deepEqual(prep.revise[0].links.map(l => l.kind), ['youtube', 'articles']);
     assert.match(s.ai.seen[calls].contents[0].parts[0].text, /CURRENT FIT SCORE: \d+\/100/);
+    // kept in its own table, for the dashboard
+    const kept = s.app.db.prepare('SELECT * FROM career_job_preps WHERE search_id = ? AND job_id = ?').get(search.id, job.id);
+    assert.deepEqual([kept.job_title, kept.company, kept.fit], [job.title, job.company, job.score]);
+    assert.equal(JSON.parse(kept.prep_json).gapPoints, 15);
 
     // made once: opening it again uses no AI action
     const used = r.json.usage.used;

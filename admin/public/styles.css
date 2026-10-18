@@ -152,3 +152,4 @@ details summary { cursor: pointer; font-weight: 600; margin: 14px 0 8px; }
 .tok-bar i { display: block; height: 100%; background: var(--good); }
 .tok-bar i.warn { background: var(--warn); } .tok-bar i.out { background: var(--bad); }
 .tok-left.warn { color: var(--warn); font-weight: 600; } .tok-left.out { color: var(--bad); font-weight: 600; }
+.cand-links { display: flex; flex-wrap: wrap; gap: 4px 10px; }

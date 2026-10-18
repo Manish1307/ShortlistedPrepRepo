@@ -382,3 +382,12 @@
   .jb-table tr.gm-row > td { padding: 0; }
   .gm > summary::after { margin-left: 0; }
 }
+
+/* ---------- clicking a matrix row jumps to its gap ---------- */
+.mx-table tr.mx-click { cursor: pointer; }
+.mx-table tr.mx-click:hover td, .mx-table tr.mx-click:focus td { background: #f6f0ff; }
+.mx-table tr.mx-click:focus { outline: 2px solid var(--purple); outline-offset: -2px; }
+.gm-hint { font-size: 12.5px; margin: 0 0 6px; }
+.pp-gap.flash { animation: pp-flash 2.6s ease; }
+@keyframes pp-flash { 0%, 60% { box-shadow: 0 0 0 3px #7d2ae8; background: #f6f0ff; } 100% { box-shadow: none; background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .pp-gap.flash { animation: none; outline: 3px solid #7d2ae8; } }

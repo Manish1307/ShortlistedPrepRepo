@@ -68,6 +68,10 @@ test('the dashboard shows each candidate\'s progress, documents, job searches an
     const sid = Number(s.db.prepare("INSERT INTO career_job_searches (customer_id, params_json, status, result_json, created_at, finished_at) VALUES (?, ?, 'done', ?, datetime('now'), datetime('now'))")
       .run(s.asha, JSON.stringify({ resume: 'all', country: 'India', role: '.NET', resumeLabel: 'All my resumes (2)' }), JSON.stringify(result)).lastInsertRowid);
     s.db.prepare("INSERT INTO career_usage (customer_id, day, count) VALUES (?, ?, 3)").run(s.asha, new Date().toISOString().slice(0, 10));
+    const plan = { fit: 88, summary: 'Close', matrix: { rows: [{ skill: 'C#', weight: 100, status: 'match', evidence: 'Contoso', earned: 100, missing: 0 }], score: 100, counts: { match: 1, partial: 0, missing: 0 } },
+      gaps: [{ skill: 'Docker', points: 12, importance: 'high', links: [] }], gapPoints: 12, plan: ['Week 1'], interviewQuestions: ['Why us?'], tips: [], createdAt: new Date().toISOString() };
+    const pid = Number(s.db.prepare("INSERT INTO career_job_preps (customer_id, search_id, job_id, job_title, company, location, url, fit, prep_json, created_at) VALUES (?, ?, 1, 'Senior .NET Developer', 'Contoso', 'Pune', 'https://example.com/1', 88, ?, datetime('now'))")
+      .run(s.asha, sid, JSON.stringify(plan)).lastInsertRowid);
 
     list = (await boss.get('/admin/api/candidates?filter=resume')).json;
     const c = list.candidates[0];
@@ -82,6 +86,10 @@ test('the dashboard shows each candidate\'s progress, documents, job searches an
     assert.equal(d.resume.ats.score, 81);
     assert.deepEqual([d.versions[0].role, d.matches[0].hasLetter, d.searches[0].counts], ['Scrum Master', true, { high: 1, medium: 0, stretch: 1 }]);
     assert.deepEqual(d.usage.map(u => u.count), [3]);
+    assert.deepEqual(d.preps.map(x => [x.jobTitle, x.fit, x.skillScore, x.gaps, x.gapPoints]), [['Senior .NET Developer', 88, 100, 1, 12]]);
+    const one = (await help.get(`/admin/api/candidates/${s.asha}/preps/${pid}`)).json.prep;
+    assert.deepEqual([one.company, one.plan.gaps[0].skill, one.plan.interviewQuestions[0]], ['Contoso', 'Docker', 'Why us?']);
+    assert.equal((await help.get(`/admin/api/candidates/${s.asha}/preps/99999`)).status, 404);
     assert.deepEqual(d.activity.map(a => a.action), ['resume.uploaded', 'login']);              // newest first
     assert.match(d.activity[0].detail, /asha\.docx/);
 

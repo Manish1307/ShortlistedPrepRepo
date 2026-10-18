@@ -145,6 +145,13 @@ CREATE TABLE IF NOT EXISTS career_activity (
   at TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_career_activity ON career_activity(customer_id, id);
+CREATE TABLE IF NOT EXISTS career_job_preps (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  search_id INTEGER, job_id INTEGER NOT NULL, job_title TEXT NOT NULL DEFAULT '', company TEXT NOT NULL DEFAULT '',
+  location TEXT NOT NULL DEFAULT '', url TEXT NOT NULL DEFAULT '', fit INTEGER NOT NULL DEFAULT 0, prep_json TEXT NOT NULL, created_at TEXT NOT NULL,
+  UNIQUE (search_id, job_id)
+);
+CREATE INDEX IF NOT EXISTS idx_career_job_preps ON career_job_preps(customer_id);
 CREATE TABLE IF NOT EXISTS token_usage (
   customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE, day TEXT NOT NULL,
   tokens INTEGER NOT NULL DEFAULT 0, calls INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (customer_id, day)

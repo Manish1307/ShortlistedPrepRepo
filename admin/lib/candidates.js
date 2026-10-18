@@ -89,6 +89,9 @@ function addRoutes(ctx) {
             params: { role: p.role, country: p.country, city: p.city, level: p.level, companies: p.companies, resumeLabel: p.resumeLabel, days: p.days },
             counts: { high: count('high'), medium: count('medium'), stretch: count('stretch') }, level: x ? x.profile.level : '' };
         }),
+      preps: all('SELECT id, search_id, job_title, company, location, url, fit, prep_json, created_at FROM career_job_preps WHERE customer_id = ? ORDER BY id DESC', c.id)
+        .map(x => { const pr = parse(x.prep_json) || {}; return { id: x.id, searchId: x.search_id, jobTitle: x.job_title, company: x.company, location: x.location, url: x.url, fit: x.fit,
+          skillScore: pr.matrix ? pr.matrix.score : null, gaps: (pr.gaps || []).length, gapPoints: pr.gapPoints || 0, createdAt: x.created_at }; }),
       usage: all('SELECT day, count FROM career_usage WHERE customer_id = ? AND day >= ? ORDER BY day', c.id, since),
       activity: all('SELECT at, action, detail FROM career_activity WHERE customer_id = ? ORDER BY id DESC LIMIT 200', c.id),
     };
@@ -98,6 +101,12 @@ function addRoutes(ctx) {
     const s = one('SELECT * FROM career_job_searches WHERE id = ? AND customer_id = ?', params.sid, params.id);
     if (!s) throw new ApiError(404, 'Search not found');
     return { search: { id: s.id, status: s.status, error: s.error, createdAt: s.created_at, params: parse(s.params_json) || {}, result: parse(s.result_json) } };
+  });
+
+  add('GET', '/admin/api/candidates/:id/preps/:pid', { admin: true }, (req, res, { params }) => {
+    const x = one('SELECT * FROM career_job_preps WHERE id = ? AND customer_id = ?', params.pid, params.id);
+    if (!x) throw new ApiError(404, 'Plan not found');
+    return { prep: { id: x.id, jobTitle: x.job_title, company: x.company, location: x.location, url: x.url, fit: x.fit, createdAt: x.created_at, plan: parse(x.prep_json) } };
   });
 
   add('GET', '/admin/api/candidates/:id/download', { admin: true }, (req, res, { params, query, admin }) => {

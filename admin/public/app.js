@@ -764,6 +764,34 @@
     };
 
     const maxUse = Math.max(1, ...d.usage.map(u => u.count));
+
+    // Prepare-for-this-job plans the candidate made (saved in career_job_preps)
+    const prepBox = h('div', {});
+    const MX = { match: ['✓ Match', 'good'], partial: ['◐ Partial', 'warn'], missing: ['✕ Missing', 'bad'] };
+    const showPrep = async x => {
+      const { prep } = await get(`/admin/api/candidates/${id}/preps/${x.id}`);
+      const p = prep.plan || {};
+      const linkList = links => h('span', { class: 'cand-links' }, (links || []).map(l => h('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer', class: 'small' }, l.label)));
+      prepBox.replaceChildren(h('div', { class: 'cand-results' },
+        h('h3', {}, `${prep.jobTitle} at ${prep.company}`, ' ', h('span', { class: 'small muted' }, `fit ${prep.fit} · prepared ${dateTime(prep.createdAt)}`)),
+        p.summary ? h('p', { class: 'small' }, p.summary) : null,
+        p.matrix ? [h('h4', {}, `Skill matrix · weighted skill score ${p.matrix.score}/100`), table([
+          { label: 'Required', render: r => h('b', {}, r.skill) }, { label: 'Weight', render: r => `${r.weight}%` },
+          { label: 'Candidate', render: r => h('span', { class: 'pill ' + MX[r.status][1] }, MX[r.status][0]) },
+          { label: 'Evidence', render: r => h('span', { class: 'small' }, r.evidence || '—'), wrap: true },
+          { label: 'Score', render: r => `${r.earned} / ${r.weight}` }, { label: 'Gap', render: r => (r.missing ? `−${r.missing}` : '—') },
+        ], p.matrix.rows)] : null,
+        (p.gaps || []).length ? [h('h4', {}, `Gaps to close (+${p.gapPoints} fit)`), table([
+          { label: 'Skill', render: g => h('b', {}, g.skill) }, { label: 'Points', render: g => `+${g.points}` },
+          { label: 'Importance', render: g => pill(g.importance === 'high' ? 'failed' : g.importance === 'low' ? 'active' : 'expired') },
+          { label: 'How to close it', render: g => h('span', { class: 'small' }, g.howToClose || g.why || '—', g.hours ? h('span', { class: 'muted' }, ` · ~${g.hours} h`) : null), wrap: true },
+          { label: 'Learning links', render: g => linkList(g.links.concat(g.certification ? [{ label: g.certification.name, url: g.certification.url }] : [])), wrap: true },
+        ], p.gaps)] : null,
+        (p.plan || []).length ? [h('h4', {}, 'Plan to a full fit'), h('ol', { class: 'small' }, p.plan.map(x => h('li', {}, x)))] : null,
+        (p.interviewQuestions || []).length ? [h('h4', {}, 'Likely interview questions'), h('ol', { class: 'small' }, p.interviewQuestions.map(x => h('li', {}, x)))] : null,
+        (p.tips || []).length ? [h('h4', {}, 'Tips'), h('ul', { class: 'small' }, p.tips.map(x => h('li', {}, x)))] : null));
+      prepBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
     el.replaceChildren(
       head(c.name || c.email, h('button', { class: 'btn', onclick: back }, '← All candidates')),
       h('div', { class: 'card' },
@@ -809,6 +837,16 @@
           { label: '', render: s => (s.status === 'done' ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showSearch(s)); } }, 'View results') : '') },
         ], d.searches, null, 'No AI job searches yet.'),
         results),
+
+      section(`Job preparation plans (${d.preps.length})`,
+        table([
+          { label: 'Job', render: x => h('span', {}, h('b', {}, x.jobTitle), h('br'), h('span', { class: 'small muted' }, [x.company, x.location].filter(Boolean).join(' · '))), wrap: true },
+          { label: 'Fit', render: x => scorePill(x.fit) }, { label: 'Skill score', render: x => scorePill(x.skillScore) },
+          { label: 'Gaps', render: x => `${x.gaps} (+${x.gapPoints})` }, { label: 'Prepared', render: x => dateTime(x.createdAt) },
+          { label: '', render: x => h('span', { class: 'tools' }, h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showPrep(x)); } }, 'View plan'),
+            x.url ? h('a', { class: 'btn sm', href: x.url, target: '_blank', rel: 'noopener noreferrer', onclick: e => e.stopPropagation() }, 'Job ↗') : null) },
+        ], d.preps, null, 'No preparation plans yet. They appear when the candidate presses "Prepare" on a job.'),
+        prepBox),
 
       h('div', { class: 'grid2', style: 'margin-top:14px' },
         h('div', { class: 'card' }, h('h2', {}, 'Activity'),

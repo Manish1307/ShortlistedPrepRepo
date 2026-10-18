@@ -177,6 +177,18 @@ function addRoutes(ctx) {
   const catalogue = ctx.jobCatalogue || CATALOGUE;
   const budget = ctx.jobFetchBudget || FETCH_BUDGET;
 
+  /** Keep a Prepare plan in career_job_preps (the dashboard reads it from there), replacing an older one for the same job. */
+  function savePrep(customerId, searchId, job, prep) {
+    db.prepare(`INSERT INTO career_job_preps (customer_id, search_id, job_id, job_title, company, location, url, fit, prep_json, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT (search_id, job_id) DO UPDATE SET fit = excluded.fit, prep_json = excluded.prep_json, created_at = excluded.created_at`)
+      .run(customerId, searchId, job.id, job.title || '', job.company || '', job.location || job.country || '', job.url || '', job.score || 0, JSON.stringify(prep), prep.createdAt || now());
+  }
+  // plans made before the table existed are copied into it once
+  for (const s of all("SELECT id, customer_id, result_json FROM career_job_searches WHERE result_json LIKE '%\"prep\":%'")) {
+    const r = parse(s.result_json);
+    for (const j of (r && r.jobs) || []) if (j.prep && !one('SELECT 1 FROM career_job_preps WHERE search_id = ? AND job_id = ?', s.id, j.id)) savePrep(s.customer_id, s.id, j, j.prep);
+  }
+
   // a search cannot survive a restart
   db.prepare("UPDATE career_job_searches SET status = 'failed', error = 'The search was interrupted. Please run it again.', finished_at = ? WHERE status = 'running'").run(now());
 
@@ -433,6 +445,7 @@ function addRoutes(ctx) {
     const target = fresh.jobs.find(j => j.id === job.id);
     if (target) target.prep = prep;
     db.prepare('UPDATE career_job_searches SET result_json = ? WHERE id = ?').run(JSON.stringify(fresh), row.id);
+    savePrep(c.id, row.id, job, prep);
     require('./career').countUse(db, c.id);
     logActivity(db, c.id, 'jobprep.created', `${job.title} at ${job.company} · ${prep.gaps.length} gaps`);
     return { prep, usage: require('./career').usage(db, c.id) };

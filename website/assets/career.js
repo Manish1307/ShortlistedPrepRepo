@@ -426,7 +426,7 @@
     var section = function (cls, icon, title, intro, body) {
       return h('section', { class: 'pp-sec ' + cls }, h('h4', {}, h('span', { 'aria-hidden': 'true' }, icon), ' ', title), intro ? h('p', { class: 'ac-muted pp-intro' }, intro) : null, body);
     };
-    return h('div', { class: 'pp' },
+    var box = h('div', { class: 'pp' },
       h('div', { class: 'pp-head' },
         h('div', { class: 'pp-meter', role: 'img', 'aria-label': 'Fit now ' + p.fit + ', up to ' + reach + ' after closing the gaps' },
           h('i', { class: 'now', style: 'width:' + p.fit + '%' }), h('i', { class: 'gain', style: 'left:' + p.fit + '%;width:' + (reach - p.fit) + '%' })),
@@ -434,7 +434,7 @@
         p.summary ? h('p', { class: 'pp-summary' }, p.summary) : null),
 
       section('matrix', '📊', 'Skill matrix: what this job requires vs. what you have', null,
-        p.matrix ? matrixView(p.matrix, p.fit)
+        p.matrix ? matrixView(p.matrix, p.fit, function (skill) { focusGap(box, skill); })
           : h('div', { class: 'mx-absent' }, h('span', { class: 'ac-muted' }, 'This plan was made before the skill matrix was added.'),
             h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: refresh }, 'Add the skill matrix (uses 1 AI action)'))),
 
@@ -442,7 +442,7 @@
         section('gaps', '🎯', 'Close the gaps to reach ' + reach + '/100',
           p.gaps.length ? 'What this job wants that your resume does not show yet, biggest first, with where to learn it.' : null,
           p.gaps.length ? h('div', { class: 'pp-gaps' }, p.gaps.map(function (g) {
-            return h('div', { class: 'pp-gap ' + g.importance },
+            return h('div', { class: 'pp-gap ' + g.importance, 'data-skill': g.skill },
               h('div', { class: 'pp-gap-head' }, h('b', {}, g.skill), h('span', { class: 'pp-pts' }, '+' + g.points + ' fit'),
                 g.hours ? h('span', { class: 'ac-muted pp-hours' }, '~' + g.hours + ' h study') : null),
               g.why ? h('p', { class: 'pp-why' }, g.why) : null,
@@ -468,18 +468,40 @@
             h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.company + ' ' + job.title + ' interview questions'), target: '_blank', rel: 'noopener noreferrer' }, '🔎 Interview experiences at ' + job.company),
             h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.title + ' salary India ' + job.company), target: '_blank', rel: 'noopener noreferrer' }, '₹ Salary for this role'))))),
       h('p', { class: 'ac-muted pp-note' }, 'Links open a search on YouTube, Udemy, Coursera, official documentation and article sites, so you always see current material. Prepared ' + dateTime(p.createdAt) + '.'));
+    return box;
+  }
+  /** Scroll to "Close the gaps" and highlight the gap that matches a matrix requirement (by shared words). */
+  function focusGap(scope, skill) {
+    var words = function (t) { return String(t).toLowerCase().split(/[^a-z0-9#+.]+/).filter(function (w) { return w.length > 1 && ['and', 'or', 'the', 'of', 'in', 'with', 'for'].indexOf(w) === -1; }); };
+    var want = words(skill);
+    var best = null, bestScore = 0;
+    [].forEach.call(scope.querySelectorAll('.pp-gap'), function (g) {
+      var have = words(g.getAttribute('data-skill'));
+      var n = want.filter(function (w) { return have.some(function (x) { return x === w || x.indexOf(w) === 0 || w.indexOf(x) === 0; }); }).length;
+      if (n > bestScore) { best = g; bestScore = n; }
+    });
+    var target = best || scope.querySelector('.pp-sec.gaps');
+    if (!target) return;
+    setTimeout(function () { target.scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' }); }, 60);   // once the new panel is laid out
+    [].forEach.call(scope.querySelectorAll('.pp-gap.flash'), function (g) { g.classList.remove('flash'); });
+    if (best) { best.classList.add('flash'); setTimeout(function () { best.classList.remove('flash'); }, 2600); }
+    else {
+      var note = scope.querySelector('.pp-sec.gaps .pp-intro');
+      if (note) note.textContent = '"' + skill + '" is not one of the gaps below: you already match it, or a gap below covers it.';
+    }
   }
   function prepRow(searchId, job, cols) {
     var cell = h('td', { colspan: String(cols), class: 'pp-cell' });
     var row = h('tr', { class: 'pp-row' }, cell);
-    function load(refresh) {
-      if (job.prep && refresh !== true) { cell.replaceChildren(prepView(job.prep, job, function () { load(true); })); return; }
+    function show(p, done) { cell.replaceChildren(prepView(p, job, function () { load(true); })); if (done) done(cell); }
+    function load(refresh, done) {
+      if (job.prep && refresh !== true) { show(job.prep, done); return; }
       var status = h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, 'Finding your skill gaps and the best ways to learn them… (about 20 seconds)')));
       cell.replaceChildren(status);
       call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id, refresh: refresh === true }).then(function (d) {
-        job.prep = d.prep; setUsage(d.usage); cell.replaceChildren(prepView(d.prep, job, function () { load(true); }));
+        job.prep = d.prep; setUsage(d.usage); show(d.prep, done);
       }).catch(function (e) {
-        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh); } }, 'Try again');
+        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, done); } }, 'Try again');
         cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', retry));
       });
     }
@@ -488,7 +510,7 @@
 
   /** Required vs. what the candidate has: each requirement's weight, status, evidence and the points earned. */
   var MATRIX_STATUS = { match: ['✓', 'Match', 'good'], partial: ['◐', 'Partial', 'warn'], missing: ['✕', 'Missing', 'bad'] };
-  function matrixView(m, fit) {
+  function matrixView(m, fit, onRow) {
     var missingTotal = m.rows.reduce(function (n, r) { return n + r.missing; }, 0);
     var showEv = m.rows.some(function (r) { return r.evidence; });   // the quick matrix from the search has no evidence
     return h('div', {},
@@ -501,7 +523,8 @@
         h('thead', {}, h('tr', {}, ['Required for this job', 'Weight', 'You'].concat(showEv ? ['Evidence in your resume'] : []).concat(['Score', 'Gap']).map(function (t) { return h('th', {}, t); }))),
         h('tbody', {}, m.rows.map(function (r) {
           var s = MATRIX_STATUS[r.status];
-          return h('tr', { class: 'mx-' + r.status },
+          return h('tr', onRow ? { class: 'mx-' + r.status + ' mx-click', tabindex: '0', title: 'See how to close this gap', onclick: function () { onRow(r.skill); },
+            onkeydown: function (e) { if (e.key === 'Enter') onRow(r.skill); } } : { class: 'mx-' + r.status },
             h('td', { 'data-label': 'Required' }, h('b', {}, r.skill)),
             h('td', { 'data-label': 'Weight', class: 'mx-num' }, r.weight + '%'),
             h('td', { 'data-label': 'You' }, h('span', { class: 'mx-status ' + s[2] }, s[0] + ' ' + s[1])),
@@ -520,15 +543,16 @@
   function fmt(n) { return Math.round(n * 10) / 10 % 1 ? (Math.round(n * 10) / 10).toFixed(1) : String(Math.round(n)); }
 
   /** Under each job: its Skill Gap Matrix (from the search), folded until opened. */
-  function gapMatrixRow(j, cols) {
+  function gapMatrixRow(j, cols, openPrep) {
     var m = j.matrix;
     if (!m || !m.rows || !m.rows.length) return null;
     return h('tr', { class: 'gm-row' }, h('td', { colspan: String(cols), class: 'gm-cell' },
-      h('details', { class: 'gm' },
+      h('details', { class: 'gm', open: true },
         h('summary', {}, h('span', { class: 'gm-title' }, '📊 Skill Gap Matrix'),
           h('span', { class: 'mx-chip good' }, '✓ ' + m.counts.match), h('span', { class: 'mx-chip warn' }, '◐ ' + m.counts.partial), h('span', { class: 'mx-chip bad' }, '✕ ' + m.counts.missing),
           h('span', { class: 'gm-score' }, 'Weighted skill score ', h('b', {}, m.score + '/100'))),
-        matrixView(m, j.score))));
+        h('p', { class: 'ac-muted gm-hint' }, 'Click a row to see how to close that gap.'),
+        matrixView(m, j.score, openPrep))));
   }
   function groupTable(list, withResume, startAt, searchId) {
     var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);
@@ -536,17 +560,24 @@
       h('thead', {}, h('tr', {}, head.map(function (t) { return h('th', {}, t); }))),
       h('tbody', {}, list.map(function (j, i) {
         var prep = null;
+        var jobRow = null;
         var toggle = h('button', { class: 'btn btn-sm pp-toggle' + (j.prep ? ' ready' : ''), type: 'button', 'aria-expanded': 'false' }, j.prep ? '📘 Prepare ▾' : '📘 Prepare');
-        toggle.addEventListener('click', function () {
-          var row = toggle.closest('tr');
-          if (prep && prep.row.parentNode) { prep.row.remove(); toggle.setAttribute('aria-expanded', 'false'); return; }
+        /** Open the Prepare panel (below the Skill Gap Matrix); with a skill, jump to its gap in "Close the gaps". */
+        function openPrep(skill) {
           prep = prep || prepRow(searchId, j, head.length);
-          var after = row.nextSibling && row.nextSibling.classList.contains('gm-row') ? row.nextSibling : row;   // below the Skill Gap Matrix
-          row.parentNode.insertBefore(prep.row, after.nextSibling);
+          if (!prep.row.parentNode) {
+            var after = jobRow.nextSibling && jobRow.nextSibling.classList.contains('gm-row') ? jobRow.nextSibling : jobRow;
+            jobRow.parentNode.insertBefore(prep.row, after.nextSibling);
+          }
           toggle.setAttribute('aria-expanded', 'true');
-          prep.load();
+          prep.load(false, skill ? function (cell) { focusGap(cell, skill); } : null);
+          if (skill && !j.prep) prep.row.scrollIntoView({ behavior: 'smooth', block: 'start' });   // while it loads
+        }
+        toggle.addEventListener('click', function () {
+          if (prep && prep.row.parentNode) { prep.row.remove(); toggle.setAttribute('aria-expanded', 'false'); return; }
+          openPrep(null);
         });
-        return [h('tr', {},
+        return [jobRow = h('tr', {},
           h('td', { class: 'js-num', 'data-label': '#' }, String(startAt + i + 1)),
           h('td', { 'data-label': 'Role' }, h('b', {}, j.title)),
           h('td', { 'data-label': 'Company' }, j.company),
@@ -556,7 +587,7 @@
           h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
             j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
           withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
-          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle)), gapMatrixRow(j, head.length)];
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle)), gapMatrixRow(j, head.length, openPrep)];
       }))));
   }
 

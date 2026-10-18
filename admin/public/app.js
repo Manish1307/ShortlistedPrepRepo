@@ -21,7 +21,7 @@
       else if (v === true) e.setAttribute(k, '');
       else e.setAttribute(k, v);
     }
-    for (const c of children.flat()) {
+    for (const c of children.flat(Infinity)) {
       if (c === undefined || c === null || c === false) continue;
       e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
     }
@@ -142,7 +142,7 @@
 
   // ---------- shell ----------
   const NAV = [
-    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
+    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['candidates', 'Candidates'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
     ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
   ];
 
@@ -684,6 +684,143 @@
     dialog(`Topics and resume · ${c.name || c.email}`, body, buttons).el.classList.add('wide');
   }
 
+  // ---------- Candidates: progress, documents and activity in My account and the Career toolkit ----------
+  const STEP_NAMES = [['resume', 'Resume'], ['ats', 'ATS check'], ['versions', 'Role resumes'], ['matches', 'Job match'], ['searches', 'AI job search']];
+  const ACTION_LABEL = {
+    login: '🔑 Signed in', 'resume.uploaded': '📄 Uploaded resume', 'resume.pdf_read': '📄 PDF read', 'ats.checked': '✅ ATS check',
+    'version.created': '🧩 Role resume created', 'version.deleted': '🗑 Role resume deleted', 'match.created': '✉️ Job match & cover letter',
+    'match.deleted': '🗑 Job match deleted', 'jobsearch.started': '🎯 AI job search started', 'jobsearch.done': '🎯 AI job search finished',
+    'jobsearch.failed': '⚠️ AI job search failed', download: '⬇️ Downloaded',
+  };
+  const scorePill = n => (n == null ? '—' : h('span', { class: 'pill ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)));
+  const progressDots = steps => h('span', { class: 'cand-dots', title: STEP_NAMES.map(([k, l]) => `${steps[k] ? '✓' : '·'} ${l}`).join('\n') },
+    STEP_NAMES.map(([k, l]) => h('i', { class: steps[k] ? 'on' : '', 'aria-label': `${l}: ${steps[k] ? 'done' : 'not yet'}` })));
+  const ago = s => {
+    if (!s) return '—';
+    const m = Math.floor((Date.now() - Date.parse(s)) / 60000);
+    return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : m < 43200 ? `${Math.floor(m / 1440)} days ago` : date(s);
+  };
+  const dlLink = (id, kind, docId, label) => h('a', { class: 'btn sm', href: `/admin/api/candidates/${id}/download?kind=${kind}${docId ? '&id=' + docId : ''}`, download: '' }, '⬇ ' + label);
+
+  async function candidates(el, state = { q: '', filter: '' }) {
+    const d = await get(`/admin/api/candidates?q=${encodeURIComponent(state.q)}&filter=${state.filter}`);
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const redo = change => candidates(el, { ...state, ...change });
+    const filter = h('select', { 'aria-label': 'Show', onchange: e => redo({ filter: e.target.value }) },
+      [['', 'All candidates'], ['resume', 'Uploaded a resume'], ['noresume', 'No resume yet'], ['searching', 'Ran an AI job search'], ['active', 'Active in the last 7 days']]
+        .map(([v, l]) => h('option', { value: v }, l)));
+    filter.value = state.filter;
+    el.replaceChildren(
+      head('Candidates', filter, searchBox(v => redo({ q: v }), 'Search name, email, organisation', state.q)),
+      h('p', { class: 'muted' }, 'Customers using My account and the Career toolkit on the website: how far they got, their documents, job searches and what they did. Click a candidate for the details.'),
+      h('div', { class: 'cards' }, stat('Candidates', d.stats.total), stat('Uploaded a resume', d.stats.withResume, `${d.stats.atsDone} ran the ATS check`),
+        stat('Active in 7 days', d.stats.activeWeek), stat('AI job searches (7 days)', d.stats.searchesWeek)),
+      table([
+        { label: 'Candidate', render: r => h('span', {}, h('b', {}, r.name || r.email), h('br'), h('span', { class: 'small muted' }, r.name ? r.email : (r.organisation || ''))) },
+        { label: 'Progress', render: r => h('span', { class: 'cand-progress' }, progressDots(r.steps), h('span', { class: 'small muted' }, `${r.done}/5`)) },
+        { label: 'Resume', render: r => (r.resume ? h('span', {}, '✓ ', h('span', { class: 'small' }, r.resume.fileName || 'Pasted')) : h('span', { class: 'muted' }, 'Not yet')) },
+        { label: 'ATS', render: r => scorePill(r.resume && r.resume.atsScore) },
+        { label: 'Role resumes', render: r => String(r.versions) },
+        { label: 'Job matches', render: r => String(r.matches) },
+        { label: 'Job searches', render: r => String(r.searches) },
+        { label: 'AI actions', render: r => String(r.aiActions) },
+        { label: 'Login', render: r => (!r.login.exists ? pill('none') : r.login.disabled ? pill('off') : h('span', { class: 'small' }, r.login.lastLogin ? ago(r.login.lastLogin) : 'never')) },
+        { label: 'Last active', render: r => h('span', { title: dateTime(r.lastActive) }, ago(r.lastActive)) },
+      ], d.candidates, r => candidateDetail(el, r.id, () => candidates(el, state)),
+      state.q || state.filter ? 'No candidates match.' : 'No candidates yet. They appear here once a customer has a website login or uses the Career toolkit.'));
+  }
+
+  async function candidateDetail(el, id, back) {
+    const d = await get(`/admin/api/candidates/${id}`);
+    const c = d.candidate;
+    const section = (title, ...body) => h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, title), ...body);
+    const tracker = h('ol', { class: 'cand-track' }, STEP_NAMES.map(([k, l], i) => h('li', { class: c.steps[k] ? 'on' : '' }, h('b', {}, c.steps[k] ? '✓' : String(i + 1)), l)));
+    const r = d.resume;
+    const results = h('div', {});
+
+    const showSearch = async s => {
+      const { search } = await get(`/admin/api/candidates/${id}/searches/${s.id}`);
+      const res = search.result;
+      if (!res) { results.replaceChildren(h('p', { class: 'muted' }, search.error || 'No results.')); return; }
+      const groups = [['high', 'High probability: apply first'], ['medium', 'Medium probability'], ['stretch', 'Low probability: stretch']];
+      results.replaceChildren(h('div', { class: 'cand-results' },
+        h('h3', {}, `Results of ${dateTime(search.createdAt)}`),
+        h('p', { class: 'small' }, h('b', {}, 'AI profile: '), [res.profile.level, res.profile.summary].filter(Boolean).join(' · ')),
+        res.profile.targetRoles.length ? h('p', { class: 'small' }, h('b', {}, 'Best-fit roles: '), res.profile.targetRoles.join(', ')) : null,
+        h('p', { class: 'small muted' }, `${res.jobs.length} matches from ${res.coverage.live} live jobs at ${res.coverage.companies} companies` +
+          (res.coverage.notFound.length ? ` · not found: ${res.coverage.notFound.join(', ')}` : '')),
+        groups.map(([b, label]) => {
+          const list = res.jobs.filter(j => j.bucket === b);
+          return list.length ? [h('h4', {}, `${label} (${list.length})`), table([
+            { label: 'Fit', render: j => scorePill(j.score) },
+            { label: 'Role', render: j => h('b', {}, j.title), wrap: true }, { label: 'Company', render: j => j.company },
+            { label: 'Location', render: j => j.location || j.country || '—', wrap: true },
+            { label: 'Why / gap', render: j => h('span', { class: 'small' }, j.why, j.gap && !/^none\.?$/i.test(j.gap) ? h('span', { class: 'muted' }, ` · Gap: ${j.gap}`) : null), wrap: true },
+            { label: '', render: j => h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', class: 'small' }, 'Open ↗') },
+          ], list)] : null;
+        }),
+        res.profile.resumeFixes.length ? [h('h4', {}, 'Resume fixes suggested'), h('ul', { class: 'small' }, res.profile.resumeFixes.map(f => h('li', {}, f)))] : null));
+      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const maxUse = Math.max(1, ...d.usage.map(u => u.count));
+    el.replaceChildren(
+      head(c.name || c.email, h('button', { class: 'btn', onclick: back }, '← All candidates')),
+      h('div', { class: 'card' },
+        h('dl', { class: 'kv' },
+          h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'),
+          h('dt', {}, 'Website login'), h('dd', {}, !c.login.exists ? 'No login yet' : c.login.disabled ? 'Turned off' : `Active · last sign-in ${c.login.lastLogin ? dateTime(c.login.lastLogin) : 'never'}`),
+          h('dt', {}, 'Last active'), h('dd', {}, c.lastActive ? `${dateTime(c.lastActive)} (${ago(c.lastActive)})` : '—'),
+          h('dt', {}, 'AI actions'), h('dd', {}, `${c.aiActions || 0} in total`)),
+        h('div', { class: 'small muted', style: 'margin-bottom:6px' }, `Career toolkit progress: ${c.done} of 5 steps`), tracker),
+
+      section('Resume',
+        !r ? h('p', { class: 'muted' }, 'No resume uploaded yet.') : h('div', {},
+          h('p', {}, h('b', {}, r.fileName || 'Pasted resume'), h('span', { class: 'muted' }, ` · ${r.chars.toLocaleString()} characters · uploaded ${dateTime(r.uploadedAt)}`)),
+          h('div', { class: 'actions' }, dlLink(id, 'original', null, 'Uploaded resume (.txt)'), r.ats ? dlLink(id, 'ats', null, 'ATS-friendly resume (.docx)') : null),
+          h('details', {}, h('summary', { class: 'small' }, 'Preview the uploaded text'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, r.preview + (r.chars > r.preview.length ? '\n…' : ''))),
+          r.ats ? h('div', { class: 'cand-ats' },
+            h('h3', {}, 'ATS check ', scorePill(r.ats.score), h('span', { class: 'small muted' }, `  ${dateTime(r.ats.checkedAt)}`)),
+            h('p', { class: 'small' }, r.ats.verdict),
+            r.ats.checks.length ? h('ul', { class: 'small cand-checks' }, r.ats.checks.map(k => h('li', { class: k.status }, h('b', {}, k.name + ': '), k.detail))) : null,
+            r.ats.keywords.missing.length ? h('p', { class: 'small' }, h('b', {}, 'Missing keywords: '), r.ats.keywords.missing.join(', ')) : null,
+            r.ats.suggestedRoles.length ? h('p', { class: 'small' }, h('b', {}, 'Suggested roles: '), r.ats.suggestedRoles.join(', ')) : null)
+            : h('p', { class: 'small muted' }, 'ATS check not run yet.'))),
+
+      section(`Role-based resumes (${d.versions.length})`, table([
+        { label: 'Role', render: v => h('b', {}, v.role) }, { label: 'Fit', render: v => scorePill(v.fitScore) },
+        { label: 'Note', render: v => h('span', { class: 'small' }, v.fitNote || '—'), wrap: true }, { label: 'Created', render: v => dateTime(v.createdAt) },
+        { label: '', render: v => dlLink(id, 'version', v.id, '.docx') },
+      ], d.versions, null, 'No role-based resumes yet.')),
+
+      section(`Job matches & cover letters (${d.matches.length})`, table([
+        { label: 'Job', render: m => h('b', {}, [m.jobTitle, m.company].filter(Boolean).join(' at ') || 'Job') }, { label: 'Score', render: m => scorePill(m.score) },
+        { label: 'Verdict', render: m => h('span', { class: 'small' }, m.verdict || '—'), wrap: true }, { label: 'Created', render: m => dateTime(m.createdAt) },
+        { label: '', render: m => (m.hasLetter ? dlLink(id, 'letter', m.id, 'Cover letter') : '—') },
+      ], d.matches, null, 'No job matches yet.')),
+
+      section(`AI job searches (${d.searches.length})`,
+        table([
+          { label: 'When', render: s => dateTime(s.createdAt) },
+          { label: 'Search', render: s => h('span', { class: 'small' }, [s.params.role || 'Roles from resume', [s.params.city, s.params.country].filter(Boolean).join(', ') || 'Any location',
+            s.params.level, s.params.companies ? `Companies: ${s.params.companies}` : 'Well-known companies', s.params.resumeLabel].filter(Boolean).join(' · ')), wrap: true },
+          { label: 'Result', render: s => (s.status === 'done' ? h('span', { class: 'cand-counts' }, h('span', { class: 'pill good' }, `${s.counts.high} high`), h('span', { class: 'pill warn' }, `${s.counts.medium} med`), h('span', { class: 'pill bad' }, `${s.counts.stretch} low`))
+            : s.status === 'running' ? pill('open') : h('span', { class: 'small', style: 'color:var(--bad)' }, s.error || 'Failed')), wrap: true },
+          { label: '', render: s => (s.status === 'done' ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showSearch(s)); } }, 'View results') : '') },
+        ], d.searches, null, 'No AI job searches yet.'),
+        results),
+
+      h('div', { class: 'grid2', style: 'margin-top:14px' },
+        h('div', { class: 'card' }, h('h2', {}, 'Activity'),
+          d.activity.length ? h('ol', { class: 'cand-timeline' }, d.activity.map(a => h('li', {},
+            h('span', { class: 'small muted', title: dateTime(a.at) }, ago(a.at)), h('b', {}, ACTION_LABEL[a.action] || a.action), a.detail ? h('span', { class: 'small' }, a.detail) : null)))
+            : h('p', { class: 'muted small' }, 'No activity recorded yet. Sign-ins, uploads, AI actions and downloads are recorded from now on.')),
+        h('div', { class: 'card' }, h('h2', {}, 'AI actions per day (30 days)'),
+          d.usage.length ? h('div', { class: 'cand-bars' }, d.usage.map(u => h('div', { class: 'cand-bar', title: `${date(u.day)}: ${u.count}` },
+            h('i', { style: `height:${Math.max(6, u.count / maxUse * 100)}%` }), h('span', {}, String(u.count)), h('small', {}, u.day.slice(5)))))
+            : h('p', { class: 'muted small' }, 'No AI actions in the last 30 days.'))));
+  }
+
   // ---------- AI Job search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
   async function jobs(el) {
     const d = await get('/admin/api/jobs');
@@ -814,7 +951,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, opportunities, visitors, customers, licences, profiles, conversations, jobs, aikeys, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

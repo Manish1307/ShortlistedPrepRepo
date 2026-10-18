@@ -10,6 +10,7 @@ const licences = require('./licence');
 const profiles = require('./profiles');
 const { ApiError } = require('./http');
 const { now } = require('./db');
+const { logActivity } = require('./activity');
 
 const SESSION_DAYS = 7;
 const DUMMY_HASH = auth.hashPassword('not-a-real-password');
@@ -102,6 +103,7 @@ function addRoutes(ctx) {
     const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
     db.prepare('INSERT INTO customer_sessions (token_hash, customer_id, created_at, expires_at) VALUES (?,?,?,?)').run(sha256(token), row.id, now(), expiresAt);
     db.prepare('UPDATE customer_accounts SET last_login = ? WHERE customer_id = ?').run(now(), row.id);
+    logActivity(db, row.id, 'login', 'Signed in on the website');
     return { body: { ok: true, token, expiresAt, mustChange: !!row.must_change, customer: { email: row.email, name: row.name } } };
   });
 

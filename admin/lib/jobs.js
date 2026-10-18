@@ -14,6 +14,7 @@ const { signedInCustomer } = require('./accounts');
 const { completeJson } = require('./careerai');
 const sources = require('./jobsources');
 const { CATALOGUE } = require('./jobcatalogue');
+const { logActivity } = require('./activity');
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const FRESH_FOR = 6 * HOUR;       // a company's jobs fetched within this time are used as they are
@@ -321,10 +322,12 @@ function addRoutes(ctx) {
       } };
       db.prepare("UPDATE career_job_searches SET status = 'done', progress = '', result_json = ?, finished_at = ? WHERE id = ?").run(JSON.stringify(result), now(), id);
       require('./career').countUse(db, customerId);
+      logActivity(db, customerId, 'jobsearch.done', `${jobs.length} matches: ${jobs.filter(j => j.bucket === 'high').length} high, ${jobs.filter(j => j.bucket === 'medium').length} medium, ${jobs.filter(j => j.bucket === 'stretch').length} low`);
     } catch (err) {
       if (!(err instanceof ApiError)) console.error('AI Job search failed:', err);
       const message = err instanceof ApiError ? err.message : 'Something went wrong with this search. Please try again.';
       try { db.prepare("UPDATE career_job_searches SET status = 'failed', progress = '', error = ?, finished_at = ? WHERE id = ?").run(message, now(), id); } catch (_) { /* database closed */ }
+      logActivity(db, customerId, 'jobsearch.failed', message);
     }
   }
 
@@ -379,6 +382,7 @@ function addRoutes(ctx) {
     const id = Number(db.prepare('INSERT INTO career_job_searches (customer_id, params_json, status, progress, created_at) VALUES (?,?,?,?,?)')
       .run(c.id, JSON.stringify(p), 'running', 'Starting…', now()).lastInsertRowid);
     db.prepare(`DELETE FROM career_job_searches WHERE customer_id = ? AND id NOT IN (SELECT id FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC LIMIT ${KEEP_SEARCHES})`).run(c.id, c.id);
+    logActivity(db, c.id, 'jobsearch.started', [p.role || 'roles from resume', [p.city, p.country].filter(Boolean).join(', ') || 'any location', p.companies ? 'chosen companies' : 'well-known companies', p.resumeLabel].join(' · '));
     runSearch(id, c.id, p, resumes);                              // not awaited: the page polls GET /api/career/jobsearch/:id
     return { status: 202, body: { search: presentSearch(searchRow(id, c.id), true) } };
   });

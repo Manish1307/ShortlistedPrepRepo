@@ -120,3 +120,29 @@ dialog.wide { width: min(900px, 96vw); }
 .transcript { display: grid; gap: 4px; font-size: 13px; }
 .transcript .t { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
 details summary { cursor: pointer; font-weight: 600; margin: 14px 0 8px; }
+
+/* ---------- Candidates ---------- */
+.cand-progress { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.cand-dots { display: inline-flex; gap: 4px; }
+.cand-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--grey-bg); border: 1px solid var(--line); }
+.cand-dots i.on { background: var(--good); border-color: var(--good); }
+.cand-track { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cand-track li { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--grey-bg); color: var(--muted); font-weight: 600; font-size: 13px; }
+.cand-track li b { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); font-size: 12px; }
+.cand-track li.on { background: var(--good-bg); color: var(--good); }
+.cand-track li.on b { background: var(--good); color: #fff; }
+.cand-ats { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.cand-ats h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+.cand-checks { padding-left: 18px; margin: 6px 0; }
+.cand-checks li.pass::marker { color: var(--good); } .cand-checks li.warn::marker { color: var(--warn); } .cand-checks li.fail::marker { color: var(--bad); }
+.cand-counts { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.cand-results { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.cand-results h4 { margin: 14px 0 6px; }
+.cand-timeline { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow: auto; }
+.cand-timeline li { display: grid; grid-template-columns: 92px 1fr; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.cand-timeline li > .small:last-child { grid-column: 2; color: var(--muted); }
+.cand-bars { display: flex; align-items: flex-end; gap: 4px; height: 170px; padding-top: 10px; overflow-x: auto; }
+.cand-bar { flex: 1 0 22px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; font-size: 11px; }
+.cand-bar i { width: 100%; max-width: 26px; background: var(--accent); border-radius: 5px 5px 2px 2px; }
+.cand-bar span { font-weight: 700; } .cand-bar small { color: var(--muted); }
+@media (max-width: 900px) { .cand-track { grid-template-columns: 1fr 1fr; } }

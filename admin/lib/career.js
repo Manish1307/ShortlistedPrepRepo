@@ -13,6 +13,7 @@ const { signedInCustomer } = require('./accounts');
 const profiles = require('./profiles');
 const { completeJson } = require('./careerai');
 const { buildDocx, resumeParagraphs, letterParagraphs } = require('./docx');
+const { logActivity } = require('./activity');
 
 const MAX_RESUME = 20000;
 const MAX_JD = 12000;
@@ -154,6 +155,7 @@ function addRoutes(ctx) {
     db.prepare(`INSERT INTO career_resumes (customer_id, file_name, source_text, ats_json, ats_at, uploaded_at) VALUES (?,?,?,NULL,NULL,?)
                 ON CONFLICT (customer_id) DO UPDATE SET file_name = excluded.file_name, source_text = excluded.source_text, ats_json = NULL, ats_at = NULL, uploaded_at = excluded.uploaded_at`)
       .run(c.id, text(body.fileName, 200, { field: 'File name' }), source, now());
+    logActivity(db, c.id, 'resume.uploaded', `${text(body.fileName, 200, { field: 'File name' }) || 'Pasted resume'} · ${source.length.toLocaleString('en-IN')} characters`);
     return { ok: true };
   });
 
@@ -166,6 +168,7 @@ function addRoutes(ctx) {
     if (data.length * 0.75 > 6 * 1024 * 1024) throw new ApiError(400, 'The PDF is larger than 6 MB');
     const out = await profiles.readPdf({ db, vault: ctx.vault, data, upstream: (ctx.upstream && ctx.upstream.gemini) || undefined });
     countUse(c.id);
+    logActivity(db, c.id, 'resume.pdf_read', 'PDF read by the AI');
     return { text: out.slice(0, MAX_RESUME) };
   });
 
@@ -187,6 +190,7 @@ function addRoutes(ctx) {
     };
     db.prepare('UPDATE career_resumes SET ats_json = ?, ats_at = ? WHERE customer_id = ?').run(JSON.stringify(result), now(), c.id);
     countUse(c.id);
+    logActivity(db, c.id, 'ats.checked', `ATS score ${result.score}`);
     return { ats: result, usage: usage(c.id) };
   });
 
@@ -206,13 +210,16 @@ function addRoutes(ctx) {
     const id = Number(db.prepare('INSERT INTO career_versions (customer_id, role, content_json, created_at) VALUES (?,?,?,?)')
       .run(c.id, role, JSON.stringify(content), now()).lastInsertRowid);
     countUse(c.id);
+    logActivity(db, c.id, 'version.created', `${role} · fit ${content.fitScore}`);
     return { status: 201, body: { version: versionsOf(c.id).find(v => v.id === id), usage: usage(c.id) } };
   });
 
   add('POST', '/api/career/versions/:id/delete', { public: true }, (req, res, { params }) => {
     const c = me(req);
+    const v = one('SELECT role FROM career_versions WHERE id = ? AND customer_id = ?', params.id, c.id);
     const r = db.prepare('DELETE FROM career_versions WHERE id = ? AND customer_id = ?').run(params.id, c.id);
     if (!r.changes) throw new ApiError(404, 'Resume version not found');
+    logActivity(db, c.id, 'version.deleted', v ? v.role : '');
     return { ok: true };
   });
 
@@ -246,46 +253,68 @@ function addRoutes(ctx) {
     const id = Number(db.prepare('INSERT INTO career_matches (customer_id, job_title, company, jd_text, version_id, result_json, created_at) VALUES (?,?,?,?,?,?,?)')
       .run(c.id, jobTitle, company, jd, best, JSON.stringify(result), now()).lastInsertRowid);
     countUse(c.id);
+    logActivity(db, c.id, 'match.created', `${[jobTitle, company].filter(Boolean).join(' at ') || 'Job'} · score ${result.score}${result.coverLetter ? ' · cover letter' : ''}`);
     return { status: 201, body: { match: { id, jobTitle, company, versionId: best, result, createdAt: now() }, usage: usage(c.id) } };
   });
 
   add('POST', '/api/career/matches/:id/delete', { public: true }, (req, res, { params }) => {
     const c = me(req);
+    const m = one('SELECT job_title, company FROM career_matches WHERE id = ? AND customer_id = ?', params.id, c.id);
     const r = db.prepare('DELETE FROM career_matches WHERE id = ? AND customer_id = ?').run(params.id, c.id);
     if (!r.changes) throw new ApiError(404, 'Job match not found');
+    logActivity(db, c.id, 'match.deleted', m ? [m.job_title, m.company].filter(Boolean).join(' at ') : '');
     return { ok: true };
   });
 
   // ===== downloads: the improved resume, a role version, or a cover letter, as a Word file =====
   add('GET', '/api/career/download', { public: true }, (req, res, { query }) => {
     const c = me(req);
-    const kind = query.get('kind'), id = Number(query.get('id'));
-    let paragraphs, name;
-    if (kind === 'ats') {
-      const ats = parse((resumeOf(c.id) || {}).ats_json);
-      if (!ats) throw new ApiError(404, 'Run the ATS check first');
-      paragraphs = resumeParagraphs(ats.resume); name = `${ats.resume.name || 'resume'}-ATS`;
-    } else if (kind === 'version') {
-      const v = versionsOf(c.id).find(x => x.id === id);
-      if (!v) throw new ApiError(404, 'Resume version not found');
-      paragraphs = resumeParagraphs(v.resume); name = `${v.resume.name || 'resume'}-${v.role}`;
-    } else if (kind === 'letter') {
-      const m = one('SELECT company, job_title, result_json FROM career_matches WHERE id = ? AND customer_id = ?', id, c.id);
-      const result = m && parse(m.result_json);
-      if (!result || !result.coverLetter) throw new ApiError(404, 'Cover letter not found');
-      paragraphs = letterParagraphs(result.coverLetter); name = `Cover-letter-${m.company || m.job_title || 'job'}`;
-    } else throw new ApiError(400, 'Unknown document');
-    const file = buildDocx(paragraphs);
-    res.writeHead(200, {
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="${fileSafe(name)}.docx"`,
-      'Content-Length': file.length,
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Expose-Headers': 'Content-Disposition',
-      'Cache-Control': 'no-store',
-    });
-    res.end(file);
+    const doc = careerDocument(db, c.id, query.get('kind'), Number(query.get('id')));
+    logActivity(db, c.id, 'download', doc.label);
+    sendDocument(res, doc, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'Content-Disposition' });
   });
 }
 
-module.exports = { addRoutes, cleanResume, resumeText, checkQuota: quota.checkQuota, countUse: quota.countUse, usage: quota.usage, MAX_RESUME };
+/**
+ * One of a customer's documents, ready to send: {name, label, type, body}. kind: "ats" (the improved resume),
+ * "version" (a role resume, id), "letter" (a cover letter, id) as Word files, or "original" (the uploaded text).
+ */
+function careerDocument(db, customerId, kind, id) {
+  const resume = db.prepare('SELECT file_name, source_text, ats_json FROM career_resumes WHERE customer_id = ?').get(customerId);
+  const docx = (paragraphs, name, label) => ({ name: fileSafe(name) + '.docx', label, type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', body: buildDocx(paragraphs) });
+  if (kind === 'original') {
+    if (!resume) throw new ApiError(404, 'No resume uploaded');
+    return { name: fileSafe(String(resume.file_name || 'resume').replace(/\.\w+$/, '')) + '.txt', label: 'Uploaded resume (text)', type: 'text/plain; charset=utf-8', body: Buffer.from(resume.source_text, 'utf8') };
+  }
+  if (kind === 'ats') {
+    const ats = parse((resume || {}).ats_json);
+    if (!ats) throw new ApiError(404, 'Run the ATS check first');
+    return docx(resumeParagraphs(ats.resume), `${ats.resume.name || 'resume'}-ATS`, 'ATS-friendly resume');
+  }
+  if (kind === 'version') {
+    const v = db.prepare('SELECT role, content_json FROM career_versions WHERE id = ? AND customer_id = ?').get(id, customerId);
+    const c = v && parse(v.content_json);
+    if (!c) throw new ApiError(404, 'Resume version not found');
+    return docx(resumeParagraphs(c.resume), `${c.resume.name || 'resume'}-${v.role}`, `Role resume: ${v.role}`);
+  }
+  if (kind === 'letter') {
+    const m = db.prepare('SELECT company, job_title, result_json FROM career_matches WHERE id = ? AND customer_id = ?').get(id, customerId);
+    const result = m && parse(m.result_json);
+    if (!result || !result.coverLetter) throw new ApiError(404, 'Cover letter not found');
+    return docx(letterParagraphs(result.coverLetter), `Cover-letter-${m.company || m.job_title || 'job'}`, `Cover letter: ${[m.job_title, m.company].filter(Boolean).join(' at ') || 'job'}`);
+  }
+  throw new ApiError(400, 'Unknown document');
+}
+
+function sendDocument(res, doc, extraHeaders = {}) {
+  res.writeHead(200, {
+    'Content-Type': doc.type,
+    'Content-Disposition': `attachment; filename="${doc.name}"`,
+    'Content-Length': doc.body.length,
+    'Cache-Control': 'no-store',
+    ...extraHeaders,
+  });
+  res.end(doc.body);
+}
+
+module.exports = { addRoutes, cleanResume, resumeText, careerDocument, sendDocument, checkQuota: quota.checkQuota, countUse: quota.countUse, usage: quota.usage, MAX_RESUME };

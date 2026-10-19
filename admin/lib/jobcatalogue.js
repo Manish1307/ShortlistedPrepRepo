@@ -56,6 +56,39 @@ const CATALOGUE = [
 ]);
 
 /**
+ * Employers outside IT, grouped by sector. The candidate picks a sector in AI Job search (or the AI picks it from the
+ * resume) and these are the career sites that are read; the IT list above is used only for the "it" sector.
+ * country: India narrows a global Workday site to India with the site's own filter.
+ */
+const SECTOR_COMPANIES = [
+  { name: 'Corteva', url: 'https://corteva.wd5.myworkdayjobs.com/Corteva' }, { name: 'Pivot Bio', url: 'https://boards.greenhouse.io/pivotbio' },
+  { name: 'Zoetis', url: 'https://zoetis.wd5.myworkdayjobs.com/zoetis' }, { name: 'Ginkgo Bioworks', url: 'https://boards.greenhouse.io/ginkgobioworks' },
+  { name: 'Thermo Fisher Scientific', url: 'https://thermofisher.wd5.myworkdayjobs.com/ThermoFisherCareers' }, { name: 'Agilent', url: 'https://agilent.wd5.myworkdayjobs.com/Agilent_Careers', country: 'India' },
+  { name: 'Illumina', url: 'https://illumina.wd1.myworkdayjobs.com/illumina-careers', country: 'India' }, { name: 'Danaher', url: 'https://danaher.wd1.myworkdayjobs.com/DanaherJobs', country: 'India' },
+  { name: 'Roche', url: 'https://roche.wd3.myworkdayjobs.com/roche-ext' }, { name: 'Labcorp', url: 'https://labcorp.wd1.myworkdayjobs.com/External' },
+  { name: 'IQVIA', url: 'https://iqvia.wd1.myworkdayjobs.com/IQVIA', country: 'India' }, { name: 'Novartis', url: 'https://novartis.wd3.myworkdayjobs.com/Novartis_Careers', country: 'India' },
+  { name: 'Pfizer', url: 'https://pfizer.wd1.myworkdayjobs.com/PfizerCareers', country: 'India' }, { name: 'MSD', url: 'https://msd.wd5.myworkdayjobs.com/SearchJobs' },
+  { name: 'Sanofi', url: 'https://sanofi.wd3.myworkdayjobs.com/SanofiCareers', country: 'India' }, { name: 'AstraZeneca', url: 'https://astrazeneca.wd3.myworkdayjobs.com/Careers' },
+  { name: 'GSK', url: 'https://gsk.wd5.myworkdayjobs.com/GSKCareers', country: 'India' }, { name: 'Abbott', url: 'https://abbott.wd5.myworkdayjobs.com/abbottcareers', country: 'India' },
+  { name: 'Medtronic', url: 'https://medtronic.wd1.myworkdayjobs.com/MedtronicCareers', country: 'India' },
+  { name: 'Unilever', url: 'https://unilever.wd3.myworkdayjobs.com/Unilever_Experienced_Professionals', country: 'India' }, { name: 'Mondelez', url: 'https://mdlz.wd3.myworkdayjobs.com/External', country: 'India' },
+  { name: 'Mars', url: 'https://mars.wd3.myworkdayjobs.com/External' }, { name: 'Coca-Cola', url: 'https://coke.wd1.myworkdayjobs.com/coca-cola-careers' },
+  { name: '3M', url: 'https://3m.wd1.myworkdayjobs.com/Search', country: 'India' }, { name: 'Shell', url: 'https://shell.wd3.myworkdayjobs.com/ShellCareers' },
+  { name: 'Barclays', url: 'https://barclays.wd3.myworkdayjobs.com/External_Career_Site_Barclays' }, { name: 'BlackRock', url: 'https://blackrock.wd1.myworkdayjobs.com/BlackRock_Professional' },
+];
+
+/** The sectors a candidate can pick. companies: names from SECTOR_COMPANIES or the IT list (CATALOGUE). 'it' is the IT list itself. */
+const SECTORS = [
+  { id: 'it', label: 'IT, software & consulting', companies: null },
+  { id: 'agri', label: 'Agriculture, seeds & agri-biotech', companies: ['Corteva', 'Pivot Bio', 'Zoetis', 'Ginkgo Bioworks', 'Thermo Fisher Scientific', 'Agilent', 'Mars'] },
+  { id: 'biotech', label: 'Biotech, life sciences & research labs', companies: ['Thermo Fisher Scientific', 'Agilent', 'Illumina', 'Danaher', 'Ginkgo Bioworks', 'Roche', 'Labcorp', 'IQVIA', 'Corteva', 'Pfizer', 'Novartis'] },
+  { id: 'pharma', label: 'Pharma, healthcare & medical devices', companies: ['Novartis', 'Pfizer', 'MSD', 'Sanofi', 'AstraZeneca', 'GSK', 'Roche', 'Abbott', 'Medtronic', 'Zoetis', 'IQVIA', 'Labcorp', 'Danaher'] },
+  { id: 'fmcg', label: 'FMCG, food & beverages', companies: ['Unilever', 'Mondelez', 'Mars', 'Coca-Cola', 'Corteva'] },
+  { id: 'manufacturing', label: 'Manufacturing, engineering & energy', companies: ['3M', 'Bosch', 'Baker Hughes', 'Avery Dennison', 'Shell', 'Danaher', 'Western Digital'] },
+  { id: 'finance', label: 'Banking, finance & accounting', companies: ['Barclays', 'BlackRock', 'Citi', 'Wells Fargo', 'Mastercard', 'Visa', 'KPMG India', 'EY'] },
+];
+
+/**
  * Big employers whose careers sites cannot be read automatically: candidates get a link to search there, and on
  * Naukri and LinkedIn, next to the results. {name, url} with {q} for the role and {l} for the city or country.
  */
@@ -86,7 +119,11 @@ const DOMAINS = {
   Salesforce: 'salesforce.com', Adobe: 'adobe.com', NVIDIA: 'nvidia.com', Intel: 'intel.com', Dell: 'dell.com', HP: 'hp.com', Mastercard: 'mastercard.com',
   Walmart: 'walmart.com', Target: 'target.com', 'Wells Fargo': 'wellsfargo.com', Citi: 'citi.com', 'Baker Hughes': 'bakerhughes.com', Autodesk: 'autodesk.com',
   Workday: 'workday.com', Accenture: 'accenture.com', HCLTech: 'hcltech.com', Wipro: 'wipro.com', Capgemini: 'capgemini.com', EY: 'ey.com',
-  LTIMindtree: 'ltimindtree.com', 'KPMG India': 'kpmg.com', Hexaware: 'hexaware.com', Zensar: 'zensar.com', Amazon: 'amazon.com',
+  Corteva: 'corteva.com', 'Pivot Bio': 'pivotbio.com', Zoetis: 'zoetis.com', 'Ginkgo Bioworks': 'ginkgobioworks.com', 'Thermo Fisher Scientific': 'thermofisher.com',
+  Agilent: 'agilent.com', Illumina: 'illumina.com', Danaher: 'danaher.com', Roche: 'roche.com', Labcorp: 'labcorp.com', IQVIA: 'iqvia.com', Novartis: 'novartis.com',
+  Pfizer: 'pfizer.com', MSD: 'msd.com', Sanofi: 'sanofi.com', AstraZeneca: 'astrazeneca.com', GSK: 'gsk.com', Abbott: 'abbott.com', Medtronic: 'medtronic.com',
+  Unilever: 'unilever.com', Mondelez: 'mondelezinternational.com', Mars: 'mars.com', 'Coca-Cola': 'coca-colacompany.com', '3M': '3m.com', Shell: 'shell.com',
+  Barclays: 'barclays.com', BlackRock: 'blackrock.com', LTIMindtree: 'ltimindtree.com', 'KPMG India': 'kpmg.com', Hexaware: 'hexaware.com', Zensar: 'zensar.com', Amazon: 'amazon.com',
 };
 
 // job-board systems: their address says nothing about the company
@@ -102,4 +139,4 @@ function companyDomain(name, careersUrl) {
   return host.replace(/^(www|careers?|jobs|join|apply)\./, '');
 }
 
-module.exports = { CATALOGUE, SEARCH_ELSEWHERE, DOMAINS, companyDomain };
+module.exports = { CATALOGUE, SECTOR_COMPANIES, SECTORS, SEARCH_ELSEWHERE, DOMAINS, companyDomain };

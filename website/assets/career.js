@@ -401,7 +401,8 @@
   ];
   var LEVELS = [['', 'Level: let the AI decide'], ['Fresher / entry-level', 'Fresher / entry-level'], ['Mid-level', 'Mid-level'], ['Senior', 'Senior'], ['Lead / manager', 'Lead / manager']];
   var COUNTRIES = ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'Ireland', 'Netherlands', 'Singapore', 'United Arab Emirates', 'Remote'];
-  var searchForm = { resume: 'all', level: '', role: '', country: 'India', city: '', companies: '', days: '', remote: true };
+  var SECTORS = [['', 'Sector: let the AI decide from my resume'], ['it', 'IT, software & consulting'], ['agri', 'Agriculture, seeds & agri-biotech'], ['biotech', 'Biotech, life sciences & research labs'], ['pharma', 'Pharma, healthcare & medical devices'], ['fmcg', 'FMCG, food & beverages'], ['manufacturing', 'Manufacturing, engineering & energy'], ['finance', 'Banking, finance & accounting']];
+  var searchForm = { resume: 'all', level: '', sector: '', role: '', country: 'India', city: '', companies: '', days: '', remote: true };
   var pollTimer = null, cardGen = 0;
 
   function ago(s) {
@@ -411,7 +412,7 @@
   }
   function fitBadge(n) { return h('span', { class: 'ac-badge js-fit ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)); }
   function paramsLine(p) {
-    return [p.role || 'Roles from my resume', [p.city, p.country].filter(Boolean).join(', ') || 'Any location', p.level, p.companies ? p.companies.split(/[\n,;]+/).filter(function (x) { return x.trim(); }).length + ' companies' : 'Well-known companies', p.resumeLabel].filter(Boolean).join(' · ');
+    return [p.role || 'Roles from my resume', [p.city, p.country].filter(Boolean).join(', ') || 'Any location', p.level, p.companies ? p.companies.split(/[\n,;]+/).filter(function (x) { return x.trim(); }).length + ' companies' : (SECTORS.filter(function (x) { return x[0] === p.sector; })[0] || ['', 'Employers for my field'])[1], p.resumeLabel].filter(Boolean).join(' · ');
   }
 
   // ---------- Insight: one job's skill matrices, the gaps to a full fit, learning links and interview revision ----------
@@ -819,6 +820,7 @@
       .concat(state.versions.map(function (v) { return ['v' + v.id, 'Resume: ' + v.role]; }));
     var resumeSel = bind(h('select', { 'aria-label': 'Resume to match' }, resumeOptions.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'resume');
     var levelSel = bind(h('select', { 'aria-label': 'Level' }, LEVELS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'level');
+    var sectorSel = bind(h('select', { 'aria-label': 'Sector' }, SECTORS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'sector');
     var role = bind(h('input', { type: 'text', maxlength: '120', placeholder: 'Role or keywords, e.g. Power Platform, Project Manager (optional)', 'aria-label': 'Role or keywords' }), 'role');
     var country = bind(h('input', { type: 'text', maxlength: '80', list: 'js-countries', placeholder: 'Country, e.g. India', 'aria-label': 'Country' }), 'country');
     var city = bind(h('input', { type: 'text', maxlength: '80', placeholder: 'City, e.g. Noida (optional)', 'aria-label': 'City' }), 'city');
@@ -827,7 +829,7 @@
     var days = bind(h('select', { 'aria-label': 'Posted within' }, [['', 'Posted: any time'], ['7', 'Posted: last 7 days'], ['14', 'Posted: last 14 days'], ['30', 'Posted: last 30 days']].map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'days');
     var remote = bind(h('input', { type: 'checkbox', id: 'js-remote' }), 'remote', 'check');
     var run = h('button', { class: 'btn btn-primary js-run', type: 'button', disabled: !state.resume }, '✦ Search jobs with AI');
-    var hint = h('p', { class: 'ac-muted js-small' }, 'Leave "Companies" empty to search well-known companies hiring in India and worldwide.');
+    var hint = h('p', { class: 'ac-muted js-small' }, 'Pick your sector so we search the right employers. Leave "Companies" empty to search the main employers of that sector.');
 
     function setRunning(on) { run.disabled = on || !state.resume; run.textContent = on ? 'Searching…' : '✦ Search jobs with AI'; }
     function showStatus(text, kind) {
@@ -852,7 +854,7 @@
     run.addEventListener('click', function () {
       if (!f.country.trim() && !f.city.trim() && !confirm('No country or city given: search jobs everywhere?')) return;
       setRunning(true); showStatus('Starting your search…', 'busy');
-      call('POST', '/api/career/jobsearch', { resume: f.resume, level: f.level, role: f.role.trim(), country: f.country.trim(), city: f.city.trim(),
+      call('POST', '/api/career/jobsearch', { resume: f.resume, level: f.level, sector: f.sector, role: f.role.trim(), country: f.country.trim(), city: f.city.trim(),
         companies: f.companies.trim(), days: f.days ? Number(f.days) : 0, remote: f.remote })
         .then(function (d) { result.replaceChildren(); poll(d.search.id); })
         .catch(function (e) { setRunning(false); showStatus(e.message, 'bad'); });
@@ -862,7 +864,6 @@
       return call('GET', '/api/career/jobsearch').then(function (d) {
         if (d.elsewhere) ELSEWHERE = d.elsewhere;
         searches = d.searches;
-        if (d.builtInCompanies) hint.textContent = 'Leave "Companies" empty to search ' + d.builtInCompanies + ' well-known companies hiring in India and worldwide.';
         var past = searches.filter(function (s) { return s.status !== 'running'; });
         history.replaceChildren(past.length ? h('details', { class: 'cr-history' }, h('summary', {}, 'Earlier searches (' + past.length + ')'),
           past.map(function (s) {
@@ -893,7 +894,7 @@
       h('div', {}, !state.resume ? h('p', { class: 'ac-muted' }, 'Upload your resume first (step 1).') : null,
         h('datalist', { id: 'js-countries' }, COUNTRIES.map(function (c) { return h('option', { value: c }); })),
         h('div', { class: 'js-form' },
-          h('div', { class: 'js-row two' }, resumeSel, levelSel),
+          h('div', { class: 'js-row three' }, resumeSel, levelSel, sectorSel),
           h('div', { class: 'js-row three' }, role, country, city),
           companies,
           h('div', { class: 'js-row actions' }, days, h('label', { class: 'js-check', for: 'js-remote' }, remote, ' Include remote jobs'), run)),

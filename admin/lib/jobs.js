@@ -13,7 +13,7 @@ const { now, transaction } = require('./db');
 const { signedInCustomer } = require('./accounts');
 const { completeJson } = require('./careerai');
 const sources = require('./jobsources');
-const { CATALOGUE, SEARCH_ELSEWHERE, companyDomain } = require('./jobcatalogue');
+const { CATALOGUE, SECTOR_COMPANIES, SECTORS, SEARCH_ELSEWHERE, companyDomain } = require('./jobcatalogue');
 const { logActivity } = require('./activity');
 const jobprep = require('./jobprep');
 const aiTokens = require('./tokens');
@@ -78,7 +78,7 @@ const ANALYSIS_RULES = `RULES (always apply):
   "searchTerms": ["6-15 short job-title phrases from THE CANDIDATE'S OWN FIELD that find matching postings (not generic single words)"],
   "avoidTerms": ["3-10 job-title phrases from OTHER fields that share words with the target roles and must be excluded, e.g. data scientist for a lab scientist"],
   "employers": ["10-20 real employers in India (or the chosen country) that hire for this field"],
-  "builtInCompaniesFit": true or false (true ONLY if the field is IT, software, IT services, consulting or general business),
+  "sector": "the one best-fitting id of: ${SECTORS.map(x => x.id).join(', ')}, or \"other\" when none fits",
   "country": "the best country to search when the candidate gave none, else empty",
   "resumeFixes": ["up to 6 specific fixes to the resume before applying"]
 }`;
@@ -201,6 +201,7 @@ function addRoutes(ctx) {
   const fetchOpts = { base: ctx.jobSourceBase || {} };
   const catalogue = ctx.jobCatalogue || CATALOGUE;
   const budget = ctx.jobFetchBudget || FETCH_BUDGET;
+  const sectorCompanies = ctx.jobSectorCompanies || SECTOR_COMPANIES;
 
   /** Keep a Prepare plan in career_job_preps (the dashboard reads it from there), replacing an older one for the same job. */
   function savePrep(customerId, searchId, job, prep) {
@@ -235,7 +236,7 @@ function addRoutes(ctx) {
       return { name: entry, row: boardRow(board.board.split('/')[0], board, entry) };
     }
     const key = norm(entry);
-    const known = catalogue.find(c => norm(c.name) === key);
+    const known = catalogue.concat(sectorCompanies).find(c => norm(c.name) === key);
     if (known) return { name: entry, row: boardRow(known.name, catalogueBoard(known), known.url) };
     const cached = all('SELECT * FROM job_companies').find(c => norm(c.name) === key && !c.last_error && c.job_count > 0);
     if (cached) return { name: entry, row: boardRow(cached.name, { provider: cached.provider, board: cached.board, ...(parse(cached.extra) || {}) }, cached.careers_url) };
@@ -330,7 +331,7 @@ function addRoutes(ctx) {
       const typed = companyList(p.companies);
       const prompt = masterPrompt(db).prompt;
       const resumeBlock = resumes.map(r => `=== RESUME: ${r.label} ===\n${r.text.slice(0, resumes.length > 1 ? 8000 : 20000)}`).join('\n\n').slice(0, 40000);
-      const wishes = [`Country: ${p.country || '(decide from the resume)'}`, `City: ${p.city || 'any'}`, `Role or keywords: ${p.role || '(let the AI decide)'}`, `Level: ${p.level || '(let the AI decide from the resume)'}`,
+      const wishes = [`Country: ${p.country || '(decide from the resume)'}`, `City: ${p.city || 'any'}`, `Role or keywords: ${p.role || '(let the AI decide)'}`, `Level: ${p.level || '(let the AI decide from the resume)'}`, `Sector: ${(SECTORS.find(x => x.id === p.sector) || {}).label || '(decide from the resume)'}`,
         `Companies: ${typed.length ? typed.join(', ') : '(let the AI decide which kinds of employers fit)'}`].join('\n');
       const a = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
       const profile = { level: String(a.level || '').slice(0, 100), summary: String(a.summary || '').slice(0, 400), strengths: strings(a.strengths, 6, 120),
@@ -344,7 +345,12 @@ function addRoutes(ctx) {
       if (typed.length) resolved = await Promise.all(typed.map(resolve));
       else {
         const named = (await Promise.all(strings(a.employers, 20, 80).map(resolve))).filter(r => r.row);
-        resolved = a.builtInCompaniesFit === false ? named : [...named, ...builtIn()];
+        // the sector the candidate picked, else the one the AI chose from the resume
+        const sector = SECTORS.find(x => x.id === p.sector) || SECTORS.find(x => x.id === (String(a.sector || '').trim() || 'it'));   // no sector given at all: the IT list, as before
+        const all2 = catalogue.concat(sectorCompanies);
+        const fromSector = !sector ? [] : sector.companies === null ? builtIn()
+          : sector.companies.map(n => all2.find(c => c.name === n)).filter(Boolean).map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url) }));
+        resolved = [...fromSector, ...named];
       }
       const rows = [...new Map(resolved.filter(r => r.row).map(r => [r.row.id, r.row])).values()];
       if (!rows.length) throw new ApiError(400, typed.length ? 'None of those companies could be found. Check the names, or paste the link of their careers page.'
@@ -486,7 +492,7 @@ function addRoutes(ctx) {
     const resume = /^(all|ats|v\d+)$/.test(String(body.resume || '')) ? String(body.resume) : 'all';
     const p = {
       resume, country: text(body.country, 80, { field: 'Country' }), city: text(body.city, 80, { field: 'City' }),
-      role: text(body.role, 120, { field: 'Role' }), level: LEVELS.includes(body.level) ? body.level : '',
+      sector: SECTORS.some(x => x.id === body.sector) ? String(body.sector) : '', role: text(body.role, 120, { field: 'Role' }), level: LEVELS.includes(body.level) ? body.level : '',
       days: [7, 14, 30].includes(Number(body.days)) ? Number(body.days) : 0, remote: body.remote !== false,
       companies: text(body.companies, 4000, { field: 'Companies' }),
     };
@@ -499,14 +505,14 @@ function addRoutes(ctx) {
     const id = Number(db.prepare('INSERT INTO career_job_searches (customer_id, params_json, status, progress, created_at) VALUES (?,?,?,?,?)')
       .run(c.id, JSON.stringify(p), 'running', 'Starting…', now()).lastInsertRowid);
     db.prepare(`DELETE FROM career_job_searches WHERE customer_id = ? AND id NOT IN (SELECT id FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC LIMIT ${KEEP_SEARCHES})`).run(c.id, c.id);
-    logActivity(db, c.id, 'jobsearch.started', [p.role || 'roles from resume', [p.city, p.country].filter(Boolean).join(', ') || 'any location', p.companies ? 'chosen companies' : 'well-known companies', p.resumeLabel].join(' · '));
+    logActivity(db, c.id, 'jobsearch.started', [p.role || 'roles from resume', [p.city, p.country].filter(Boolean).join(', ') || 'any location', p.companies ? 'chosen companies' : ((SECTORS.find(x => x.id === p.sector) || {}).label || 'sector from resume'), p.resumeLabel].join(' · '));
     runSearch(id, c.id, p, resumes);                              // not awaited: the page polls GET /api/career/jobsearch/:id
     return { status: 202, body: { search: presentSearch(searchRow(id, c.id), true) } };
   });
 
   add('GET', '/api/career/jobsearch', { public: true }, req => {
     const c = me(req);
-    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length, elsewhere: SEARCH_ELSEWHERE };
+    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length, sectors: SECTORS.map(x => ({ id: x.id, label: x.label })), elsewhere: SEARCH_ELSEWHERE };
   });
 
   add('GET', '/api/career/jobsearch/:id', { public: true }, (req, res, { params, query }) => {

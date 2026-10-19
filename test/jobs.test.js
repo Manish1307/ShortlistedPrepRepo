@@ -141,7 +141,12 @@ async function fakeGemini() {
             { skill: 'Presales & Account Mining', points: 5, importance: 'medium', why: 'Usual for managers', howToClose: 'Write an RFP', hours: 10, searchQuery: 'RFP', provider: 'other', certification: '' },   // not in the description: dropped
             { skill: 'Kubernetes', points: 4, importance: 'low', why: 'Containers', howToClose: 'Learn it', hours: 10, searchQuery: 'k8s', provider: 'other', certification: '' }],             // its row was dropped: so is the gap
           revise: [{ topic: 'C# and .NET', searchQuery: 'C# .NET interview questions' }, { topic: 'Cloud migration and FinOps', searchQuery: 'FinOps' }],
-          plan: ['Week 1: Azure DevOps'], interviewQuestions: ['What is middleware?'], tips: ['Lead with your API work'] };
+          plan: ['Week 1: Azure DevOps'], tips: ['Lead with your API work'] };
+      } else if (/expert interviewer/.test(system)) {
+        out = {
+          mcq: Array.from({ length: 5 }, (_, i) => ({ question: 'MCQ ' + i, options: ['a', 'b', 'c', 'd'], correct: i % 4, explanation: 'Because ' + i })).concat([{ question: 'Bad: three options', options: ['a', 'b', 'c'], correct: 0 }]),
+          short: Array.from({ length: 11 }, (_, i) => ({ question: 'What is ' + i + '?', answer: 'It is ' + i })),
+          scenario: Array.from({ length: 5 }, (_, i) => ({ question: 'Scenario ' + i, answer: 'Do ' + i })) };
       } else if (/This step only analyses the candidate/.test(system)) {
         out = { level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
           searchTerms: ['.net', 'scrum master', 'backend engineer', 'qa engineer'], resumeFixes: ['Replace the [add number] markers'] };
@@ -438,7 +443,12 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     assert.deepEqual([prep.matrix.checked, prep.matrix.dropped, prep.matrix.types], [true, 1, { technical: 3, functional: 1 }]);
     assert.equal(prep.matrix.rows.find(r => r.skill === 'Azure DevOps').quote, 'Hands-on  Azure DevOps pipelines.');   // found whatever the spacing
     assert.equal(prep.matrix.rows.find(r => r.skill === 'Docker').quote, '');                                         // not word for word: no quote shown
-    assert.deepEqual([prep.version, prep.description], [3, 'full']);
+    assert.deepEqual([prep.version, prep.description], [4, 'full']);
+    // 20 practice questions: 5 multiple choice (4 options, a correct one), 10 short, 5 scenarios, each with an answer
+    const byType = t => prep.interviewQuestions.filter(q => q.type === t);
+    assert.deepEqual(['mcq', 'short', 'scenario'].map(t => byType(t).length), [5, 10, 5]);
+    assert.ok(byType('mcq').every(q => q.options.length === 4 && q.correct >= 0 && q.correct <= 3 && q.answer));
+    assert.ok(prep.interviewQuestions.every(q => q.question && q.answer));
     assert.equal(prep.matrix.rows.reduce((n, r) => n + r.weight, 0), 100);
     assert.equal(prep.matrix.score, 50);
     assert.deepEqual(prep.matrix.counts, { match: 1, partial: 1, missing: 2 });
@@ -460,7 +470,7 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     const used = r.json.usage.used;
     const again = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id });
     assert.equal(again.json.usage.used, used);
-    assert.equal(s.ai.seen.length, calls + 1);
+    assert.equal(s.ai.seen.length, calls + 2);   // the Insight and its 20 practice questions are two AI calls (one action)
     assert.ok((await web.jobsOf(search)).find(j => j.id === job.id).insight);
     assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: 999999 })).status, 404);
 

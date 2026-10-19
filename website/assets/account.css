@@ -432,3 +432,19 @@
 /* the sector is required: a notice at the top of the overview */
 .ac-need { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 20px; border-color: #f3c76b; background: #fffaf0; }
 .ac-need b { display: block; font-size: 17px; margin-bottom: 4px; } .ac-need p { margin-bottom: 12px; }
+
+/* ---------- practice questions in Insight ---------- */
+.pp-qgroup + .pp-qgroup { margin-top: 20px; }
+.pp-qgroup h5 { font-size: 15px; margin: 0 0 10px; color: var(--ink); } .pp-qgroup h5 .ac-muted { font-weight: 500; font-size: 13px; }
+.pp-qlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pp-q { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: #fff; }
+.pp-q-text { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; color: var(--ink); font-size: 14.5px; }
+.pp-q-n { flex: none; min-width: 26px; height: 26px; border-radius: 8px; background: var(--purple-l); color: var(--purple); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.pp-opts { list-style: none; margin: 10px 0 0 36px; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.pp-opts li { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+.pp-opts.reveal li.right { border-color: #7cc99a; background: #effaf3; }
+.pp-qa-btn { margin: 10px 0 0 36px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--bd); background: #fff; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--purple); cursor: pointer; }
+.pp-qa-btn:hover { background: var(--tint); }
+.pp-ans { margin: 10px 0 0 36px; padding: 10px 12px; border-radius: 10px; background: #f6f2ff; font-size: 14px; }
+.pp-ans[hidden] { display: none; } .pp-ans p { margin: 0; } .pp-ans p + p { margin-top: 6px; }
+@media (max-width: 560px) { .pp-opts, .pp-qa-btn, .pp-ans { margin-left: 0; } }

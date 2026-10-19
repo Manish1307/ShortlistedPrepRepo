@@ -427,6 +427,47 @@
   function section(cls, icon, title, intro, body) {
     return h('section', { class: 'pp-sec ' + cls }, h('h4', {}, h('span', { 'aria-hidden': 'true' }, icon), ' ', title), intro ? h('p', { class: 'ac-muted pp-intro' }, intro) : null, body);
   }
+  /** Practice questions: multiple choice, short and scenario-based, each with its answer behind a "Show answer" button. */
+  var QUESTION_GROUPS = [['mcq', 'Multiple choice', 'Pick the right option.'], ['short', 'Short questions', 'Answer in two or three sentences.'], ['scenario', 'Scenario-based questions', 'Say what you would do, step by step.']];
+  function answerToggle(box) {
+    var btn = h('button', { class: 'pp-qa-btn', type: 'button', 'aria-expanded': 'false' }, h('span', { 'aria-hidden': 'true' }, '👁'), ' Show answer');
+    btn.addEventListener('click', function () {
+      var open = box.hidden;
+      box.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.replaceChildren(h('span', { 'aria-hidden': 'true' }, open ? '🙈' : '👁'), open ? ' Hide answer' : ' Show answer');
+      var opts = btn.parentNode && btn.parentNode.querySelector('.pp-opts');
+      if (opts) opts.classList.toggle('reveal', open);
+    });
+    return btn;
+  }
+  function questionItem(q, n) {
+    var letters = ['A', 'B', 'C', 'D'];
+    var answer = h('div', { class: 'pp-ans', hidden: true },
+      q.type === 'mcq' ? h('p', {}, h('b', {}, 'Answer: '), letters[q.correct] + '. ' + q.options[q.correct]) : null,
+      h('p', {}, q.type === 'mcq' ? h('span', {}, h('b', {}, 'Why: '), q.answer) : q.answer));
+    return h('li', { class: 'pp-q' }, h('div', { class: 'pp-q-text' }, h('span', { class: 'pp-q-n' }, String(n)), h('span', {}, q.question)),
+      q.type === 'mcq' ? h('ul', { class: 'pp-opts' }, q.options.map(function (o, i) { return h('li', { class: i === q.correct ? 'right' : '' }, h('b', {}, letters[i] + '.'), ' ' + o); })) : null,
+      answerToggle(answer), answer);
+  }
+  function questionsSection(p, refresh) {
+    var qs = p.interviewQuestions || [];
+    if (!qs.length) return null;
+    // Insights made before the practice questions have only plain questions, with no answers
+    if (typeof qs[0] === 'string') {
+      return section('questions', '🎤', 'Likely interview questions', null, h('div', {},
+        h('ol', { class: 'pp-list' }, qs.map(function (x) { return h('li', {}, x); })),
+        h('div', { class: 'in-note' }, h('span', {}, 'Update this Insight to get 20 practice questions with answers: 5 multiple choice, 10 short and 5 scenarios.'),
+          h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: refresh }, 'Update Insight (uses 1 AI action)'))));
+    }
+    var n = 0;
+    return section('questions', '🎤', 'Practice questions (' + qs.length + ')', 'Try to answer each one first, then click Show answer.',
+      h('div', { class: 'pp-qgroups' }, QUESTION_GROUPS.map(function (g) {
+        var list = qs.filter(function (q) { return q.type === g[0]; });
+        return list.length ? h('div', { class: 'pp-qgroup' }, h('h5', {}, g[1] + ' (' + list.length + ')', h('span', { class: 'ac-muted' }, ' · ' + g[2])),
+          h('ol', { class: 'pp-qlist' }, list.map(function (q) { return questionItem(q, ++n); }))) : null;
+      })));
+  }
   function insightView(p, job, refresh, tab) {
     var reach = Math.min(100, p.fit + p.gapPoints);
     var exact = (p.version || 1) >= 2;     // the skill matrix comes from the job description
@@ -487,9 +528,8 @@
         return h('div', {},
           p.revise.length ? section('revise', '📚', 'Topics to revise', 'Topics you know but should brush up for this job: videos and articles.',
             h('div', { class: 'pp-revise' }, p.revise.map(function (r) { return h('div', { class: 'pp-rev' }, h('b', {}, r.topic), linkRow(r.links)); }))) : null,
+          questionsSection(p, refresh),
           h('div', { class: 'pp-grid two' },
-            p.interviewQuestions.length ? section('questions', '🎤', 'Likely interview questions', null,
-              h('ol', { class: 'pp-list' }, p.interviewQuestions.map(function (x) { return h('li', {}, x); }))) : null,
             section('help', '💡', 'More help', null, h('div', {},
               p.tips.length ? h('ul', { class: 'pp-list' }, p.tips.map(function (x) { return h('li', {}, x); })) : null,
               h('div', { class: 'pp-actions' },

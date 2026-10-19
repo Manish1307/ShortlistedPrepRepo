@@ -795,7 +795,10 @@
           { label: 'Learning links', render: g => linkList(g.links.concat(g.certification ? [{ label: g.certification.name, url: g.certification.url }] : [])), wrap: true },
         ], p.gaps)] : null,
         (p.plan || []).length ? [h('h4', {}, 'Plan to a full fit'), h('ol', { class: 'small' }, p.plan.map(x => h('li', {}, x)))] : null,
-        (p.interviewQuestions || []).length ? [h('h4', {}, 'Likely interview questions'), h('ol', { class: 'small' }, p.interviewQuestions.map(x => h('li', {}, x)))] : null,
+        (p.interviewQuestions || []).length ? [h('h4', {}, 'Interview questions'), h('ol', { class: 'small' }, p.interviewQuestions.map(x => typeof x === 'string' ? h('li', {}, x)
+          : h('li', {}, h('span', { class: 'muted' }, ({ mcq: 'MCQ', short: 'Short', scenario: 'Scenario' })[x.type] + ': '), x.question,
+            x.options ? h('div', {}, x.options.map((o, i) => h('div', {}, 'ABCD'[i] + '. ' + o + (i === x.correct ? '  ✓' : '')))) : null,
+            h('div', { class: 'muted' }, 'Answer: ' + x.answer))))] : null,
         (p.tips || []).length ? [h('h4', {}, 'Tips'), h('ul', { class: 'small' }, p.tips.map(x => h('li', {}, x)))] : null));
       prepBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };

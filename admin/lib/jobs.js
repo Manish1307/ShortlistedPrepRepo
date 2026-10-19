@@ -565,7 +565,16 @@ function addRoutes(ctx) {
         `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 15000)}`].filter(Boolean).join('\n'),
       maxTokens: 6000,
     });
-    const prep = jobprep.cleanPrep(out, job.score, jd);
+    // the 20 practice questions are a call of their own; if it fails the Insight is still made (without them)
+    let questions = null;
+    try {
+      questions = await completeJson({ ...ai, meter: aiTokens.meter(db, c.id) }, {
+        system: jobprep.QUESTIONS_PROMPT,
+        user: [`JOB: ${job.title} at ${job.company}`, `JOB DESCRIPTION:\n${jd}`, `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 8000)}`].join('\n'),
+        maxTokens: 9000,
+      });
+    } catch (err) { console.error('Insight questions failed:', err && err.message); }
+    const prep = jobprep.cleanPrep({ ...out, questions }, job.score, jd);
     if (pasted) prep.description = 'pasted';
     if (!prep.matrix) throw new ApiError(502, 'The AI could not match this job\'s requirements to its description this time. Please try again.', 'ai');
     // save it with the search (read again: another job may have been prepared meanwhile)

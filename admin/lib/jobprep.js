@@ -24,7 +24,6 @@ RULES:
   (100 - current fit score).
 - "revise" topics are requirements the resume already shows ("match" or "partial") that the interview will probe:
   name each with the job description's own words (e.g. "Spring Boot and Hibernate", "AWS SQS and CloudWatch").
-- "interviewQuestions" must each be about a responsibility or requirement in the job description.
 - "matched" lists only requirements from the job description that the resume shows.
 - "plan" and "tips" use only the gaps above and the job description.
 - "searchQuery" must be a short search phrase that finds good tutorials for that exact skill, e.g. "Power Platform ALM pipelines tutorial".
@@ -53,9 +52,47 @@ Reply with ONLY a JSON object:
               "provider": "...", "certification": "" } ],
   "revise": [ { "topic": "a topic the candidate knows but should revise for this interview", "searchQuery": "..." } ],
   "plan": ["3-5 steps, in order, to reach a full fit, with rough days or weeks"],
-  "interviewQuestions": ["6-8 questions this interview is likely to ask"],
   "tips": ["2-4 tips: what to highlight in the resume, cover letter or interview for this job"]
 }`;
+
+/** 20 practice questions for one job, in a call of their own: 5 multiple choice, 10 short "what is" questions, 5 scenarios. */
+const QUESTIONS_PROMPT = `You are an expert interviewer. You get one JOB DESCRIPTION and the candidate's resume. Write 20 practice
+interview questions, with answers, that THIS job's interview is likely to ask. Work in whatever field the job is in
+(IT, science and research, engineering, healthcare, finance, sales or any other): never assume IT.
+
+RULES:
+- Every question must be about a responsibility, requirement, tool, method or domain topic that the JOB DESCRIPTION states.
+  Never ask about something the job description does not mention.
+- Exactly 5 "mcq": a multiple-choice question with exactly 4 options, one correct. "correct" is the index (0-3) of the
+  right option. Make the wrong options believable. "explanation": one or two sentences on why it is right.
+- Exactly 10 "short": a direct "what is / what does / how do you / why" question on a topic of the job. "answer": a
+  correct, complete answer in 2-4 sentences, as a strong candidate would say it.
+- Exactly 5 "scenario": a realistic work situation from this job ("You are asked to ... what do you do?").
+  "answer": a model answer in 4-6 sentences: the steps to take and why.
+- Mix easy and hard questions. Answers must be factually correct. Keep every text short and practical.
+Reply with ONLY a JSON object:
+{
+  "mcq": [ { "question": "...", "options": ["...", "...", "...", "..."], "correct": 0, "explanation": "..." } ],
+  "short": [ { "question": "...", "answer": "..." } ],
+  "scenario": [ { "question": "...", "answer": "..." } ]
+}`;
+
+/** The AI's questions → [{type, question, options?, correct?, answer}] (mcq, then short, then scenario); bad entries are dropped. */
+function cleanQuestions(out) {
+  const arr = v => (Array.isArray(v) ? v : []);
+  const mcq = arr(out && out.mcq).map(x => {
+    const options = arr(x && x.options).map(o => str(o, 200)).filter(Boolean);
+    const correct = Number(x && x.correct);
+    const question = str(x && x.question, 300);
+    if (!question || options.length !== 4 || !Number.isInteger(correct) || correct < 0 || correct > 3) return null;
+    return { type: 'mcq', question, options, correct, answer: str(x.explanation, 400) };
+  }).filter(Boolean).slice(0, 5);
+  const text = (v, type, max) => arr(v).map(x => {
+    const question = str(x && x.question, 300), answer = str(x && x.answer, max);
+    return question && answer ? { type, question, answer } : null;
+  }).filter(Boolean);
+  return [...mcq, ...text(out && out.short, 'short', 700).slice(0, 10), ...text(out && out.scenario, 'scenario', 1000).slice(0, 5)];
+}
 
 const OFFICIAL = {
   microsoft: 'learn.microsoft.com', aws: 'docs.aws.amazon.com', google: 'cloud.google.com', oracle: 'docs.oracle.com',
@@ -81,7 +118,7 @@ function learningLinks(query, provider) {
   return links;
 }
 
-const VERSION = 3;              // 2: matrix from the job description; 3: gaps, topics and questions from it too, never a guess
+const VERSION = 4;              // 2: matrix from the job description; 3: gaps, topics and questions from it too, never a guess; 4: 20 practice questions with answers
 const MIN_DESCRIPTION = 300;    // characters: shorter is not a job description we can trust
 const MAX_DESCRIPTION = 15000;  // characters a candidate may paste
 const str = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
@@ -183,9 +220,9 @@ function cleanPrep(out, fit, jd) {
       if (!topic || (jd && !mentions(text, topic))) return null;
       return { topic, links: learningLinks(str(r.searchQuery, 100) || `${topic} interview questions`, 'other').filter(l => ['youtube', 'articles'].includes(l.kind)) };
     }).filter(Boolean),
-    plan: list(out.plan, 6, 240), interviewQuestions: list(out.interviewQuestions, 10, 240), tips: list(out.tips, 5, 240),
+    plan: list(out.plan, 6, 240), interviewQuestions: cleanQuestions(out.questions), tips: list(out.tips, 5, 240),
     createdAt: new Date().toISOString(),
   };
 }
 
-module.exports = { PREP_PROMPT, learningLinks, cleanPrep, skillMatrix, VERSION, MIN_DESCRIPTION, MAX_DESCRIPTION };
+module.exports = { PREP_PROMPT, QUESTIONS_PROMPT, cleanQuestions, learningLinks, cleanPrep, skillMatrix, VERSION, MIN_DESCRIPTION, MAX_DESCRIPTION };

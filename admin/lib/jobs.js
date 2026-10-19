@@ -13,7 +13,7 @@ const { now, transaction } = require('./db');
 const { signedInCustomer } = require('./accounts');
 const { completeJson } = require('./careerai');
 const sources = require('./jobsources');
-const { CATALOGUE, SEARCH_ELSEWHERE } = require('./jobcatalogue');
+const { CATALOGUE, SEARCH_ELSEWHERE, companyDomain } = require('./jobcatalogue');
 const { logActivity } = require('./activity');
 const jobprep = require('./jobprep');
 const aiTokens = require('./tokens');
@@ -27,6 +27,8 @@ const AI_BATCH = 60;              // jobs the AI scores per search
 const MAX_COMPANIES = 30;         // typed by the candidate
 const KEEP_SEARCHES = 20;         // per candidate
 const BUCKETS = ['high', 'medium', 'stretch'];
+const PAGE_SIZE = 5;              // jobs per page of a group on the website
+const DESCRIPTION_FRESH = 7 * DAY;  // a job's full description, read for Insight, is kept this long
 const LEVELS = ['', 'Fresher / entry-level', 'Mid-level', 'Senior', 'Lead / manager'];
 
 const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting machine for candidates in India.
@@ -66,10 +68,8 @@ const SCORING_RULES = `RULES (always apply):
 - Score ONLY the job postings listed below, using their exact "id". Never invent companies, jobs or links.
 - Never claim the candidate has skills or experience the resume does not show.
 - Reply with ONLY a JSON object:
-{ "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "why": "one sentence", "gap": "short phrase or none", "resume": "label of the best resume to send",
-                 "requirements": [ { "skill": "2-5 words", "weight": 0-100, "status": "match" | "partial" | "missing" } ] } ] }
-Include every listed job in "matches". "requirements" is the job's skill gap matrix: its 4-6 most important requirements, with
-weights that add up to 100 and whether the resume shows each one (match), partly (partial) or not at all (missing).`;
+{ "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "why": "one sentence", "gap": "short phrase or none", "resume": "label of the best resume to send" } ] }
+Include every listed job in "matches".`;
 
 const parse = s => { try { return JSON.parse(s); } catch (_) { return null; } };
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -248,12 +248,46 @@ function addRoutes(ctx) {
     return [v];
   }
 
-  const presentSearch = (row, full) => {
+  /** One job in a page of results: no Insight body (that is read on its own), and the company's web address for its logo. */
+  const listJob = j => ({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.postedAt, url: j.url,
+    score: j.score, bucket: j.bucket, why: j.why, gap: j.gap, resume: j.resume, domain: j.domain != null ? j.domain : companyDomain(j.company), insight: !!j.prep });
+  const pageSize = v => Math.max(1, Math.min(20, Math.round(Number(v)) || PAGE_SIZE));
+  /** Page n (from 1) of one group of a search's jobs. */
+  function jobPage(result, bucket, page, size) {
+    const list = result.jobs.filter(j => j.bucket === bucket);
+    const pages = Math.max(1, Math.ceil(list.length / size));
+    const n = Math.max(1, Math.min(pages, Math.round(Number(page)) || 1));
+    return { bucket, total: list.length, page: n, pages, size, jobs: list.slice((n - 1) * size, n * size).map(listJob) };
+  }
+  /**
+   * A search. full: with its result, but only the first page of each group (the page asks for the other pages one at
+   * a time, so it never loads every job at once).
+   */
+  const presentSearch = (row, full, size = PAGE_SIZE) => {
     const result = parse(row.result_json);
     const counts = Object.fromEntries(BUCKETS.map(b => [b, result ? result.jobs.filter(j => j.bucket === b).length : 0]));
+    const shown = result && { profile: result.profile, coverage: result.coverage, total: result.jobs.length, groups: Object.fromEntries(BUCKETS.map(b => [b, jobPage(result, b, 1, size)])) };
     return { id: row.id, params: parse(row.params_json) || {}, status: row.status, progress: row.progress, error: row.error,
-      createdAt: row.created_at, finishedAt: row.finished_at, counts, ...(full ? { result } : {}) };
+      createdAt: row.created_at, finishedAt: row.finished_at, counts, ...(full ? { result: shown } : {}) };
   };
+
+  /**
+   * A job's description for its Insight: the whole description from the job's own page on the careers board (kept a
+   * week), else the start of it from the job list. '' when the careers site gives none.
+   */
+  async function jobDescription(jobId) {
+    const j = one(`SELECT j.external_id, j.url, j.description, j.full_description, j.full_fetched_at, c.provider, c.board, c.extra
+                   FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE j.id = ?`, jobId);
+    if (!j) return '';
+    if (j.full_fetched_at && Date.now() - Date.parse(j.full_fetched_at) < DESCRIPTION_FRESH) return j.full_description || j.description || '';
+    let full = null;
+    try {
+      full = await sources.fetchDescription({ ...(parse(j.extra) || {}), provider: j.provider, board: j.board }, { externalId: j.external_id, url: j.url }, fetchOpts);
+    } catch (_) { full = null; }   // the board did not answer: use the start of the description we have
+    const text = full && full.length > String(j.description || '').length ? full : (j.description || '');
+    if (full != null) db.prepare('UPDATE jobs SET full_description = ?, full_fetched_at = ? WHERE id = ?').run(text, now(), jobId);
+    return text;
+  }
 
   /** The whole search, in the background. Errors are saved on the search; nothing is counted unless it succeeds. */
   async function runSearch(id, customerId, p, resumes) {
@@ -276,7 +310,7 @@ function addRoutes(ctx) {
       }
       if (p.city) { where.push("j.location LIKE ? ESCAPE '\\'"); params.push(likeTerm(p.city)); }
       if (p.days) { where.push('j.posted_at >= ?'); params.push(new Date(Date.now() - p.days * DAY).toISOString()); }
-      const pool = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.posted_at, j.url, substr(j.description, 1, 1500) AS description, c.name AS company
+      const pool = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.posted_at, j.url, substr(j.description, 1, 1500) AS description, c.name AS company, c.careers_url
                         FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE ${where.join(' AND ')}
                         ORDER BY j.posted_at IS NULL, j.posted_at DESC LIMIT 20000`, ...params);
       if (!pool.length) throw new ApiError(400, `No live openings were found${p.country ? ' in ' + p.country : ''}${p.city ? ', ' + p.city : ''} at ${typed.length ? 'those companies' : 'the companies we searched'}. Try a wider location, a longer date range, or other companies.`);
@@ -331,7 +365,7 @@ function addRoutes(ctx) {
         return { id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.posted_at, url: j.url, score,
           bucket: BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch',
           why: String(m.why || m.reason || '').slice(0, 300), gap: String(m.gap || '').slice(0, 160),
-          resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '', matrix: jobprep.skillMatrix(m.requirements) };
+          resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '', domain: companyDomain(j.company, j.careers_url) };
       }).sort((x, y) => y.score - x.score);
       // nothing usable (e.g. the AI answered with made-up ids only): an error, not counted against today's limit
       if (!jobs.length) throw new ApiError(502, 'The AI could not score the jobs this time. Please try again.', 'ai');
@@ -414,15 +448,27 @@ function addRoutes(ctx) {
     return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length, elsewhere: SEARCH_ELSEWHERE };
   });
 
-  add('GET', '/api/career/jobsearch/:id', { public: true }, (req, res, { params }) => {
+  add('GET', '/api/career/jobsearch/:id', { public: true }, (req, res, { params, query }) => {
     const c = me(req);
     const row = searchRow(params.id, c.id);
     if (!row) throw new ApiError(404, 'Search not found');
-    return { search: presentSearch(row, true), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
+    return { search: presentSearch(row, true, pageSize(query.get('size'))), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
   });
 
-  // "Prepare for this job": the skill gaps to a full fit, learning links, revision topics and interview questions.
-  // Made once per job (one AI action) and kept with the search.
+  // one page of one group: ?bucket=high|medium|stretch&page=2&size=5
+  add('GET', '/api/career/jobsearch/:id/jobs', { public: true }, (req, res, { params, query }) => {
+    const c = me(req);
+    const row = searchRow(params.id, c.id);
+    const result = row && parse(row.result_json);
+    if (!result) throw new ApiError(404, 'Search not found');
+    const bucket = query.get('bucket');
+    if (!BUCKETS.includes(bucket)) throw new ApiError(400, 'Unknown group');
+    return jobPage(result, bucket, query.get('page'), pageSize(query.get('size')));
+  });
+
+  // Insight: the job's skill matrix (from its own description), the skill gaps to a full fit, learning links, revision
+  // topics and interview questions. Made once per job (one AI action) and kept with the search. refresh: make it again,
+  // only for an older one made before the skill matrix was taken from the job description (version 2).
   add('POST', '/api/career/jobsearch/:id/prep', { public: true }, async (req, res, { params, body }) => {
     const c = me(req);
     const row = searchRow(params.id, c.id);
@@ -430,21 +476,22 @@ function addRoutes(ctx) {
     if (!result) throw new ApiError(404, 'Search not found');
     const job = result.jobs.find(j => j.id === Number(body.jobId));
     if (!job) throw new ApiError(404, 'Job not found in this search');
-    if (job.prep && !(body.refresh && !job.prep.matrix)) return { prep: job.prep, usage: require('./career').usage(db, c.id) };   // refresh: only an older panel without the skill matrix
+    if (job.prep && !(body.refresh && (job.prep.version || 1) < 2)) return { prep: job.prep, usage: require('./career').usage(db, c.id) };
     require('./career').checkQuota(db, c.id);
     const resumes = resumesFor(c.id, 'all');
     const resume = resumes.find(r => r.label === job.resume) || resumes[0];
-    const posting = one('SELECT department, employment_type, description FROM jobs WHERE id = ?', job.id) || {};
+    const posting = one('SELECT department, employment_type FROM jobs WHERE id = ?', job.id) || {};
+    const jd = String(await jobDescription(job.id)).trim();
     const out = await completeJson({ ...ai, meter: aiTokens.meter(db, c.id) }, {
       system: jobprep.PREP_PROMPT,
       user: [`JOB: ${job.title} at ${job.company} (${job.location || job.country || 'location not given'})`,
         posting.department ? `TEAM: ${posting.department}` : '', `CURRENT FIT SCORE: ${job.score}/100`,
         job.why ? `WHY THIS SCORE: ${job.why}` : '', job.gap ? `MAIN GAP NOTED: ${job.gap}` : '',
-        `JOB DESCRIPTION:\n${String(posting.description || '').slice(0, 5000) || '(the careers site gave no description: use the job title, company and what such roles usually need)'}`,
+        jd ? `JOB DESCRIPTION:\n${jd}` : 'JOB DESCRIPTION: (the careers site gave none: leave "requirements" empty and base the gaps on the job title and company)',
         `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 15000)}`].filter(Boolean).join('\n'),
-      maxTokens: 3500,
+      maxTokens: 5000,
     });
-    const prep = jobprep.cleanPrep(out, job.score);
+    const prep = jobprep.cleanPrep(out, job.score, jd);
     if (!prep.gaps.length && !prep.interviewQuestions.length) throw new ApiError(502, 'The AI could not prepare this job this time. Please try again.', 'ai');
     // save it with the search (read again: another job may have been prepared meanwhile)
     const fresh = parse(one('SELECT result_json FROM career_job_searches WHERE id = ?', row.id).result_json);

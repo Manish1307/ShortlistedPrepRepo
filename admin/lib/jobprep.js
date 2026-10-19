@@ -1,5 +1,6 @@
 'use strict';
-// "Prepare for this job" (AI Job search results): for one job, what the candidate already matches, the skill gaps
+// Insight (AI Job search results; formerly "Prepare for this job"): for one job, the skill matrix taken from the job's
+// own description (technical and functional requirements), what the candidate already matches, the skill gaps
 // that keep the fit score below 100 (with how many points each one is worth), a study plan, topics to revise,
 // likely interview questions and tips. The AI only chooses WHAT to search for; every link is built here as a search
 // on YouTube, Udemy (free and paid), Coursera, the official documentation site or article sites, so a link can never
@@ -18,15 +19,22 @@ RULES:
 - "provider" is the company that owns the official documentation for the skill: one of
   microsoft, aws, google, oracle, salesforce, sap, servicenow, atlassian, ibm, redhat, kubernetes, python, java, scrum, pmi, other.
 - "certification" is the official certification that proves the skill, if a well-known one exists (e.g. "PL-600"), else "".
-- "requirements" is the skill matrix: EVERY important requirement of the job (6-12 rows: skills, tools, experience,
-  domain, certifications), each with "weight" = how much it matters for this job (all weights add up to 100),
-  "status" = "match" (the resume clearly shows it), "partial" (some or related experience) or "missing", and
-  "evidence" = where the resume shows it, in a few words ("" when missing).
+- "requirements" is the skill matrix. Take it ONLY from the JOB DESCRIPTION: every requirement it states, and nothing
+  it does not state (never add skills that such roles "usually" need). 4-14 rows.
+  "skill": the requirement in 2-6 words, using the job description's own words.
+  "type": "technical" (languages, tools, platforms, methods, certifications, technical experience) or
+          "functional" (domain and business knowledge, responsibilities, soft skills, years and kind of experience, education).
+  "priority": "must" (required, minimum, must have) or "nice" (preferred, plus, good to have).
+  "quote": the exact words from the job description that state it, copied character for character (at most 15 words).
+  "weight": how much it matters for this job (all weights add up to 100; must-haves weigh more than nice-to-haves).
+  "status": "match" (the resume clearly shows it), "partial" (some or related experience) or "missing".
+  "evidence": where the resume shows it, in a few words ("" when missing).
+- Each gap's "skill" must be exactly the "skill" of a requirement whose status is "partial" or "missing".
 - Keep every text short and practical.
 Reply with ONLY a JSON object:
 {
   "summary": "one sentence: where the candidate stands for this job",
-  "requirements": [ { "skill": "...", "weight": 0-100, "status": "match" | "partial" | "missing", "evidence": "..." } ],
+  "requirements": [ { "skill": "...", "type": "technical" | "functional", "priority": "must" | "nice", "quote": "...", "weight": 0-100, "status": "match" | "partial" | "missing", "evidence": "..." } ],
   "matched": ["skills from the job the resume already shows"],
   "gaps": [ { "skill": "...", "points": 0-50, "importance": "high" | "medium" | "low", "why": "why this job needs it",
               "howToClose": "the fastest honest way to close it", "hours": estimated study hours, "searchQuery": "...",
@@ -65,17 +73,34 @@ const str = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const list = (v, n, max) => (Array.isArray(v) ? v : []).map(x => str(x, max)).filter(Boolean).slice(0, n);
 
 const CREDIT = { match: 1, partial: 0.5, missing: 0 };
+const NOISE = new Set(['and', 'or', 'the', 'of', 'in', 'with', 'for', 'to', 'a', 'an', 'on', 'at', 'experience', 'knowledge', 'skills', 'strong', 'good', 'years', 'year', 'plus']);
+/** Lower case, words only: "Node.js / C#" → " node js c# " (so a quote is found whatever the spacing or punctuation). */
+const flat = t => ' ' + String(t || '').toLowerCase().replace(/[^a-z0-9#+]+/g, ' ').trim() + ' ';
+/** Whether the job description states this requirement: its quote is in the text, or else every word of its name is. */
+function inDescription(row, jd) {
+  if (row.quote && flat(row.quote).trim().length > 2 && jd.includes(flat(row.quote))) return true;
+  const words = flat(row.skill).trim().split(' ').filter(w => w && !NOISE.has(w));
+  return words.length > 0 && words.every(w => jd.includes(' ' + w + ' ') || (w.length > 4 && jd.includes(' ' + w.replace(/s$/, ''))));
+}
 
 /**
- * The required-vs-gap matrix: each requirement with its weight (scaled so all weights add up to 100), the
- * candidate's status, the points earned (weight × 1 / ½ / 0) and the points missing. null when the AI gave none.
+ * The required-vs-gap matrix: each requirement with its type (technical / functional), priority, the words of the job
+ * description that state it, its weight (scaled so all weights add up to 100), the candidate's status, the points
+ * earned (weight × 1 / ½ / 0) and the points missing. null when the AI gave none.
+ * With the job description (jd), a requirement the description does not state is dropped, so the matrix matches the
+ * job's real requirements exactly; "dropped" says how many.
  */
-function skillMatrix(requirements) {
-  const rows = (Array.isArray(requirements) ? requirements : []).slice(0, 14).map(r => ({
-    skill: str(r && r.skill, 90), weight: Math.max(0, Number(r && r.weight) || 0),
+function skillMatrix(requirements, jd) {
+  const text = jd == null ? null : flat(jd);
+  let rows = (Array.isArray(requirements) ? requirements : []).slice(0, 16).map(r => ({
+    skill: str(r && r.skill, 90), type: r && r.type === 'functional' ? 'functional' : 'technical', priority: r && r.priority === 'nice' ? 'nice' : 'must',
+    quote: str(r && r.quote, 200), weight: Math.max(0, Number(r && r.weight) || 0),
     status: Object.prototype.hasOwnProperty.call(CREDIT, r && r.status) ? r.status : 'missing', evidence: str(r && r.evidence, 160),
   })).filter(r => r.skill);
+  const given = rows.length;
+  if (text) rows = rows.filter(r => inDescription(r, text)).map(r => (r.quote && !text.includes(flat(r.quote)) ? { ...r, quote: '' } : r));
   if (!rows.length) return null;
+  const dropped = given - rows.length;
   const total = rows.reduce((n, r) => n + r.weight, 0) || rows.length;
   let left = 100;
   rows.forEach((r, i) => {   // whole-number weights that add up to exactly 100
@@ -85,11 +110,17 @@ function skillMatrix(requirements) {
   rows.forEach(r => { r.weight = Math.max(0, r.weight); r.earned = Math.round(r.weight * CREDIT[r.status] * 10) / 10; r.missing = Math.round((r.weight - r.earned) * 10) / 10; });
   rows.sort((a, b) => b.weight - a.weight);
   const score = Math.round(rows.reduce((n, r) => n + r.earned, 0));
-  return { rows, score, counts: { match: rows.filter(r => r.status === 'match').length, partial: rows.filter(r => r.status === 'partial').length, missing: rows.filter(r => r.status === 'missing').length } };
+  return { rows, score, counts: { match: rows.filter(r => r.status === 'match').length, partial: rows.filter(r => r.status === 'partial').length, missing: rows.filter(r => r.status === 'missing').length },
+    types: { technical: rows.filter(r => r.type === 'technical').length, functional: rows.filter(r => r.type === 'functional').length },
+    ...(text ? { checked: true, dropped } : {}) };
 }
 
-/** The AI's answer, checked and with the links added. */
-function cleanPrep(out, fit) {
+/**
+ * The AI's answer, checked and with the links added. jd: the job description the AI was given ('' when the careers
+ * site gave none); the skill matrix keeps only the requirements it states.
+ */
+function cleanPrep(out, fit, jd) {
+  const matrix = jd ? skillMatrix(out.requirements, jd) : null;
   const gaps = (Array.isArray(out.gaps) ? out.gaps : []).slice(0, 8).map(g => {
     const skill = str(g && g.skill, 80);
     if (!skill) return null;
@@ -105,7 +136,7 @@ function cleanPrep(out, fit) {
     };
   }).filter(Boolean).sort((a, b) => b.points - a.points);
   return {
-    fit, summary: str(out.summary, 300), matrix: skillMatrix(out.requirements), matched: list(out.matched, 20, 60), gaps,
+    version: 2, fit, summary: str(out.summary, 300), matrix, description: jd ? 'full' : 'none', matched: list(out.matched, 20, 60), gaps,
     gapPoints: gaps.reduce((n, g) => n + g.points, 0),
     revise: (Array.isArray(out.revise) ? out.revise : []).slice(0, 8).map(r => {
       const topic = str(r && r.topic, 80);

@@ -223,6 +223,8 @@ function open(file) {
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
   addColumn(db, 'job_companies', 'last_used', 'TEXT');   // AI Job search: boards nobody searched lately are dropped
+  addColumn(db, 'jobs', 'full_description', 'TEXT');      // Insight: a job's whole description, read when a candidate opens it
+  addColumn(db, 'jobs', 'full_fetched_at', 'TEXT');
   return db;
 }
 

@@ -312,4 +312,39 @@ async function fetchJobs(source, { fetchImpl = fetch, base = {}, now = Date.now 
   throw new Error('Unsupported job board');
 }
 
-module.exports = { parseBoardUrl, fetchJobs, countryOf, workdayDate, stripHtml, MAX_JOBS };
+const FULL_DESCRIPTION = 15000;   // characters of one job's full description
+
+/**
+ * One job's whole description, for its skill matrix. The job lists keep only the start of each description (and
+ * SmartRecruiters and Workday lists have none), so the job's own page on the board is read when a candidate opens it.
+ * job: {externalId, url}. Returns the text, or null when the board has no single-job API we can read.
+ */
+async function fetchDescription(source, job, { fetchImpl = fetch, base = {} } = {}) {
+  const p = source.provider, board = encodeURIComponent(source.board || ''), id = encodeURIComponent(job.externalId || '');
+  let text = null;
+  if (p === 'greenhouse') {
+    const d = await getJson(fetchImpl, `${base.greenhouse || 'https://boards-api.greenhouse.io/v1/boards'}/${board}/jobs/${id}`);
+    text = stripHtml(d.content);
+  } else if (p === 'lever') {
+    const d = await getJson(fetchImpl, `${base.lever || 'https://api.lever.co/v0/postings'}/${board}/${id}?mode=json`);
+    text = [d.descriptionPlain || stripHtml(d.description), ...(d.lists || []).map(l => `${l.text || ''}\n${stripHtml(l.content)}`), d.additionalPlain || stripHtml(d.additional)].filter(Boolean).join('\n');
+  } else if (p === 'smartrecruiters') {
+    const d = await getJson(fetchImpl, `${base.smartrecruiters || 'https://api.smartrecruiters.com/v1/companies'}/${board}/postings/${id}`);
+    const sections = (d.jobAd && d.jobAd.sections) || {};
+    text = ['jobDescription', 'qualifications', 'additionalInformation'].map(k => sections[k]).filter(s => s && s.text).map(s => `${s.title || ''}\n${stripHtml(s.text)}`).join('\n');
+  } else if (p === 'ashby') {
+    const d = await getJson(fetchImpl, `${base.ashby || 'https://api.ashbyhq.com/posting-api/job-board'}/${board}`);
+    const j = (d.jobs || []).find(x => String(x.id) === String(job.externalId));
+    text = j ? (j.descriptionPlain || stripHtml(j.descriptionHtml)) : '';
+  } else if (p === 'workday') {
+    // the job's link is https://<tenant>.<wd>.myworkdayjobs.com/<site>/job/...; its JSON is at /wday/cxs/<tenant>/<site>/job/...
+    const [tenant, site] = String(source.board || '').split('/');
+    const path = new URL(job.url).pathname.replace(new RegExp('^/' + site.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '');
+    const origin = base.workday || `https://${tenant}.${source.wd || 'wd1'}.myworkdayjobs.com`;
+    const d = await getJson(fetchImpl, `${origin}/wday/cxs/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}${path}`, { headers: { Accept: 'application/json' } });
+    text = stripHtml((d.jobPostingInfo || {}).jobDescription);
+  }
+  return text == null ? null : text.slice(0, FULL_DESCRIPTION);
+}
+
+module.exports = { parseBoardUrl, fetchJobs, fetchDescription, countryOf, workdayDate, stripHtml, MAX_JOBS };

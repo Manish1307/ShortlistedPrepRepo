@@ -414,63 +414,111 @@
     return [p.role || 'Roles from my resume', [p.city, p.country].filter(Boolean).join(', ') || 'Any location', p.level, p.companies ? p.companies.split(/[\n,;]+/).filter(function (x) { return x.trim(); }).length + ' companies' : 'Well-known companies', p.resumeLabel].filter(Boolean).join(' · ');
   }
 
-  // ---------- "Prepare for this job": gaps to a full fit, learning links, revision and interview prep ----------
+  // ---------- Insight: one job's skill matrices, the gaps to a full fit, learning links and interview revision ----------
+  // Four tabs per job. Both matrices come from the job's own description (the server drops anything it does not state).
   var LINK_ICON = { youtube: '▶', 'udemy-free': '🎓', 'udemy-paid': '🎓', coursera: '📘', official: '🏛', articles: '📰', cert: '🏅' };
+  var INSIGHT_TABS = [['gap', '📊 Skill Gap Matrix'], ['skills', '🧩 Skill matrix'], ['close', '🎯 Close the gaps'], ['revise', '📚 Revise before the interview']];
   function linkRow(links) {
     return h('div', { class: 'pp-links' }, links.map(function (l) {
       return h('a', { class: 'pp-link ' + l.kind, href: l.url, target: '_blank', rel: 'noopener noreferrer' }, (LINK_ICON[l.kind] || '↗') + ' ' + l.label);
     }));
   }
-  function prepView(p, job, refresh) {
+  function section(cls, icon, title, intro, body) {
+    return h('section', { class: 'pp-sec ' + cls }, h('h4', {}, h('span', { 'aria-hidden': 'true' }, icon), ' ', title), intro ? h('p', { class: 'ac-muted pp-intro' }, intro) : null, body);
+  }
+  function insightView(p, job, refresh, tab) {
     var reach = Math.min(100, p.fit + p.gapPoints);
-    var section = function (cls, icon, title, intro, body) {
-      return h('section', { class: 'pp-sec ' + cls }, h('h4', {}, h('span', { 'aria-hidden': 'true' }, icon), ' ', title), intro ? h('p', { class: 'ac-muted pp-intro' }, intro) : null, body);
+    var exact = (p.version || 1) >= 2;
+    var buttons = {}, panels = {};
+    var uid = 'in' + job.id;
+
+    var oldNote = exact ? null : h('div', { class: 'in-note' },
+      h('span', {}, 'This Insight was made before skill matrices were taken word for word from the job description.'),
+      h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: refresh }, 'Update Insight (uses 1 AI action)'));
+    var noDescription = function () {
+      return h('div', { class: 'in-note' }, h('span', {}, 'The careers site does not publish this job\'s description, so an exact skill matrix cannot be made for it.'),
+        h('a', { class: 'btn btn-sm', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Read the job on the company site ↗'));
     };
-    var box = h('div', { class: 'pp' },
-      h('div', { class: 'pp-head' },
-        h('div', { class: 'pp-meter', role: 'img', 'aria-label': 'Fit now ' + p.fit + ', up to ' + reach + ' after closing the gaps' },
-          h('i', { class: 'now', style: 'width:' + p.fit + '%' }), h('i', { class: 'gain', style: 'left:' + p.fit + '%;width:' + (reach - p.fit) + '%' })),
-        h('div', { class: 'pp-scores' }, h('span', {}, 'Fit now ', h('b', {}, String(p.fit))), h('span', {}, 'After closing the gaps ', h('b', { class: 'up' }, String(reach)))),
-        p.summary ? h('p', { class: 'pp-summary' }, p.summary) : null),
+    function select(id, focus) {
+      INSIGHT_TABS.forEach(function (t) {
+        var on = t[0] === id;
+        buttons[t[0]].setAttribute('aria-selected', on ? 'true' : 'false');
+        buttons[t[0]].tabIndex = on ? 0 : -1;
+        panels[t[0]].hidden = !on;
+      });
+      if (focus) buttons[id].focus();
+    }
+    /** A Skill Gap Matrix row: open "Close the gaps" at that gap. */
+    function toGap(skill) { select('close'); focusGap(panels.close, skill); }
 
-      section('matrix', '📊', 'Skill matrix: what this job requires vs. what you have', null,
-        p.matrix ? matrixView(p.matrix, p.fit, function (skill) { focusGap(box, skill); })
-          : h('div', { class: 'mx-absent' }, h('span', { class: 'ac-muted' }, 'This plan was made before the skill matrix was added.'),
-            h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: refresh }, 'Add the skill matrix (uses 1 AI action)'))),
+    var bodies = {
+      gap: function () {
+        return h('div', {}, oldNote,
+          p.matrix ? [h('p', { class: 'ac-muted pp-intro' }, 'Each requirement of this job against your resume. Click a row to see how to close that gap.'), matrixView(p.matrix, p.fit, toGap)]
+            : exact ? noDescription() : null);
+      },
+      skills: function () {
+        return h('div', {}, exact ? (p.matrix ? skillsView(p.matrix) : noDescription()) : oldNote);
+      },
+      close: function () {
+        return h('div', {},
+          h('div', { class: 'pp-head' },
+            h('div', { class: 'pp-meter', role: 'img', 'aria-label': 'Fit now ' + p.fit + ', up to ' + reach + ' after closing the gaps' },
+              h('i', { class: 'now', style: 'width:' + p.fit + '%' }), h('i', { class: 'gain', style: 'left:' + p.fit + '%;width:' + (reach - p.fit) + '%' })),
+            h('div', { class: 'pp-scores' }, h('span', {}, 'Fit now ', h('b', {}, String(p.fit))), h('span', {}, 'After closing the gaps ', h('b', { class: 'up' }, String(reach))))),
+          h('div', { class: 'pp-grid' },
+            section('gaps', '🎯', 'Close the gaps to reach ' + reach + '/100',
+              p.gaps.length ? 'What this job wants that your resume does not show yet, biggest first, with where to learn it.' : null,
+              p.gaps.length ? h('div', { class: 'pp-gaps' }, p.gaps.map(function (g) {
+                return h('div', { class: 'pp-gap ' + g.importance, 'data-skill': g.skill },
+                  h('div', { class: 'pp-gap-head' }, h('b', {}, g.skill), h('span', { class: 'pp-pts' }, '+' + g.points + ' fit'),
+                    g.hours ? h('span', { class: 'ac-muted pp-hours' }, '~' + g.hours + ' h study') : null),
+                  g.why ? h('p', { class: 'pp-why' }, g.why) : null,
+                  g.howToClose ? h('p', { class: 'pp-how' }, h('b', {}, 'How: '), g.howToClose) : null,
+                  linkRow(g.links.concat(g.certification ? [{ kind: 'cert', label: g.certification.name + ' certification', url: g.certification.url }] : [])));
+              })) : h('p', { class: 'ac-muted' }, 'No real gaps: you already match what this job asks for.')),
+            h('div', { class: 'pp-side' },
+              p.matched.length ? section('match', '✅', 'You already match', null, chips(p.matched)) : null,
+              p.plan.length ? section('plan', '🗓', 'Your plan to a full fit', null, h('ol', { class: 'pp-list' }, p.plan.map(function (x) { return h('li', {}, x); }))) : null)));
+      },
+      revise: function () {
+        return h('div', {},
+          p.revise.length ? section('revise', '📚', 'Topics to revise', 'Topics you know but should brush up for this job: videos and articles.',
+            h('div', { class: 'pp-revise' }, p.revise.map(function (r) { return h('div', { class: 'pp-rev' }, h('b', {}, r.topic), linkRow(r.links)); }))) : null,
+          h('div', { class: 'pp-grid two' },
+            p.interviewQuestions.length ? section('questions', '🎤', 'Likely interview questions', null,
+              h('ol', { class: 'pp-list' }, p.interviewQuestions.map(function (x) { return h('li', {}, x); }))) : null,
+            section('help', '💡', 'More help', null, h('div', {},
+              p.tips.length ? h('ul', { class: 'pp-list' }, p.tips.map(function (x) { return h('li', {}, x); })) : null,
+              h('div', { class: 'pp-actions' },
+                h('a', { class: 'btn btn-sm', href: '#cr-match', onclick: function (e) { e.preventDefault(); goTo('cr-match'); } }, '✉️ Write a cover letter for this job'),
+                h('a', { class: 'btn btn-sm', href: '#cr-versions', onclick: function (e) { e.preventDefault(); goTo('cr-versions'); } }, '🧩 Make a resume for this role'),
+                h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.company + ' ' + job.title + ' interview questions'), target: '_blank', rel: 'noopener noreferrer' }, '🔎 Interview experiences at ' + job.company),
+                h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.title + ' salary India ' + job.company), target: '_blank', rel: 'noopener noreferrer' }, '₹ Salary for this role'))))));
+      }
+    };
 
-      h('div', { class: 'pp-grid' },
-        section('gaps', '🎯', 'Close the gaps to reach ' + reach + '/100',
-          p.gaps.length ? 'What this job wants that your resume does not show yet, biggest first, with where to learn it.' : null,
-          p.gaps.length ? h('div', { class: 'pp-gaps' }, p.gaps.map(function (g) {
-            return h('div', { class: 'pp-gap ' + g.importance, 'data-skill': g.skill },
-              h('div', { class: 'pp-gap-head' }, h('b', {}, g.skill), h('span', { class: 'pp-pts' }, '+' + g.points + ' fit'),
-                g.hours ? h('span', { class: 'ac-muted pp-hours' }, '~' + g.hours + ' h study') : null),
-              g.why ? h('p', { class: 'pp-why' }, g.why) : null,
-              g.howToClose ? h('p', { class: 'pp-how' }, h('b', {}, 'How: '), g.howToClose) : null,
-              linkRow(g.links.concat(g.certification ? [{ kind: 'cert', label: g.certification.name + ' certification', url: g.certification.url }] : [])));
-          })) : h('p', { class: 'ac-muted' }, 'No real gaps: you already match what this job asks for.')),
-
-        h('div', { class: 'pp-side' },
-          p.matched.length ? section('match', '✅', 'You already match', null, chips(p.matched)) : null,
-          p.plan.length ? section('plan', '🗓', 'Your plan to a full fit', null, h('ol', { class: 'pp-list' }, p.plan.map(function (x) { return h('li', {}, x); }))) : null)),
-
-      p.revise.length ? section('revise', '📚', 'Revise before the interview', 'Topics you know but should brush up for this job: videos and articles.',
-        h('div', { class: 'pp-revise' }, p.revise.map(function (r) { return h('div', { class: 'pp-rev' }, h('b', {}, r.topic), linkRow(r.links)); }))) : null,
-
-      h('div', { class: 'pp-grid two' },
-        p.interviewQuestions.length ? section('questions', '🎤', 'Likely interview questions', null,
-          h('ol', { class: 'pp-list' }, p.interviewQuestions.map(function (x) { return h('li', {}, x); }))) : null,
-        section('help', '💡', 'More help', null, h('div', {},
-          p.tips.length ? h('ul', { class: 'pp-list' }, p.tips.map(function (x) { return h('li', {}, x); })) : null,
-          h('div', { class: 'pp-actions' },
-            h('a', { class: 'btn btn-sm', href: '#cr-match', onclick: function (e) { e.preventDefault(); goTo('cr-match'); } }, '✉️ Write a cover letter for this job'),
-            h('a', { class: 'btn btn-sm', href: '#cr-versions', onclick: function (e) { e.preventDefault(); goTo('cr-versions'); } }, '🧩 Make a resume for this role'),
-            h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.company + ' ' + job.title + ' interview questions'), target: '_blank', rel: 'noopener noreferrer' }, '🔎 Interview experiences at ' + job.company),
-            h('a', { class: 'btn btn-sm', href: 'https://www.google.com/search?q=' + encodeURIComponent(job.title + ' salary India ' + job.company), target: '_blank', rel: 'noopener noreferrer' }, '₹ Salary for this role'))))),
-      h('p', { class: 'ac-muted pp-note' }, 'Links open a search on YouTube, Udemy, Coursera, official documentation and article sites, so you always see current material. Prepared ' + dateTime(p.createdAt) + '.'));
+    var tabs = h('div', { class: 'in-tabs', role: 'tablist', 'aria-label': 'Insight: ' + job.title + ' at ' + job.company }, INSIGHT_TABS.map(function (t, i) {
+      var label = t[0] === 'close' ? '🎯 Close the gaps to reach ' + reach : t[1];
+      var b = h('button', { class: 'in-tab', type: 'button', role: 'tab', id: uid + '-' + t[0], 'aria-controls': uid + '-' + t[0] + '-p', onclick: function () { select(t[0]); },
+        onkeydown: function (e) {
+          var step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+          if (step) { e.preventDefault(); select(INSIGHT_TABS[(i + step + INSIGHT_TABS.length) % INSIGHT_TABS.length][0], true); }
+        } }, label);
+      buttons[t[0]] = b;
+      return b;
+    }));
+    INSIGHT_TABS.forEach(function (t) {
+      panels[t[0]] = h('div', { class: 'in-panel', role: 'tabpanel', id: uid + '-' + t[0] + '-p', 'aria-labelledby': uid + '-' + t[0], tabindex: '0' }, bodies[t[0]]());
+    });
+    var box = h('div', { class: 'pp in' },
+      p.summary ? h('p', { class: 'pp-summary' }, p.summary) : null,
+      tabs, INSIGHT_TABS.map(function (t) { return panels[t[0]]; }),
+      h('p', { class: 'ac-muted pp-note' }, 'Links open a search on YouTube, Udemy, Coursera, official documentation and article sites, so you always see current material. Made ' + dateTime(p.createdAt) + '.'));
+    select(tab || 'gap');
     return box;
   }
-  /** Scroll to "Close the gaps" and highlight the gap that matches a matrix requirement (by shared words). */
+  /** Highlight the gap in "Close the gaps" that matches a matrix requirement (by shared words) and scroll to it. */
   function focusGap(scope, skill) {
     var words = function (t) { return String(t).toLowerCase().split(/[^a-z0-9#+.]+/).filter(function (w) { return w.length > 1 && ['and', 'or', 'the', 'of', 'in', 'with', 'for'].indexOf(w) === -1; }); };
     var want = words(skill);
@@ -482,7 +530,7 @@
     });
     var target = best || scope.querySelector('.pp-sec.gaps');
     if (!target) return;
-    setTimeout(function () { target.scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' }); }, 60);   // once the new panel is laid out
+    setTimeout(function () { target.scrollIntoView({ behavior: 'smooth', block: best ? 'center' : 'start' }); }, 60);   // once the tab is shown
     [].forEach.call(scope.querySelectorAll('.pp-gap.flash'), function (g) { g.classList.remove('flash'); });
     if (best) { best.classList.add('flash'); setTimeout(function () { best.classList.remove('flash'); }, 2600); }
     else {
@@ -490,29 +538,32 @@
       if (note) note.textContent = '"' + skill + '" is not one of the gaps below: you already match it, or a gap below covers it.';
     }
   }
-  function prepRow(searchId, job, cols) {
+  /** The Insight row under a job: made on first open (one AI action), then read again for free. */
+  function insightRow(searchId, job, cols) {
     var cell = h('td', { colspan: String(cols), class: 'pp-cell' });
     var row = h('tr', { class: 'pp-row' }, cell);
-    function show(p, done) { cell.replaceChildren(prepView(p, job, function () { load(true); })); if (done) done(cell); }
-    function load(refresh, done) {
-      if (job.prep && refresh !== true) { show(job.prep, done); return; }
-      var status = h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, 'Finding your skill gaps and the best ways to learn them… (about 20 seconds)')));
-      cell.replaceChildren(status);
+    function show(p, tab) { cell.replaceChildren(insightView(p, job, function () { load(true, 'gap'); }, tab)); }
+    function load(refresh, tab) {
+      if (job.insightData && refresh !== true) { show(job.insightData, tab); return; }
+      var text = job.insight && refresh !== true ? 'Opening Insight…' : 'Reading the job description and building your Insight… (about 20 seconds)';
+      cell.replaceChildren(h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, text))));
       call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id, refresh: refresh === true }).then(function (d) {
-        job.prep = d.prep; setUsage(d.usage); show(d.prep, done);
+        job.insightData = d.prep; job.insight = true; setUsage(d.usage); show(d.prep, tab);
       }).catch(function (e) {
-        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, done); } }, 'Try again');
+        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, tab); } }, 'Try again');
         cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', retry));
       });
     }
     return { row: row, load: load };
   }
 
-  /** Required vs. what the candidate has: each requirement's weight, status, evidence and the points earned. */
+  /** Required vs. what the candidate has: each requirement's type, weight, status, evidence and the points earned. */
   var MATRIX_STATUS = { match: ['✓', 'Match', 'good'], partial: ['◐', 'Partial', 'warn'], missing: ['✕', 'Missing', 'bad'] };
+  function typeLabel(r) { return (r.type === 'functional' ? 'Functional' : 'Technical') + (r.priority === 'nice' ? ' · nice to have' : ''); }
   function matrixView(m, fit, onRow) {
     var missingTotal = m.rows.reduce(function (n, r) { return n + r.missing; }, 0);
-    var showEv = m.rows.some(function (r) { return r.evidence; });   // the quick matrix from the search has no evidence
+    var showEv = m.rows.some(function (r) { return r.evidence; });
+    var showType = m.rows.some(function (r) { return r.type; });
     return h('div', {},
       h('div', { class: 'mx-summary' },
         h('span', { class: 'mx-chip good' }, '✓ ' + m.counts.match + ' match'),
@@ -520,12 +571,14 @@
         h('span', { class: 'mx-chip bad' }, '✕ ' + m.counts.missing + ' missing'),
         h('span', { class: 'mx-score' }, 'Weighted skill score ', h('b', {}, m.score + '/100'))),
       h('div', { class: 'mx-scroll' }, h('table', { class: 'mx-table' },
-        h('thead', {}, h('tr', {}, ['Required for this job', 'Weight', 'You'].concat(showEv ? ['Evidence in your resume'] : []).concat(['Score', 'Gap']).map(function (t) { return h('th', {}, t); }))),
+        h('thead', {}, h('tr', {}, ['Required for this job'].concat(showType ? ['Type'] : []).concat(['Weight', 'You']).concat(showEv ? ['Evidence in your resume'] : []).concat(['Score', 'Gap'])
+          .map(function (t) { return h('th', {}, t); }))),
         h('tbody', {}, m.rows.map(function (r) {
           var s = MATRIX_STATUS[r.status];
           return h('tr', onRow ? { class: 'mx-' + r.status + ' mx-click', tabindex: '0', title: 'See how to close this gap', onclick: function () { onRow(r.skill); },
             onkeydown: function (e) { if (e.key === 'Enter') onRow(r.skill); } } : { class: 'mx-' + r.status },
             h('td', { 'data-label': 'Required' }, h('b', {}, r.skill)),
+            showType ? h('td', { 'data-label': 'Type', class: 'mx-type' }, typeLabel(r)) : null,
             h('td', { 'data-label': 'Weight', class: 'mx-num' }, r.weight + '%'),
             h('td', { 'data-label': 'You' }, h('span', { class: 'mx-status ' + s[2] }, s[0] + ' ' + s[1])),
             showEv ? h('td', { 'data-label': 'Evidence', class: 'mx-ev' }, r.evidence || (r.status === 'missing' ? 'Not in your resume' : '—')) : null,
@@ -535,10 +588,31 @@
             h('td', { 'data-label': 'Gap', class: 'mx-num mx-gap' }, r.missing ? '−' + fmt(r.missing) : '—'));
         })),
         h('tfoot', {}, h('tr', {},
-          h('td', {}, h('b', {}, 'Total')), h('td', { class: 'mx-num' }, h('b', {}, '100%')), h('td'), showEv ? h('td') : null,
+          h('td', {}, h('b', {}, 'Total')), showType ? h('td') : null, h('td', { class: 'mx-num' }, h('b', {}, '100%')), h('td'), showEv ? h('td') : null,
           h('td', { class: 'mx-num' }, h('b', {}, m.score + ' / 100')), h('td', { class: 'mx-num mx-gap' }, h('b', {}, '−' + fmt(missingTotal))))))),
       h('p', { class: 'ac-muted pp-intro mx-note' }, 'Weight = how much each requirement matters for this job (all add up to 100). A match earns the full weight, partial half, missing none. ' +
         'Your overall fit (' + fit + ') also counts experience level and location.'));
+  }
+  /** What the job requires, technical and functional, in the job description's own words. */
+  function skillsView(m) {
+    var kinds = [['technical', '⚙️ Technical requirements'], ['functional', '🤝 Functional requirements']];
+    return h('div', {},
+      h('p', { class: 'ac-muted pp-intro' }, 'Every requirement this job\'s description states, and nothing else' +
+        (m.dropped ? ' (' + m.dropped + ' AI suggestion' + (m.dropped === 1 ? '' : 's') + ' not stated in the description ' + (m.dropped === 1 ? 'was' : 'were') + ' left out).' : '.')),
+      kinds.map(function (k) {
+        var rows = m.rows.filter(function (r) { return (r.type || 'technical') === k[0]; });
+        if (!rows.length) return null;
+        return h('div', { class: 'sk-group' }, h('h5', {}, k[1] + ' (' + rows.length + ')'),
+          h('div', { class: 'mx-scroll' }, h('table', { class: 'mx-table sk-table' },
+            h('thead', {}, h('tr', {}, ['Requirement', 'Priority', 'Weight', 'In the job description'].map(function (t) { return h('th', {}, t); }))),
+            h('tbody', {}, rows.map(function (r) {
+              return h('tr', {},
+                h('td', { 'data-label': 'Required' }, h('b', {}, r.skill)),
+                h('td', { 'data-label': 'Priority' }, h('span', { class: 'sk-pri ' + (r.priority === 'nice' ? 'nice' : 'must') }, r.priority === 'nice' ? 'Nice to have' : 'Must have')),
+                h('td', { 'data-label': 'Weight', class: 'mx-num' }, r.weight + '%'),
+                h('td', { 'data-label': 'In the description', class: 'sk-quote' }, r.quote ? '“' + r.quote + '”' : 'Stated in the description'));
+            })))));
+      }));
   }
   function fmt(n) { return Math.round(n * 10) / 10 % 1 ? (Math.round(n * 10) / 10).toFixed(1) : String(Math.round(n)); }
 
@@ -575,65 +649,82 @@
         ELSEWHERE.map(function (c) { return h('a', { class: 'pp-link', href: fill(c.url, roles[0], where), target: '_blank', rel: 'noopener noreferrer' }, c.name + ' ↗'); })) : null);
   }
 
-  /** Under each job: its Skill Gap Matrix (from the search), folded until opened. */
-  function gapMatrixRow(j, cols, openPrep) {
-    var m = j.matrix;
-    if (!m || !m.rows || !m.rows.length) return null;
-    return h('tr', { class: 'gm-row' }, h('td', { colspan: String(cols), class: 'gm-cell' },
-      h('details', { class: 'gm', open: true },
-        h('summary', {}, h('span', { class: 'gm-title' }, '📊 Skill Gap Matrix'),
-          h('span', { class: 'mx-chip good' }, '✓ ' + m.counts.match), h('span', { class: 'mx-chip warn' }, '◐ ' + m.counts.partial), h('span', { class: 'mx-chip bad' }, '✕ ' + m.counts.missing),
-          h('span', { class: 'gm-score' }, 'Weighted skill score ', h('b', {}, m.score + '/100'))),
-        h('p', { class: 'ac-muted gm-hint' }, 'Click a row to see how to close that gap.'),
-        matrixView(m, j.score, openPrep))));
+  /** The company's logo (from its web address) next to its name; its initials when the logo is unknown or does not load. */
+  function companyCell(j) {
+    var initials = String(j.company || '?').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
+    var badge = h('span', { class: 'jb-initials', 'aria-hidden': 'true' }, initials);
+    var logo = j.domain ? h('img', { class: 'jb-logo', src: 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(j.domain) + '&sz=64', alt: '', width: '28', height: '28', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null;
+    if (logo) logo.addEventListener('error', function () { logo.replaceWith(badge); });
+    return h('span', { class: 'jb-co' }, logo || badge, h('span', {}, j.company));
   }
   function groupTable(list, withResume, startAt, searchId) {
     var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);
     return h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table js-table' },
       h('thead', {}, h('tr', {}, head.map(function (t) { return h('th', {}, t); }))),
       h('tbody', {}, list.map(function (j, i) {
-        var prep = null;
-        var jobRow = null;
-        var toggle = h('button', { class: 'btn btn-sm pp-toggle' + (j.prep ? ' ready' : ''), type: 'button', 'aria-expanded': 'false' }, j.prep ? '📘 Prepare ▾' : '📘 Prepare');
-        /** Open the Prepare panel (below the Skill Gap Matrix); with a skill, jump to its gap in "Close the gaps". */
-        function openPrep(skill) {
-          prep = prep || prepRow(searchId, j, head.length);
-          if (!prep.row.parentNode) {
-            var after = jobRow.nextSibling && jobRow.nextSibling.classList.contains('gm-row') ? jobRow.nextSibling : jobRow;
-            jobRow.parentNode.insertBefore(prep.row, after.nextSibling);
-          }
-          toggle.setAttribute('aria-expanded', 'true');
-          prep.load(false, skill ? function (cell) { focusGap(cell, skill); } : null);
-          if (skill && !j.prep) prep.row.scrollIntoView({ behavior: 'smooth', block: 'start' });   // while it loads
-        }
+        var insight = null, jobRow = null;
+        var toggle = h('button', { class: 'btn btn-sm pp-toggle' + (j.insight ? ' ready' : ''), type: 'button', 'aria-expanded': 'false' }, '💡 Insight');
         toggle.addEventListener('click', function () {
-          if (prep && prep.row.parentNode) { prep.row.remove(); toggle.setAttribute('aria-expanded', 'false'); return; }
-          openPrep(null);
+          if (insight && insight.row.parentNode) { insight.row.remove(); toggle.setAttribute('aria-expanded', 'false'); toggle.textContent = '💡 Insight'; return; }
+          insight = insight || insightRow(searchId, j, head.length);
+          jobRow.parentNode.insertBefore(insight.row, jobRow.nextSibling);
+          toggle.setAttribute('aria-expanded', 'true'); toggle.textContent = '💡 Insight ▴';
+          insight.load(false, 'gap');
         });
-        return [jobRow = h('tr', {},
+        return jobRow = h('tr', {},
           h('td', { class: 'js-num', 'data-label': '#' }, String(startAt + i + 1)),
           h('td', { 'data-label': 'Role' }, h('b', {}, j.title)),
-          h('td', { 'data-label': 'Company' }, j.company),
+          h('td', { 'data-label': 'Company' }, companyCell(j)),
           h('td', { 'data-label': 'Location' }, j.location || j.country || '—'),
           h('td', { 'data-label': 'Posted', title: j.postedAt ? new Date(j.postedAt).toLocaleString() : '' }, ago(j.postedAt)),
           h('td', { 'data-label': 'Fit' }, fitBadge(j.score)),
           h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
             j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
           withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
-          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle, jobElsewhere(j))), gapMatrixRow(j, head.length, openPrep)];
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle, jobElsewhere(j)));
       }))));
+  }
+
+  /** One group of results, PAGE_SIZE jobs a page; each page is read from the server when it is opened. */
+  var PAGE_SIZE = 5;
+  function groupBlock(s, g, first, withResume) {
+    var body = h('div', {}), pager = h('div', { class: 'jb-pager' });
+    var block = h('div', { class: 'js-group ' + g[0] },
+      h('div', { class: 'js-group-head' }, h('h3', {}, g[1] + ' (' + first.total + ')'), h('span', { class: 'ac-muted' }, g[2])), body, pager);
+    function show(pg) {
+      body.replaceChildren(groupTable(pg.jobs, withResume, (pg.page - 1) * pg.size, s.id));
+      pager.replaceChildren();
+      if (pg.pages <= 1) return;
+      var button = function (label, n, current) {
+        return h('button', { class: 'btn btn-sm' + (current ? ' btn-primary' : ''), type: 'button', disabled: n < 1 || n > pg.pages || current,
+          'aria-current': current ? 'page' : null, 'aria-label': /^\d+$/.test(label) ? 'Page ' + label : null, onclick: function () { open(n); } }, label);
+      };
+      var numbers = [];
+      for (var n = 1; n <= pg.pages; n++) numbers.push(button(String(n), n, n === pg.page));
+      pager.append(
+        h('span', { class: 'ac-muted' }, 'Showing ' + ((pg.page - 1) * pg.size + 1) + '–' + Math.min(pg.page * pg.size, pg.total) + ' of ' + pg.total),
+        h('nav', { class: 'jb-pages', 'aria-label': 'Pages: ' + g[1] }, button('‹ Previous', pg.page - 1), numbers, button('Next ›', pg.page + 1)));
+    }
+    function open(n) {
+      pager.classList.add('busy');
+      call('GET', '/api/career/jobsearch/' + s.id + '/jobs?bucket=' + g[0] + '&page=' + n + '&size=' + PAGE_SIZE)
+        .then(function (pg) { show(pg); block.scrollIntoView({ behavior: 'smooth', block: 'start' }); })
+        .catch(function (e) { showError(e.message); })
+        .then(function () { pager.classList.remove('busy'); });
+    }
+    show(first);
+    return block;
   }
 
   function searchResult(s) {
     var r = s.result, p = r.profile, cov = r.coverage;
     var withResume = s.params.resume === 'all';
-    var n = 0;
     var notes = [];
     if (cov.notFound.length) notes.push('Could not find the careers site of: ' + cov.notFound.join(', ') + '. Paste the link of their careers page instead.');
     if (cov.notSupported.length) notes.push('These careers sites cannot be read yet: ' + cov.notSupported.join(', ') + '. Sites on Greenhouse, Lever, SmartRecruiters, Ashby and Workday work.');
     if (cov.failed.length) notes.push('These careers sites did not answer: ' + cov.failed.join(', ') + '. Try again later.');
     if (cov.loading) notes.push(cov.loading + ' careers site' + (cov.loading === 1 ? ' was' : 's were') + ' still loading. Search again in a few minutes to include them.');
-    if (r.jobs.length < 20) notes.push('Fewer than 20 matches: try a wider location, another role, a longer date range or more companies.');
+    if (r.total < 20) notes.push('Fewer than 20 matches: try a wider location, another role, a longer date range or more companies.');
     return h('div', { class: 'js-result' },
       h('div', { class: 'js-profile' },
         h('div', { class: 'ac-subhead' }, 'Your profile'),
@@ -641,16 +732,12 @@
         p.summary ? h('p', {}, p.summary) : null,
         p.strengths.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Strongest areas: '), chips(p.strengths)) : null,
         p.targetRoles.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Best-fit roles: '), chips(p.targetRoles.map(function (t, i) { return (i + 1) + '. ' + t; }))) : null),
-      h('p', { class: 'jb-info' }, r.jobs.length + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
+      h('p', { class: 'jb-info' }, r.total + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
         ' · searched ' + dateTime(s.finishedAt) + ' · ' + paramsLine(s.params)),
+      h('p', { class: 'ac-muted js-small' }, 'Press 💡 Insight on a job for its skill gap matrix, its technical and functional requirements, how to close each gap, and what to revise before the interview.'),
       GROUPS.map(function (g) {
-        var list = r.jobs.filter(function (j) { return j.bucket === g[0]; });
-        if (!list.length) return null;
-        var block = h('div', { class: 'js-group ' + g[0] },
-          h('div', { class: 'js-group-head' }, h('h3', {}, g[1] + ' (' + list.length + ')'), h('span', { class: 'ac-muted' }, g[2])),
-          groupTable(list, withResume, n, s.id));
-        n += list.length;
-        return block;
+        var first = r.groups && r.groups[g[0]];
+        return first && first.total ? groupBlock(s, g, first, withResume) : null;
       }),
       searchElsewhere(s.params, p),
       p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),

@@ -690,7 +690,7 @@
     login: '🔑 Signed in', 'resume.uploaded': '📄 Uploaded resume', 'resume.pdf_read': '📄 PDF read', 'ats.checked': '✅ ATS check',
     'version.created': '🧩 Role resume created', 'version.deleted': '🗑 Role resume deleted', 'match.created': '✉️ Job match & cover letter',
     'match.deleted': '🗑 Job match deleted', 'jobsearch.started': '🎯 AI job search started', 'jobsearch.done': '🎯 AI job search finished',
-    'jobsearch.failed': '⚠️ AI job search failed', 'jobprep.created': '📘 Prepared for a job', 'tokens.claimed': '⚡ Asked for more AI tokens', 'tokens.granted': '⚡ Got AI tokens', download: '⬇️ Downloaded',
+    'jobsearch.failed': '⚠️ AI job search failed', 'jobprep.created': '💡 Opened Insight for a job', 'tokens.claimed': '⚡ Asked for more AI tokens', 'tokens.granted': '⚡ Got AI tokens', download: '⬇️ Downloaded',
   };
   const scorePill = n => (n == null ? '—' : h('span', { class: 'pill ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)));
   const progressDots = steps => h('span', { class: 'cand-dots', title: STEP_NAMES.map(([k, l]) => `${steps[k] ? '✓' : '·'} ${l}`).join('\n') },
@@ -776,7 +776,9 @@
         h('h3', {}, `${prep.jobTitle} at ${prep.company}`, ' ', h('span', { class: 'small muted' }, `fit ${prep.fit} · prepared ${dateTime(prep.createdAt)}`)),
         p.summary ? h('p', { class: 'small' }, p.summary) : null,
         p.matrix ? [h('h4', {}, `Skill matrix · weighted skill score ${p.matrix.score}/100`), table([
-          { label: 'Required', render: r => h('b', {}, r.skill) }, { label: 'Weight', render: r => `${r.weight}%` },
+          { label: 'Required', render: r => h('b', {}, r.skill) },
+          { label: 'Type', render: r => (r.type ? `${r.type === 'functional' ? 'Functional' : 'Technical'}${r.priority === 'nice' ? ' · nice to have' : ''}` : '—') },
+          { label: 'Weight', render: r => `${r.weight}%` },
           { label: 'Candidate', render: r => h('span', { class: 'pill ' + MX[r.status][1] }, MX[r.status][0]) },
           { label: 'Evidence', render: r => h('span', { class: 'small' }, r.evidence || '—'), wrap: true },
           { label: 'Score', render: r => `${r.earned} / ${r.weight}` }, { label: 'Gap', render: r => (r.missing ? `−${r.missing}` : '—') },
@@ -845,7 +847,7 @@
           { label: 'Gaps', render: x => `${x.gaps} (+${x.gapPoints})` }, { label: 'Prepared', render: x => dateTime(x.createdAt) },
           { label: '', render: x => h('span', { class: 'tools' }, h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showPrep(x)); } }, 'View plan'),
             x.url ? h('a', { class: 'btn sm', href: x.url, target: '_blank', rel: 'noopener noreferrer', onclick: e => e.stopPropagation() }, 'Job ↗') : null) },
-        ], d.preps, null, 'No preparation plans yet. They appear when the candidate presses "Prepare" on a job.'),
+        ], d.preps, null, 'No preparation plans yet. They appear when the candidate presses "Insight" on a job.'),
         prepBox),
 
       h('div', { class: 'grid2', style: 'margin-top:14px' },
@@ -933,7 +935,7 @@
     const pending = d.claims.filter(k => k.status === 'pending');
     el.replaceChildren(
       head('AI tokens', write ? h('button', { class: 'btn', onclick: () => packForm(null) }, '+ New token pack') : null),
-      h('p', { class: 'muted' }, 'AI tokens used by website customers (Career toolkit, AI Job search, Prepare for this job). Set the daily allowance, offer token packs, and answer requests for more.'),
+      h('p', { class: 'muted' }, 'AI tokens used by website customers (Career toolkit, AI Job search, Insight). Set the daily allowance, offer token packs, and answer requests for more.'),
       h('div', { class: 'cards' },
         stat('Tokens used today', tok(d.totals.today.t), `${d.totals.today.c} AI calls by ${d.totals.today.n} customers`),
         stat('Tokens in 7 days', tok(d.totals.week.t), `${d.totals.week.c} AI calls`),
@@ -981,7 +983,7 @@
   // ---------- Pricing: plans master, active pricing (the website), payment settings, plan orders ----------
   const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
   const ORDER_PILL = { created: '', pending: 'warn', paid: 'good', failed: 'bad', cancelled: '', refunded: 'warn' };
-  const LIMIT_LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Prepare plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
+  const LIMIT_LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
 
   async function pricingPage(el) {
     const d = await get('/admin/api/pricing');

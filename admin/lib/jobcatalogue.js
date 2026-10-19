@@ -72,4 +72,34 @@ const SEARCH_ELSEWHERE = [
   { name: 'Mphasis', url: 'https://careers.mphasis.com/home.html' },
 ];
 
-module.exports = { CATALOGUE, SEARCH_ELSEWHERE };
+/** Each built-in company's own web address, for its logo next to its jobs. */
+const DOMAINS = {
+  Stripe: 'stripe.com', Databricks: 'databricks.com', Cloudflare: 'cloudflare.com', Twilio: 'twilio.com', Okta: 'okta.com', MongoDB: 'mongodb.com',
+  Elastic: 'elastic.co', GitLab: 'gitlab.com', HubSpot: 'hubspot.com', Zscaler: 'zscaler.com', Rubrik: 'rubrik.com', 'New Relic': 'newrelic.com',
+  Datadog: 'datadoghq.com', Coinbase: 'coinbase.com', Airbnb: 'airbnb.com', Dropbox: 'dropbox.com', Pinterest: 'pinterest.com', Chargebee: 'chargebee.com',
+  Postman: 'postman.com', Druva: 'druva.com', ServiceTitan: 'servicetitan.com', Samsara: 'samsara.com', 'Pure Storage': 'purestorage.com', Nutanix: 'nutanix.com',
+  Confluent: 'confluent.io', Celonis: 'celonis.com', PhonePe: 'phonepe.com', Groww: 'groww.in', Razorpay: 'razorpay.com', Sprinklr: 'sprinklr.com',
+  Freshworks: 'freshworks.com', Mindtickle: 'mindtickle.com', Innovaccer: 'innovaccer.com', BrowserStack: 'browserstack.com', Palantir: 'palantir.com',
+  CRED: 'cred.club', Zeta: 'zeta.tech', Meesho: 'meesho.com', Swiggy: 'swiggy.com', Paytm: 'paytm.com', Upstox: 'upstox.com', Dream11: 'dream11.com',
+  ShareChat: 'sharechat.com', Atlan: 'atlan.com', Ramp: 'ramp.com', Notion: 'notion.so', Zepto: 'zeptonow.com', Deel: 'deel.com', Bosch: 'bosch.com',
+  Visa: 'visa.com', ServiceNow: 'servicenow.com', Equinix: 'equinix.com', 'Western Digital': 'westerndigital.com', 'Avery Dennison': 'averydennison.com',
+  Salesforce: 'salesforce.com', Adobe: 'adobe.com', NVIDIA: 'nvidia.com', Intel: 'intel.com', Dell: 'dell.com', HP: 'hp.com', Mastercard: 'mastercard.com',
+  Walmart: 'walmart.com', Target: 'target.com', 'Wells Fargo': 'wellsfargo.com', Citi: 'citi.com', 'Baker Hughes': 'bakerhughes.com', Autodesk: 'autodesk.com',
+  Workday: 'workday.com', Accenture: 'accenture.com', HCLTech: 'hcltech.com', Wipro: 'wipro.com', Capgemini: 'capgemini.com', EY: 'ey.com',
+  LTIMindtree: 'ltimindtree.com', 'KPMG India': 'kpmg.com', Hexaware: 'hexaware.com', Zensar: 'zensar.com', Amazon: 'amazon.com',
+};
+
+// job-board systems: their address says nothing about the company
+const BOARD_HOSTS = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|myworkdayjobs\.com|oraclecloud\.com|amazon\.jobs|workable\.com|recruitee\.com)$/i;
+
+/** A company's web address for its logo: the built-in list, else the host of its own careers site; '' when unknown. */
+function companyDomain(name, careersUrl) {
+  const known = Object.keys(DOMAINS).find(k => k.toLowerCase() === String(name || '').trim().toLowerCase());
+  if (known) return DOMAINS[known];
+  let host = '';
+  try { host = new URL(String(careersUrl || '')).hostname.toLowerCase(); } catch (_) { return ''; }
+  if (!host || BOARD_HOSTS.test(host)) return '';
+  return host.replace(/^(www|careers?|jobs|join|apply)\./, '');
+}
+
+module.exports = { CATALOGUE, SEARCH_ELSEWHERE, DOMAINS, companyDomain };

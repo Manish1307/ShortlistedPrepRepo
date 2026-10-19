@@ -29,10 +29,10 @@ const LIMIT_KEYS = ['dailyTokens', 'jobSearches', 'preps', 'roleResumes', 'liveS
 
 const DEFAULT_PLANS = [
   { code: 'free', name: 'Free', tagline: 'Try ShortlistPrep', price: 0, mrp: 0, days: 30, active: 1, featured: 0, sort: 10, cta: 'Start free',
-    features: ['1 ATS check and improved resume', '1 role-based resume', '2 AI job searches a month', 'Skill Gap Matrix on every job', '1 Prepare plan'],
+    features: ['1 ATS check and improved resume', '1 role-based resume', '2 AI job searches a month', 'Skill Gap Matrix on every job', '1 job Insight'],
     limits: { dailyTokens: 30000, jobSearches: 2, preps: 1, roleResumes: 1, liveSessions: 0 } },
   { code: 'shortlist-30', name: 'Shortlist Pass', tagline: 'Get more interview calls', price: 299, mrp: 0, days: 30, active: 1, featured: 0, sort: 20, cta: 'Get Shortlist Pass',
-    features: ['Unlimited ATS checks and rewrites (fair use)', 'Up to 8 role-based resumes', 'Cover letters for every job', 'About 30 AI job searches', 'About 30 Prepare plans', 'Naukri and LinkedIn search links'],
+    features: ['Unlimited ATS checks and rewrites (fair use)', 'Up to 8 role-based resumes', 'Cover letters for every job', 'About 30 AI job searches', 'About 30 job Insights', 'Naukri and LinkedIn search links'],
     limits: { dailyTokens: 100000, jobSearches: 30, preps: 30, roleResumes: 8, liveSessions: 0 } },
   { code: 'interview-30', name: 'Interview Pass', tagline: 'For candidates with interviews coming', price: 599, mrp: 799, days: 30, active: 1, featured: 1, sort: 30, badge: 'Most popular', cta: 'Get Interview Pass',
     features: ['Everything in Shortlist Pass', 'Interview coaching (mock interviews)', 'Question bank and model answers', 'Introduction builder', 'Bigger daily AI allowance'],

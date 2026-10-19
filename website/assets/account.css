@@ -364,30 +364,10 @@
 /* ---------- token badge in the Career toolkit header ---------- */
 .cr-tokens.warn { background: #fff1d6; color: #a86c00; } .cr-tokens.out { background: #fde2e7; color: #b4235e; }
 
-/* ---------- Skill Gap Matrix under each job ---------- */
-.jb-table tr.gm-row > td, .jb-table tr.gm-row:hover > td { border-top: 0; padding: 0 12px 10px; background: #fff; }
-.gm { border: 1px dashed var(--bd); border-radius: 12px; background: #fcfbff; }
-.gm > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; font-size: 13.5px; }
-.gm > summary::-webkit-details-marker { display: none; }
-.gm > summary::after { content: "▸ Show"; margin-left: auto; color: var(--purple); font-weight: 700; font-size: 13px; }
-.gm[open] > summary::after { content: "▾ Hide"; }
-.gm[open] > summary { border-bottom: 1px solid var(--line); }
-.gm-title { font-weight: 800; color: var(--ink); margin-right: 4px; }
-.gm .mx-chip { padding: 2px 9px; font-size: 12px; }
-.gm-score { color: var(--body); font-weight: 600; } .gm-score b { color: var(--purple); }
-.gm > div { padding: 10px 12px 12px; }
-.gm .mx-summary { display: none; }
-@media (max-width: 640px) {
-  .jb-table tr.gm-row { border: 0; padding: 0; margin: -6px 0 12px; background: transparent; }
-  .jb-table tr.gm-row > td { padding: 0; }
-  .gm > summary::after { margin-left: 0; }
-}
-
 /* ---------- clicking a matrix row jumps to its gap ---------- */
 .mx-table tr.mx-click { cursor: pointer; }
 .mx-table tr.mx-click:hover td, .mx-table tr.mx-click:focus td { background: #f6f0ff; }
 .mx-table tr.mx-click:focus { outline: 2px solid var(--purple); outline-offset: -2px; }
-.gm-hint { font-size: 12.5px; margin: 0 0 6px; }
 .pp-gap.flash { animation: pp-flash 2.6s ease; }
 @keyframes pp-flash { 0%, 60% { box-shadow: 0 0 0 3px #7d2ae8; background: #f6f0ff; } 100% { box-shadow: none; background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .pp-gap.flash { animation: none; outline: 3px solid #7d2ae8; } }
@@ -400,3 +380,36 @@
 .je-row b { min-width: 180px; color: var(--ink); font-size: 14px; }
 .je-firms { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) { .je-links { text-align: left; } .je-row b { min-width: 0; width: 100%; } }
+
+/* ---------- company logos and pages of results ---------- */
+.jb-co { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); }
+.jb-logo, .jb-initials { width: 28px; height: 28px; border-radius: 8px; flex: none; }
+.jb-logo { background: #fff; border: 1px solid var(--line); padding: 3px; object-fit: contain; }
+.jb-initials { display: grid; place-items: center; background: var(--purple-l); color: var(--purple-d); font-size: 11.5px; font-weight: 800; letter-spacing: .02em; }
+.jb-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-top: 10px; font-size: 13.5px; }
+.jb-pager.busy { opacity: .6; pointer-events: none; }
+.jb-pages { display: flex; flex-wrap: wrap; gap: 6px; }
+.jb-pages .btn[aria-current="page"] { opacity: 1; cursor: default; }
+
+/* ---------- Insight: four tabs per job ---------- */
+.in-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--bd); margin: 10px 0 14px; scrollbar-width: thin; }
+.in-tab { appearance: none; border: 0; border-bottom: 3px solid transparent; background: none; border-radius: 10px 10px 0 0; padding: 10px 14px; font: inherit; font-size: 14px; font-weight: 700; color: var(--body); white-space: nowrap; cursor: pointer; }
+.in-tab:hover { background: var(--tint); color: var(--ink); }
+.in-tab[aria-selected="true"] { color: var(--purple-d); border-bottom-color: var(--purple); background: #fff; }
+.in-tab:focus-visible { outline: 2px solid var(--purple); outline-offset: -2px; }
+.in-panel:focus-visible { outline: 2px solid var(--purple); outline-offset: 4px; border-radius: 8px; }
+.in-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; background: #fff8e6; border: 1px solid #ecd29a; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+.mx-type { font-size: 12.5px; color: var(--body); white-space: nowrap; }
+.sk-group + .sk-group { margin-top: 16px; }
+.sk-group h5 { margin: 0 0 8px; font-size: 15px; }
+.sk-pri { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.sk-pri.must { background: var(--purple-l); color: var(--purple-d); } .sk-pri.nice { background: #eef1f6; color: var(--body); }
+.sk-quote { font-size: 13px; color: var(--body); font-style: italic; }
+.sk-table td.sk-quote::before { font-style: normal; }
+@media (max-width: 640px) {
+  /* on a phone the four tabs wrap into a 2 × 2 grid instead of scrolling sideways */
+  .in-tabs { flex-wrap: wrap; overflow: visible; border-bottom: 0; gap: 6px; }
+  .in-tab { flex: 1 1 calc(50% - 6px); white-space: normal; text-align: center; border: 1px solid var(--bd); border-radius: 10px; padding: 9px 8px; font-size: 13px; background: #fff; }
+  .in-tab[aria-selected="true"] { background: var(--purple-l); border-color: var(--purple); }
+  .jb-pager { justify-content: flex-start; }
+}

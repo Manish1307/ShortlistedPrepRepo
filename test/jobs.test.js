@@ -18,6 +18,10 @@ const { DEFAULT_MASTER_PROMPT, maintain } = require('../admin/lib/jobs');
 const listen = server => new Promise(r => server.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${server.address().port}`)));
 const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString();
 
+/** The whole description of Contoso's job 1 (its job list has only the first line). */
+const FULL_JD = '&lt;p&gt;We need a Senior .NET Developer.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;5+ years of C# and .NET experience&lt;/li&gt;&lt;li&gt;Hands-on Azure DevOps pipelines&lt;/li&gt;' +
+  '&lt;li&gt;Docker containers&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Nice to have: Agile ways of working&lt;/p&gt;';
+
 /** A fake of the five job-board APIs. greenhouse.jobs can be changed between syncs. */
 async function fakeBoards() {
   const state = {
@@ -35,6 +39,10 @@ async function fakeBoards() {
       const u = new URL(req.url, 'http://x');
       const send = body => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
       if (u.pathname === '/gh/contoso/jobs') return send({ jobs: state.greenhouse });
+      if (u.pathname === '/gh/contoso/jobs/1') return send({ id: 1, content: FULL_JD });
+      if (u.pathname === '/lever/fabrikam/l1') return send({ descriptionPlain: 'Build APIs', lists: [{ text: 'Requirements', content: '<li>Node.js</li><li>PostgreSQL</li>' }], additionalPlain: 'Hybrid' });
+      if (u.pathname === '/sr/Northwind/postings/s1') return send({ jobAd: { sections: { jobDescription: { title: 'Job', text: '<p>Test our apps</p>' }, qualifications: { title: 'Qualifications', text: '<ul><li>Selenium</li></ul>' } } } });
+      if (u.pathname === '/wd/wday/cxs/woodgrove/External/job/Pune/Cloud_0') return send({ jobPostingInfo: { jobDescription: '<p>Terraform and AWS</p>' } });
       if (u.pathname === '/gh/missing/jobs') { res.statusCode = 404; return res.end('{}'); }
       if (u.pathname === '/lever/fabrikam') return send([{ id: 'l1', text: 'Backend Engineer', hostedUrl: 'https://jobs.lever.co/fabrikam/l1', createdAt: Date.now() - 86400000, country: 'IN', categories: { location: 'Hyderabad', team: 'Platform', commitment: 'Full-time' }, descriptionPlain: 'Node.js' }]);
       if (u.pathname === '/sr/Northwind/postings') {
@@ -104,8 +112,12 @@ async function fakeGemini() {
       let out;
       if (/expert career coach/.test(system)) {
         out = { summary: 'Close to a full fit.', matched: ['C#', '.NET'],
-          requirements: [{ skill: 'C# / .NET', weight: 40, status: 'match', evidence: 'Contoso, 6 years' }, { skill: 'Azure DevOps', weight: 30, status: 'partial', evidence: 'Some pipelines' },
-            { skill: 'Docker', weight: 20, status: 'missing', evidence: '' }, { skill: 'Agile', weight: 20, status: 'unknown' }],
+          requirements: [
+            { skill: 'C# / .NET', type: 'technical', priority: 'must', quote: '5+ years of C# and .NET experience', weight: 40, status: 'match', evidence: 'Contoso, 6 years' },
+            { skill: 'Azure DevOps', type: 'technical', priority: 'must', quote: 'Hands-on  Azure DevOps pipelines.', weight: 30, status: 'partial', evidence: 'Some pipelines' },
+            { skill: 'Docker', type: 'technical', priority: 'must', quote: 'Docker container skills', weight: 20, status: 'missing', evidence: '' },   // quote not word for word: kept by its name
+            { skill: 'Agile', type: 'functional', priority: 'nice', quote: 'Agile ways of working', weight: 20, status: 'unknown' },
+            { skill: 'Kubernetes', type: 'technical', priority: 'must', quote: 'Kubernetes clusters', weight: 25, status: 'missing' }],                // not in the description: dropped
           gaps: [{ skill: 'Docker', points: 6, importance: 'medium', why: 'Containers', howToClose: 'Build one app', hours: 10, searchQuery: 'Docker for .NET developers', provider: 'docker', certification: '' },
             { skill: 'Azure DevOps', points: 9, importance: 'high', why: 'CI/CD', howToClose: 'Set up a pipeline', hours: 12, searchQuery: 'Azure DevOps pipelines tutorial', provider: 'microsoft', certification: 'AZ-400' }],
           revise: [{ topic: 'ASP.NET Core middleware', searchQuery: 'ASP.NET Core middleware interview' }],
@@ -116,8 +128,7 @@ async function fakeGemini() {
       } else {
         const label = (/labels: ([^|)\n]+)/.exec(user) || [])[1];
         const ids = [...user.matchAll(/"id":(\d+)/g)].map(m => Number(m[1]));
-        const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], why: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none', resume: (label || '').trim(),
-          requirements: [{ skill: 'C#', weight: 50, status: 'match' }, { skill: 'Kubernetes', weight: 30, status: 'missing' }, { skill: 'Agile', weight: 20, status: 'partial' }] }));
+        const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], why: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none', resume: (label || '').trim() }));
         matches.push({ id: 999999, score: 99, bucket: 'high', why: 'made up' });
         out = { matches };
       }
@@ -168,7 +179,19 @@ async function start() {
       }
       throw new Error('search did not finish');
     };
-    return { get, post, search };
+    /** Every job of a finished search, read one page of one group at a time. */
+    const jobsOf = async search => {
+      const out = [];
+      for (const bucket of ['high', 'medium', 'stretch']) {
+        for (let page = 1; ; page++) {
+          const r = (await get(`/api/career/jobsearch/${search.id}/jobs?bucket=${bucket}&page=${page}&size=20`)).json;
+          out.push(...r.jobs);
+          if (page >= r.pages) break;
+        }
+      }
+      return out;
+    };
+    return { get, post, search, jobsOf };
   };
   const addResume = () => {
     app.db.prepare("INSERT INTO career_resumes (customer_id, file_name, source_text, uploaded_at) VALUES (?, 'cv', ?, datetime('now'))")
@@ -257,7 +280,8 @@ test('AI Job search: live jobs from the built-in companies, filtered by country 
     const r = await web.search({ resume: 'all', country: 'India' });
     const search = r.json.search;
     assert.equal(search.status, 'done', search.error);
-    const { profile, jobs, coverage } = search.result;
+    const { profile, coverage, groups } = search.result;
+    const jobs = await web.jobsOf(search);
     assert.equal(profile.level, 'Mid-level (6 years)');
     assert.deepEqual(profile.resumeFixes, ['Replace the [add number] markers']);
     assert.equal(coverage.companies, 2);
@@ -268,9 +292,17 @@ test('AI Job search: live jobs from the built-in companies, filtered by country 
     assert.ok(!jobs.some(j => j.title === 'Data Engineer'));
     assert.equal(jobs[0].score, 88);                                             // best first
     assert.deepEqual(search.counts, { high: 20, medium: 20, stretch: 20 });
-    // every job has its Skill Gap Matrix from the same AI call
-    assert.ok(jobs.every(j => j.matrix && j.matrix.rows.length === 3));
-    assert.deepEqual([jobs[0].matrix.score, jobs[0].matrix.counts], [60, { match: 1, partial: 1, missing: 1 }]);
+    // the search sends only the first page of each group (5 jobs); the other pages are asked for one at a time
+    assert.equal(search.result.jobs, undefined);
+    assert.equal(search.result.total, 60);
+    assert.deepEqual([groups.high.total, groups.high.page, groups.high.pages, groups.high.jobs.length], [20, 1, 4, 5]);
+    const page4 = (await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=medium&page=4`)).json;
+    assert.deepEqual([page4.page, page4.jobs.length, page4.size], [4, 5, 5]);
+    assert.equal((await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=medium&page=99`)).json.page, 4);   // past the end: the last page
+    assert.equal((await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=other`)).status, 400);
+    assert.equal(new Set(jobs.map(j => j.id)).size, 60);                          // no job on two pages
+    assert.ok(jobs.every(j => j.matrix === undefined && j.insight === false));   // the matrix is made from the job's own description, in Insight
+    assert.ok(jobs.every(j => j.domain === ''));                                  // test companies: no web address known
     assert.equal(jobs[0].resume, 'Uploaded resume');   // which resume to send, when searching with all of them
     assert.equal(search.params.resumeLabel, 'All my resumes (2)');
     assert.equal(r.json.usage.used, 1);
@@ -295,7 +327,8 @@ test('AI Job search: companies typed by the candidate are found by name or caree
     const r = await web.search({ resume: 'ats', country: '', companies: 'contoso, fabrikam\nhttps://www.naukri.com/x, Nonexistent Co' });
     const search = r.json.search;
     assert.equal(search.status, 'done', search.error);
-    const { jobs, coverage } = search.result;
+    const { coverage } = search.result;
+    const jobs = await web.jobsOf(search);
     assert.equal(coverage.companies, 2);                                          // Contoso (built in) and Fabrikam (found on Lever)
     assert.deepEqual(coverage.notFound, ['Nonexistent Co']);
     assert.deepEqual(coverage.notSupported, ['https://www.naukri.com/x']);
@@ -353,21 +386,31 @@ test('career sites nobody searched for two weeks are dropped from the cache', as
   });
 });
 
-test('Prepare for this job: gaps to a full fit with search links, made once and kept with the search', async () => {
+test('Insight: the skill matrix from the job\'s whole description, gaps to a full fit with search links, made once and kept with the search', async () => {
   await withServer(async s => {
     s.addResume();
     const web = await s.site();
     const search = (await web.search({ resume: 'ats', country: 'India' })).json.search;
-    const job = search.result.jobs[0];
+    const job = (await web.jobsOf(search)).find(j => j.title === 'Senior .NET Developer');
     const calls = s.ai.seen.length;
     const r = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id });
     assert.equal(r.status, 200);
     const prep = r.json.prep;
     assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Azure DevOps', 9], ['Docker', 6]]);      // biggest gap first
     assert.equal(prep.gapPoints, 15);
-    // the matrix: weights scaled to 100 (40/30/20/20 of 110), match = full weight, partial = half, missing or unknown = none
-    assert.deepEqual(prep.matrix.rows.map(r => [r.skill, r.weight, r.status, r.earned, r.missing]),
-      [['C# / .NET', 36, 'match', 36, 0], ['Azure DevOps', 27, 'partial', 13.5, 13.5], ['Agile', 19, 'missing', 0, 19], ['Docker', 18, 'missing', 0, 18]]);   // heaviest first
+    // the AI was given the job's whole description, read from its own page on the board, and it is kept for a week
+    const asked = s.ai.seen[calls].contents[0].parts[0].text;
+    assert.match(asked, /Nice to have: Agile ways of working/);
+    assert.match(s.app.db.prepare('SELECT full_description FROM jobs WHERE id = ?').get(job.id).full_description, /Hands-on Azure DevOps pipelines/);
+    // the matrix keeps only what the description states (Kubernetes is dropped); weights scaled to 100 (40/30/20/20 of 110),
+    // match = full weight, partial = half, missing or unknown = none
+    assert.deepEqual(prep.matrix.rows.map(r => [r.skill, r.type, r.priority, r.weight, r.status, r.earned, r.missing]),
+      [['C# / .NET', 'technical', 'must', 36, 'match', 36, 0], ['Azure DevOps', 'technical', 'must', 27, 'partial', 13.5, 13.5],
+        ['Agile', 'functional', 'nice', 19, 'missing', 0, 19], ['Docker', 'technical', 'must', 18, 'missing', 0, 18]]);   // heaviest first
+    assert.deepEqual([prep.matrix.checked, prep.matrix.dropped, prep.matrix.types], [true, 1, { technical: 3, functional: 1 }]);
+    assert.equal(prep.matrix.rows.find(r => r.skill === 'Azure DevOps').quote, 'Hands-on  Azure DevOps pipelines.');   // found whatever the spacing
+    assert.equal(prep.matrix.rows.find(r => r.skill === 'Docker').quote, '');                                         // not word for word: no quote shown
+    assert.deepEqual([prep.version, prep.description], [2, 'full']);
     assert.equal(prep.matrix.rows.reduce((n, r) => n + r.weight, 0), 100);
     assert.equal(prep.matrix.score, 50);
     assert.deepEqual(prep.matrix.counts, { match: 1, partial: 1, missing: 2 });
@@ -390,13 +433,13 @@ test('Prepare for this job: gaps to a full fit with search links, made once and 
     const again = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id });
     assert.equal(again.json.usage.used, used);
     assert.equal(s.ai.seen.length, calls + 1);
-    assert.ok((await web.get('/api/career/jobsearch/' + search.id)).json.search.result.jobs[0].prep);
+    assert.ok((await web.jobsOf(search)).find(j => j.id === job.id).insight);
     assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: 999999 })).status, 404);
 
-    // refresh makes it again only for an older plan without the matrix
+    // refresh makes it again only for an older Insight, made before the matrix came from the job description
     assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id, refresh: true })).json.usage.used, used);
     const row = s.app.db.prepare('SELECT result_json FROM career_job_searches WHERE id = ?').get(search.id);
-    const saved = JSON.parse(row.result_json); delete saved.jobs[0].prep.matrix;
+    const saved = JSON.parse(row.result_json); delete saved.jobs.find(j => j.id === job.id).prep.version;
     s.app.db.prepare('UPDATE career_job_searches SET result_json = ? WHERE id = ?').run(JSON.stringify(saved), search.id);
     const remade = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id, refresh: true });
     assert.ok(remade.json.prep.matrix);
@@ -435,4 +478,29 @@ test('the built-in list includes Indian IT employers, and links to search the on
   for (const n of ['Accenture', 'HCLTech', 'Wipro', 'Capgemini', 'EY', 'KPMG India', 'Amazon']) assert.ok(names.includes(n), n);
   for (const c of CATALOGUE) assert.ok(c.board || sources.parseBoardUrl(c.url), c.name + ' has a readable board');
   assert.ok(SEARCH_ELSEWHERE.some(c => c.name === 'TCS') && SEARCH_ELSEWHERE.every(c => c.url.startsWith('https://')));
+});
+
+test('a job\'s whole description is read from its own page on Greenhouse, Lever, SmartRecruiters, Ashby and Workday', async () => {
+  const boards = await fakeBoards();
+  try {
+    const opts = { base: boards.sourceBase };
+    assert.match(await sources.fetchDescription({ provider: 'greenhouse', board: 'contoso' }, { externalId: '1' }, opts), /^We need a Senior \.NET Developer\.\n ?5\+ years of C# and \.NET experience/);
+    assert.equal(await sources.fetchDescription({ provider: 'lever', board: 'fabrikam' }, { externalId: 'l1' }, opts), 'Build APIs\nRequirements\nNode.js\n PostgreSQL\nHybrid');
+    assert.equal(await sources.fetchDescription({ provider: 'smartrecruiters', board: 'Northwind' }, { externalId: 's1' }, opts), 'Job\nTest our apps\nQualifications\nSelenium');
+    assert.equal(await sources.fetchDescription({ provider: 'ashby', board: 'tailspin' }, { externalId: 'a1' }, opts), 'Roadmaps');
+    assert.equal(await sources.fetchDescription({ provider: 'workday', board: 'woodgrove/External', wd: 'wd5' },
+      { externalId: 'R0', url: 'https://woodgrove.wd5.myworkdayjobs.com/External/job/Pune/Cloud_0' }, opts), 'Terraform and AWS');
+    assert.equal(await sources.fetchDescription({ provider: 'amazon', board: 'IND' }, { externalId: '1' }, opts), null);   // no single-job page: the list's text is used
+    await assert.rejects(sources.fetchDescription({ provider: 'greenhouse', board: 'contoso' }, { externalId: '404' }, opts));
+  } finally { await boards.close(); }
+});
+
+test('company logos: the built-in companies\' web addresses, else the host of their own careers site', () => {
+  const { companyDomain, DOMAINS, CATALOGUE } = require('../admin/lib/jobcatalogue');
+  assert.ok(CATALOGUE.every(c => DOMAINS[c.name]), 'every built-in company has a web address');
+  assert.equal(companyDomain('stripe'), 'stripe.com');
+  assert.equal(companyDomain('CRED', 'https://jobs.lever.co/cred'), 'cred.club');
+  assert.equal(companyDomain('Acme', 'https://careers.acme.co.in/jobs'), 'acme.co.in');
+  assert.equal(companyDomain('Acme', 'https://boards.greenhouse.io/acme'), '');   // a job board says nothing about the company
+  assert.equal(companyDomain('Acme', ''), '');
 });

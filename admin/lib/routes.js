@@ -11,6 +11,7 @@ const profiles = require('./profiles');
 const accounts = require('./accounts');
 const career = require('./career');
 const jobs = require('./jobs');
+const logos = require('./logos');
 const candidates = require('./candidates');
 const aiTokens = require('./tokens');
 const pricing = require('./pricing');
@@ -80,6 +81,7 @@ function buildRoutes(ctx) {
   accounts.addRoutes({ ...ctx, add, audit, one, all });        // customer logins for the website's My account page
   career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)
   jobs.addRoutes({ ...ctx, add, audit, one, all });            // AI Job search: live openings from career sites, scored by the AI
+  logos.addRoutes({ ...ctx, add });                            // company logos next to the jobs
   candidates.addRoutes({ ...ctx, add, audit, one, all });      // Candidates: progress, documents and activity in the Career toolkit
   aiTokens.addRoutes({ ...ctx, add, audit, one, all });
   pricing.addRoutes({ ...ctx, add, audit, one, all });          // Pricing: plans master, active plans, payment settings, plan orders          // AI tokens: daily allowance per customer, packs and requests for more

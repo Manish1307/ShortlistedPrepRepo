@@ -23,6 +23,8 @@ const FULL_JD = '&lt;p&gt;We need a Senior .NET Developer.&lt;/p&gt;&lt;ul&gt;&l
   '&lt;li&gt;Docker containers&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Nice to have: Agile ways of working&lt;/p&gt;' +
   '&lt;p&gt;You will build and run the payment APIs used by our customers, review code, and keep the services fast and reliable in production, working closely with product and QA.&lt;/p&gt;';
 
+const ICON = Buffer.alloc(100, 7);   // a small picture
+
 /** A fake of the five job-board APIs. greenhouse.jobs can be changed between syncs. */
 async function fakeBoards() {
   const state = {
@@ -41,7 +43,12 @@ async function fakeBoards() {
       const send = body => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
       if (u.pathname === '/gh/contoso/jobs') return send({ jobs: state.greenhouse });
       if (u.pathname === '/gh/contoso/jobs/1') return send({ id: 1, content: FULL_JD });
-      if (u.pathname === '/icons/stripe.com.ico') { res.setHeader('Content-Type', 'image/x-icon'); return res.end(Buffer.from([0, 0, 1, 0, 1])); }
+      if (u.pathname === '/icons/stripe.com.ico') { res.setHeader('Content-Type', 'image/x-icon'); return res.end(ICON); }
+      if (u.pathname === '/icons/adobe.com.ico') { res.setHeader('Content-Type', 'text/plain'); return res.end(''); }             // the first source answers with nothing...
+      if (u.pathname === '/icons2/adobe.com.ico') { res.setHeader('Content-Type', 'image/png'); return res.end(ICON); }           // ...the second has it
+      if (u.pathname === '/home/acme.com') { res.setHeader('Content-Type', 'text/html'); return res.end('<title>Acme | Home</title><link rel="icon" href="brand/acme.png">'); }
+      if (u.pathname === '/home/brand/acme.png') { res.setHeader('Content-Type', 'image/png'); return res.end(ICON); }            // named by the home page
+      if (u.pathname === '/home/zeta.com') { res.setHeader('Content-Type', 'text/html'); return res.end('<title>Domain for sale</title>'); }   // a site that is not the company
       if (u.pathname === '/icons/unknown-co.com.ico') { res.statusCode = 404; res.setHeader('Content-Type', 'image/png'); return res.end(Buffer.from('globe')); }   // a placeholder picture with a 404
       if (u.pathname === '/sfc/careers.example.com/job/Technical-Manager/172654-en_US') {   // SuccessFactors: the company, then the job, with spans inside
         res.setHeader('Content-Type', 'text/html');
@@ -155,7 +162,7 @@ async function fakeGemini() {
 
 async function start() {
   const boards = await fakeBoards(), ai = await fakeGemini();
-  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase, logoBase: boards.base + '/icons',
+  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase, logoSources: [boards.base + '/icons/{domain}.ico', boards.base + '/icons2/{domain}.ico'], logoHome: boards.base + '/home/{domain}',
     jobCatalogue: [{ name: 'Contoso', url: 'https://boards.greenhouse.io/contoso' }, { name: 'Northwind', url: 'https://careers.smartrecruiters.com/Northwind' }] });
   const base = await listen(app.server);
   aikeys.addKey(app.db, app.vault, { provider: 'gemini', label: 'Gemini', key: 'AIza' + 'g'.repeat(35) + 'GGGG', makeDefault: true });
@@ -546,14 +553,35 @@ test('company logos: the built-in companies\' web addresses, else the host of th
   assert.equal(companyDomain('Acme', ''), '');
 });
 
-test('company logos come through our own server: a real icon, else a plain 404 so the page shows initials', async () => {
+test('company logos come through our own server: the next source when one misses, the home page icon, found from the name, else a 404', async () => {
   await withServer(async s => {
-    const real = await fetch(s.base + '/api/logo/stripe.com');
+    const logo = q => fetch(s.base + '/api/logo?' + q);
+    const real = await logo('domain=stripe.com');
     assert.equal(real.status, 200);
     assert.equal(real.headers.get('content-type'), 'image/x-icon');
     assert.match(real.headers.get('cache-control'), /max-age=604800/);
-    assert.deepEqual([...Buffer.from(await real.arrayBuffer())], [0, 0, 1, 0, 1]);
-    assert.equal((await fetch(s.base + '/api/logo/unknown-co.com')).status, 404);      // the icon service's placeholder is not passed on
-    assert.equal((await fetch(s.base + '/api/logo/not%20a%20domain')).status, 400);
+    assert.equal(Buffer.from(await real.arrayBuffer()).length, 100);
+    assert.equal((await logo('domain=adobe.com')).status, 200);                    // empty from the first source: the second one's
+    assert.equal((await logo('domain=unknown-co.com')).status, 404);               // a placeholder picture with a 404 is not passed on
+    assert.equal((await logo('name=Acme%20Technologies%20Pvt%20Ltd')).status, 200); // acme.com names Acme in its title; its icon is on its home page
+    assert.equal((await logo('name=Zeta')).status, 404);                           // zeta.com is not about Zeta: not used
+    for (const bad of ['domain=169.254.169.254', 'domain=metadata.google.internal', 'domain=localhost', 'domain=a%20b.com', '']) assert.equal((await logo(bad)).status, 400, bad);
+  });
+});
+
+test('the results can be narrowed to one company, still read a page at a time', async () => {
+  await withServer(async s => {
+    s.addResume();
+    const web = await s.site();
+    const search = (await web.search({ resume: 'ats', country: 'India' })).json.search;
+    const companies = search.result.companies;
+    assert.deepEqual(companies.map(c => [c.name, c.count]), [['Northwind', 58], ['Contoso', 2]]);   // most jobs first
+    const only = (await web.get(`/api/career/jobsearch/${search.id}?company=Contoso`)).json.search.result;
+    assert.equal(only.company, 'Contoso');
+    const shown = Object.values(only.groups).flatMap(g => g.jobs);
+    assert.ok(shown.length === 2 && shown.every(j => j.company === 'Contoso'));
+    const page = (await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=high&page=1&company=Northwind`)).json;
+    assert.ok(page.jobs.every(j => j.company === 'Northwind') && page.company === 'Northwind');
+    assert.equal((await web.get(`/api/career/jobsearch/${search.id}?company=Nobody`)).json.search.result.company, '');   // not in the results: all companies
   });
 });

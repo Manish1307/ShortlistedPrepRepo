@@ -414,3 +414,17 @@
   .jb-pager { justify-content: flex-start; }
 }
 .pp.in > textarea { width: 100%; margin-top: 4px; }
+
+/* ---------- company logo filter above the results ---------- */
+.co-box { margin: 16px 0 4px; }
+.co-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.co-filter.busy { opacity: .6; pointer-events: none; }
+.co-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--bd); background: #fff; border-radius: 999px; padding: 5px 12px 5px 6px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.co-chip:hover { background: var(--tint); }
+.co-chip.on { background: var(--purple-l); border-color: var(--purple); color: var(--purple-d); }
+.co-chip:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
+.co-chip .jb-logo { width: 22px; height: 22px; border-radius: 6px; padding: 2px; }
+.co-chip .jb-initials { border-radius: 6px; font-size: 10px; }
+.co-all { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--purple-l); color: var(--purple-d); font-size: 12px; }
+.co-count { background: var(--tint); color: var(--body); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
+.co-chip.on .co-count { background: #fff; }

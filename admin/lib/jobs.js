@@ -261,20 +261,32 @@ function addRoutes(ctx) {
     score: j.score, bucket: j.bucket, why: j.why, gap: j.gap, resume: j.resume, domain: j.domain != null ? j.domain : companyDomain(j.company), insight: !!j.prep });
   const pageSize = v => Math.max(1, Math.min(20, Math.round(Number(v)) || PAGE_SIZE));
   /** Page n (from 1) of one group of a search's jobs. */
-  function jobPage(result, bucket, page, size) {
-    const list = result.jobs.filter(j => j.bucket === bucket);
+  function jobPage(result, bucket, page, size, company = '') {
+    const list = result.jobs.filter(j => j.bucket === bucket && (!company || j.company === company));
     const pages = Math.max(1, Math.ceil(list.length / size));
     const n = Math.max(1, Math.min(pages, Math.round(Number(page)) || 1));
-    return { bucket, total: list.length, page: n, pages, size, jobs: list.slice((n - 1) * size, n * size).map(listJob) };
+    return { bucket, total: list.length, page: n, pages, size, company, jobs: list.slice((n - 1) * size, n * size).map(listJob) };
   }
+  /** The companies in a search's results, most jobs first, with their web address (for the logo filter). */
+  const companiesOf = result => {
+    const by = new Map();
+    for (const j of result.jobs) {
+      const c = by.get(j.company) || { name: j.company, domain: j.domain != null ? j.domain : companyDomain(j.company), count: 0 };
+      c.count++;
+      by.set(j.company, c);
+    }
+    return [...by.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  };
   /**
    * A search. full: with its result, but only the first page of each group (the page asks for the other pages one at
    * a time, so it never loads every job at once).
    */
-  const presentSearch = (row, full, size = PAGE_SIZE) => {
+  const presentSearch = (row, full, size = PAGE_SIZE, company = '') => {
     const result = parse(row.result_json);
     const counts = Object.fromEntries(BUCKETS.map(b => [b, result ? result.jobs.filter(j => j.bucket === b).length : 0]));
-    const shown = result && { profile: result.profile, coverage: result.coverage, total: result.jobs.length, groups: Object.fromEntries(BUCKETS.map(b => [b, jobPage(result, b, 1, size)])) };
+    if (result && company && !result.jobs.some(j => j.company === company)) company = '';   // not in this search: all companies
+    const shown = result && { profile: result.profile, coverage: result.coverage, total: result.jobs.length, companies: companiesOf(result), company,
+      groups: Object.fromEntries(BUCKETS.map(b => [b, jobPage(result, b, 1, size, company)])) };
     return { id: row.id, params: parse(row.params_json) || {}, status: row.status, progress: row.progress, error: row.error,
       createdAt: row.created_at, finishedAt: row.finished_at, counts, ...(full ? { result: shown } : {}) };
   };
@@ -471,36 +483,10 @@ function addRoutes(ctx) {
     const c = me(req);
     const row = searchRow(params.id, c.id);
     if (!row) throw new ApiError(404, 'Search not found');
-    return { search: presentSearch(row, true, pageSize(query.get('size'))), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
+    return { search: presentSearch(row, true, pageSize(query.get('size')), String(query.get('company') || '')), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
   });
 
-  // A company's logo for the results, by its web address. The icon services answer an unknown address with a
-  // placeholder picture (a globe), which a page cannot tell from a real logo; here a missing icon is a plain 404, so
-  // the page shows the company's initials instead. Kept in memory for a day; candidates' browsers never contact the
-  // icon service themselves.
-  const logos = new Map();   // domain -> { at, type, body } (body null: no logo)
-  const logoBase = ctx.logoBase || 'https://icons.duckduckgo.com/ip3';
-  add('GET', '/api/logo/:domain', { public: true }, async (req, res, { params }) => {
-    const domain = String(params.domain || '').toLowerCase();
-    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain) || domain.length > 100) throw new ApiError(400, 'Not a web address');
-    let hit = logos.get(domain);
-    if (!hit || Date.now() - hit.at > DAY) {
-      hit = { at: Date.now(), type: '', body: null };
-      try {
-        const r = await fetch(`${logoBase}/${domain}.ico`, { signal: AbortSignal.timeout(6000) });
-        const type = String(r.headers.get('content-type') || '');
-        const body = r.ok && /^image\//.test(type) ? Buffer.from(await r.arrayBuffer()) : null;
-        if (body && body.length > 0 && body.length < 200 * 1024) hit = { at: Date.now(), type, body };
-      } catch (_) { /* no answer: no logo for now */ }
-      if (logos.size > 1000) logos.delete(logos.keys().next().value);
-      logos.set(domain, hit);
-    }
-    if (!hit.body) throw new ApiError(404, 'No logo');
-    res.writeHead(200, { 'Content-Type': hit.type, 'Content-Length': hit.body.length, 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' });
-    res.end(hit.body);
-  });
-
-  // one page of one group: ?bucket=high|medium|stretch&page=2&size=5
+  // one page of one group: ?bucket=high|medium|stretch&page=2&size=5[&company=Adobe]
   add('GET', '/api/career/jobsearch/:id/jobs', { public: true }, (req, res, { params, query }) => {
     const c = me(req);
     const row = searchRow(params.id, c.id);
@@ -508,7 +494,7 @@ function addRoutes(ctx) {
     if (!result) throw new ApiError(404, 'Search not found');
     const bucket = query.get('bucket');
     if (!BUCKETS.includes(bucket)) throw new ApiError(400, 'Unknown group');
-    return jobPage(result, bucket, query.get('page'), pageSize(query.get('size')));
+    return jobPage(result, bucket, query.get('page'), pageSize(query.get('size')), String(query.get('company') || ''));
   });
 
   // Insight: the job's skill matrix (from its own description), the skill gaps to a full fit, learning links, revision

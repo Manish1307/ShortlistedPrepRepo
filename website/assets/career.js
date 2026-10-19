@@ -666,13 +666,16 @@
   }
 
   /** The company's logo (from its web address) next to its name; its initials when the logo is unknown or does not load. */
-  function companyCell(j) {
-    var initials = String(j.company || '?').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
-    var badge = h('span', { class: 'jb-initials', 'aria-hidden': 'true' }, initials);
-    var logo = j.domain ? h('img', { class: 'jb-logo', src: API + '/api/logo/' + encodeURIComponent(j.domain), alt: '', width: '28', height: '28', loading: 'lazy' }) : null;   // 404 when there is none: the initials show
-    if (logo) logo.addEventListener('error', function () { logo.replaceWith(badge); });
-    return h('span', { class: 'jb-co' }, logo || badge, h('span', {}, j.company));
+  /** A company's logo: from its web address, or found from its name by the server; its initials when there is none (404). */
+  function companyLogo(name, domain, size) {
+    var initials = String(name || '?').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
+    var badge = h('span', { class: 'jb-initials', 'aria-hidden': 'true', style: size ? 'width:' + size + 'px;height:' + size + 'px' : null }, initials);
+    var logo = h('img', { class: 'jb-logo', src: API + '/api/logo?' + (domain ? 'domain=' + encodeURIComponent(domain) + '&' : '') + 'name=' + encodeURIComponent(name || ''),
+      alt: '', width: String(size || 28), height: String(size || 28), loading: 'lazy' });
+    logo.addEventListener('error', function () { logo.replaceWith(badge); });
+    return logo;
   }
+  function companyCell(j) { return h('span', { class: 'jb-co' }, companyLogo(j.company, j.domain), h('span', {}, j.company)); }
   function groupTable(list, withResume, startAt, searchId) {
     var head = ['#', 'Role', 'Company', 'Location', 'Posted', 'Fit', 'Why / gap'].concat(withResume ? ['Send'] : []).concat(['']);
     return h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table js-table' },
@@ -723,13 +726,49 @@
     }
     function open(n) {
       pager.classList.add('busy');
-      call('GET', '/api/career/jobsearch/' + s.id + '/jobs?bucket=' + g[0] + '&page=' + n + '&size=' + PAGE_SIZE)
+      call('GET', '/api/career/jobsearch/' + s.id + '/jobs?bucket=' + g[0] + '&page=' + n + '&size=' + PAGE_SIZE + (first.company ? '&company=' + encodeURIComponent(first.company) : ''))
         .then(function (pg) { show(pg); block.scrollIntoView({ behavior: 'smooth', block: 'start' }); })
         .catch(function (e) { showError(e.message); })
         .then(function () { pager.classList.remove('busy'); });
     }
     show(first);
     return block;
+  }
+
+  /** The three groups (high, medium, low) for the company chosen in the filter, or for all companies. */
+  function showGroups(box, r, s, withResume) {
+    var blocks = GROUPS.map(function (g) {
+      var first = r.groups && r.groups[g[0]];
+      return first && first.total ? groupBlock(s, g, first, withResume) : null;
+    }).filter(Boolean);
+    box.replaceChildren.apply(box, blocks.length ? blocks : [h('p', { class: 'ac-muted' }, 'No jobs at this company in this search.')]);
+  }
+  /** Company logos above the results: one click shows only that company's jobs (read from the server, 5 a page). */
+  function companyFilter(s, groups) {
+    var list = (s.result.companies || []);
+    if (list.length < 2) return null;
+    var withResume = s.params.resume === 'all';
+    var row = h('div', { class: 'co-filter', role: 'group', 'aria-label': 'Show the jobs of one company' });
+    function chip(c) {
+      var on = (s.result.company || '') === (c ? c.name : '');
+      return h('button', { class: 'co-chip' + (on ? ' on' : ''), type: 'button', 'aria-pressed': on ? 'true' : 'false', title: c ? 'Only ' + c.name + ' jobs' : 'Jobs at every company',
+        onclick: function () { pick(c ? c.name : ''); } },
+        c ? companyLogo(c.name, c.domain, 22) : h('span', { class: 'co-all', 'aria-hidden': 'true' }, '★'),
+        h('span', {}, c ? c.name : 'All companies'), h('span', { class: 'co-count' }, String(c ? c.count : s.result.total)));
+    }
+    function draw() { row.replaceChildren.apply(row, [chip(null)].concat(list.map(chip))); }
+    function pick(name) {
+      if ((s.result.company || '') === name) return;
+      row.classList.add('busy');
+      call('GET', '/api/career/jobsearch/' + s.id + (name ? '?company=' + encodeURIComponent(name) : '')).then(function (d) {
+        s.result.company = d.search.result.company;
+        s.result.groups = d.search.result.groups;
+        draw();
+        showGroups(groups, s.result, s, withResume);
+      }).catch(function (e) { showError(e.message); }).then(function () { row.classList.remove('busy'); });
+    }
+    draw();
+    return h('div', { class: 'co-box' }, h('div', { class: 'ac-subhead' }, 'Companies in your results'), row);
   }
 
   function searchResult(s) {
@@ -741,6 +780,8 @@
     if (cov.failed.length) notes.push('These careers sites did not answer: ' + cov.failed.join(', ') + '. Try again later.');
     if (cov.loading) notes.push(cov.loading + ' careers site' + (cov.loading === 1 ? ' was' : 's were') + ' still loading. Search again in a few minutes to include them.');
     if (r.total < 20) notes.push('Fewer than 20 matches: try a wider location, another role, a longer date range or more companies.');
+    var groups = h('div', { class: 'js-groups' });
+    showGroups(groups, r, s, withResume);
     return h('div', { class: 'js-result' },
       h('div', { class: 'js-profile' },
         h('div', { class: 'ac-subhead' }, 'Your profile'),
@@ -751,10 +792,8 @@
       h('p', { class: 'jb-info' }, r.total + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
         ' · searched ' + dateTime(s.finishedAt) + ' · ' + paramsLine(s.params)),
       h('p', { class: 'ac-muted js-small' }, 'Press 💡 Insight on a job for its skill gap matrix, its technical and functional requirements, how to close each gap, and what to revise before the interview.'),
-      GROUPS.map(function (g) {
-        var first = r.groups && r.groups[g[0]];
-        return first && first.total ? groupBlock(s, g, first, withResume) : null;
-      }),
+      companyFilter(s, groups),
+      groups,
       searchElsewhere(s.params, p),
       p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),
         h('ol', { class: 'cr-list' }, p.resumeFixes.map(function (f) { return h('li', {}, f); }))) : null,

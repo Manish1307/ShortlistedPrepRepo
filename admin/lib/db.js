@@ -140,6 +140,15 @@ CREATE TABLE IF NOT EXISTS career_job_searches (
   result_json TEXT, error TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, finished_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_career_job_searches ON career_job_searches(customer_id);
+CREATE TABLE IF NOT EXISTS career_app_profiles (
+  customer_id INTEGER PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE, profile_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL, confirmed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS career_applications (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE, search_id INTEGER, job_id INTEGER,
+  title TEXT NOT NULL DEFAULT '', company TEXT NOT NULL DEFAULT '', url TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'applied',
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (customer_id, url)
+);
 CREATE TABLE IF NOT EXISTS career_activity (
   id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   at TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''

@@ -723,6 +723,14 @@
       h('thead', {}, h('tr', {}, head.map(function (t) { return h('th', {}, t); }))),
       h('tbody', {}, list.map(function (j, i) {
         var insight = null, jobRow = null;
+        var kitRow = null, kit = h('button', { class: 'btn btn-sm pp-toggle', type: 'button', 'aria-expanded': 'false' }, '📝 Apply kit');
+        kit.addEventListener('click', function () {
+          if (kitRow && kitRow.row.parentNode) { kitRow.row.remove(); kit.setAttribute('aria-expanded', 'false'); kit.textContent = '📝 Apply kit'; return; }
+          kitRow = kitRow || applyKitRow(searchId, j, head.length);
+          jobRow.parentNode.insertBefore(kitRow.row, jobRow.nextSibling);
+          kit.setAttribute('aria-expanded', 'true'); kit.textContent = '📝 Apply kit ▴';
+          kitRow.load();
+        });
         var toggle = h('button', { class: 'btn btn-sm pp-toggle' + (j.insight ? ' ready' : ''), type: 'button', 'aria-expanded': 'false' }, '💡 Insight');
         toggle.addEventListener('click', function () {
           if (insight && insight.row.parentNode) { insight.row.remove(); toggle.setAttribute('aria-expanded', 'false'); toggle.textContent = '💡 Insight'; return; }
@@ -741,7 +749,7 @@
           h('td', { 'data-label': 'Why' }, j.why ? h('div', { class: 'jb-reason' }, j.why) : null,
             j.gap && !/^none\.?$/i.test(j.gap) ? h('div', { class: 'jb-gap' }, 'Gap: ' + j.gap) : null),
           withResume ? h('td', { 'data-label': 'Send' }, j.resume || '—') : null,
-          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle, jobElsewhere(j)));
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗'), toggle, kit, jobElsewhere(j)));
       }))));
   }
 
@@ -943,8 +951,258 @@
         hint, status, result, history));
   }
 
+  // ---------- 6. Apply: the application profile, the Apply kit on each job, the tracker, and the browser extension ----------
+  // The profile holds everything a company's form asks for (jobs and education as lists with exact dates). The candidate
+  // checks it once; then each job's "Apply kit" has every field one click away, and the extension fills company portals.
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var DATE_FORMATS = ['MM/YYYY', 'Month YYYY', 'MMM YYYY', 'YYYY-MM', 'DD/MM/YYYY'];
+  var apply = { profile: null, problems: [], confirmedAt: null, apps: [], promise: null, extension: false, format: 'MM/YYYY' };
+
+  function emptyProfile() {
+    return { personal: {}, summary: '', work: [], education: [], skills: [], certifications: [], languages: [], preferences: {} };
+  }
+  function fmtDate(m, y, f) {
+    if (!y) return '';
+    var mm = m ? (m < 10 ? '0' : '') + m : '';
+    if (f === 'Month YYYY') return m ? MONTHS[m - 1] + ' ' + y : String(y);
+    if (f === 'MMM YYYY') return m ? MONTHS[m - 1].slice(0, 3) + ' ' + y : String(y);
+    if (f === 'YYYY-MM') return m ? y + '-' + mm : String(y);
+    if (f === 'DD/MM/YYYY') return '01/' + (mm || '01') + '/' + y;
+    return m ? mm + '/' + y : String(y);
+  }
+  function takeApply(d) {
+    apply.profile = d.profile; apply.problems = d.problems || []; apply.confirmedAt = d.confirmedAt || null;
+    tellExtension();
+  }
+  /** The checked profile goes to the browser extension (when installed) through the page; nothing leaves the browser. */
+  function tellExtension() {
+    try { window.postMessage({ source: 'shortlistprep-site', type: 'profile', profile: apply.profile && apply.confirmedAt ? apply.profile : null }, location.origin); } catch (e) { /* ignore */ }
+  }
+  window.addEventListener('message', function (e) {
+    if (e.source !== window || !e.data || e.data.source !== 'shortlistprep-extension') return;
+    apply.extension = true;
+    tellExtension();
+    document.querySelectorAll('.ap-ext-state').forEach(function (n) { n.textContent = 'Browser extension connected'; n.classList.add('ok'); });
+  });
+
+  function loadApply(force) {
+    if (!apply.promise || force) {
+      apply.promise = Promise.all([call('GET', '/api/career/app-profile'), call('GET', '/api/career/applications')]).then(function (r) {
+        takeApply(r[0]); apply.apps = r[1].applications || [];
+      }).catch(function (e) { apply.promise = null; throw e; });
+    }
+    return apply.promise;
+  }
+
+  function copyText(text, btn) {
+    var done = function (ok) {
+      var old = btn.getAttribute('data-label') || btn.textContent;
+      btn.setAttribute('data-label', old); btn.textContent = ok ? 'Copied' : 'Select and copy';
+      setTimeout(function () { btn.textContent = old; }, 1300);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    else done(false);
+  }
+  function copyRow(label, value, multiline) {
+    var btn = h('button', { class: 'btn btn-sm ap-copy', type: 'button', disabled: !value }, 'Copy');
+    btn.addEventListener('click', function () { copyText(value, btn); });
+    return h('div', { class: 'ap-crow' }, h('span', { class: 'ap-k' }, label),
+      h('span', { class: 'ap-v' + (multiline ? ' multi' : '') }, value || '—'), btn);
+  }
+
+  /** The Apply kit for one job: every field one click away, a job or education entry at a time. */
+  function applyKit(j, redraw) {
+    var p = apply.profile, per = p.personal, pref = p.preferences, f = apply.format;
+    var box = h('div', { class: 'ap-kit' });
+    var fmt = h('select', { 'aria-label': 'Date format' }, DATE_FORMATS.map(function (x) { return h('option', { value: x }, 'Dates: ' + x); }));
+    fmt.value = f;
+    fmt.addEventListener('change', function () { apply.format = fmt.value; redraw(); });
+    var group = function (title, rows, all) {
+      var head = h('div', { class: 'ap-ghead' }, h('b', {}, title));
+      if (all) { var b = h('button', { class: 'btn btn-sm', type: 'button' }, 'Copy all'); b.addEventListener('click', function () { copyText(all, b); }); head.appendChild(b); }
+      return h('div', { class: 'ap-group' }, head, rows);
+    };
+    var lines = function (pairs) { return pairs.filter(function (x) { return x[1]; }).map(function (x) { return x[0] + ': ' + x[1]; }).join('\n'); };
+    box.appendChild(h('div', { class: 'ap-bar' }, fmt));
+    box.appendChild(group('About you', [
+      copyRow('Full name', per.fullName), copyRow('First name', per.firstName), copyRow('Last name', per.lastName), copyRow('Email', per.email), copyRow('Phone', per.phone),
+      copyRow('City', per.city), copyRow('State', per.state), copyRow('Country', per.country), copyRow('Postal code', per.postalCode), copyRow('Address', per.address),
+      copyRow('LinkedIn', per.linkedin), copyRow('GitHub', per.github), copyRow('Website', per.portfolio)],
+    lines([['Name', per.fullName], ['Email', per.email], ['Phone', per.phone], ['City', per.city], ['Country', per.country], ['LinkedIn', per.linkedin]])));
+    p.work.forEach(function (w, i) {
+      var start = fmtDate(w.startMonth, w.startYear, f), end = w.current ? '' : fmtDate(w.endMonth, w.endYear, f);
+      box.appendChild(group('Job ' + (i + 1) + ' of ' + p.work.length + ': ' + (w.company || 'Untitled') + (w.current ? ' (current)' : ''), [
+        copyRow('Company', w.company), copyRow('Job title', w.title), copyRow('Location', w.location), copyRow('Start date', start),
+        copyRow('End date', w.current ? '' : end), w.current ? h('p', { class: 'ap-note' }, 'This is your current job: tick "I currently work here" and leave the end date empty.') : null,
+        copyRow('Responsibilities', w.responsibilities, true)],
+      lines([['Company', w.company], ['Title', w.title], ['Location', w.location], ['Start', start], ['End', w.current ? 'Present' : end], ['Responsibilities', w.responsibilities ? '\n' + w.responsibilities : '']])));
+    });
+    p.education.forEach(function (e, i) {
+      var start = e.startYear ? String(e.startYear) : '', end = e.endYear ? String(e.endYear) : '';
+      box.appendChild(group('Education ' + (i + 1) + ' of ' + p.education.length + ': ' + (e.school || 'Untitled'), [
+        copyRow('College or university', e.school), copyRow('Degree', e.degree), copyRow('Field of study', e.field), copyRow('Start year', start), copyRow('End year', end), copyRow('Grade', e.grade)],
+      lines([['College', e.school], ['Degree', e.degree], ['Field', e.field], ['Start', start], ['End', end], ['Grade', e.grade]])));
+    });
+    box.appendChild(group('Other questions', [
+      copyRow('Total experience', pref.totalExperience), copyRow('Notice period', pref.noticePeriod), copyRow('Current salary', pref.currentCtc), copyRow('Expected salary', pref.expectedCtc),
+      copyRow('Work authorisation', pref.workAuthorization), copyRow('Skills', (p.skills || []).join(', '), true)], ''));
+    return box;
+  }
+
+  /** The Apply kit under a job in the results. */
+  function applyKitRow(searchId, j, cols) {
+    var cell = h('td', { colspan: String(cols) });
+    var row = h('tr', { class: 'pp-row' }, cell);
+    var track = function (note) {
+      call('POST', '/api/career/applications', { url: j.url, title: j.title, company: j.company, jobId: j.id, searchId: searchId, status: 'applied' }).then(function (d) {
+        apply.apps = apply.apps.filter(function (a) { return a.url !== j.url; }); apply.apps.unshift(d.application);
+        note.textContent = 'Saved: marked as applied. Find it in step 6 under "Your applications".'; note.className = 'form-result ok';
+      }).catch(function (e) { note.textContent = e.message; note.className = 'form-result bad'; });
+    };
+    function draw() {
+      var note = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
+      var mark = h('button', { class: 'btn btn-sm', type: 'button' }, '✔ Mark as applied');
+      mark.addEventListener('click', function () { track(note); });
+      var open = h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the application ↗');
+      var done = apply.apps.some(function (a) { return a.url === j.url; });
+      var ready = apply.profile && apply.confirmedAt;
+      cell.replaceChildren(h('div', { class: 'pp in ap' },
+        h('div', { class: 'ap-top' }, h('b', {}, '📝 Apply kit: ' + j.title + ' at ' + j.company), h('span', { class: 'ac-muted' }, done ? 'Marked as applied' : '')),
+        ready ? [h('p', { class: 'ac-muted' }, 'Open the company\'s application in a new tab and copy each field from here, one at a time. With the browser extension the form fills itself.'), applyKit(j, draw)]
+          : h('div', { class: 'in-note' }, h('span', {}, apply.profile ? 'Check and confirm your application profile first, so these details are right.' : 'Create your application profile first: it is filled from your resume and takes about a minute.'),
+            h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: function () { goTo('cr-apply'); } }, 'Open step 6: Apply')),
+        h('div', { class: 'ap-actions' }, open, mark), note));
+    }
+    return { row: row, load: function () {
+      cell.replaceChildren(h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, 'Opening your Apply kit…'))));
+      loadApply().then(draw).catch(function (e) { cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message)); });
+    } };
+  }
+
+  /** Step 6 */
+  function applyCard() {
+    var body = h('div', {}, h('p', { class: 'ac-muted' }, 'Loading…'));
+    var section = card('cr-apply', 6, 'Apply faster', 'Keep your details once, checked by you. Copy them into any company\'s form from the job\'s Apply kit, or let the browser extension fill the form.', body);
+    var draft = null;
+
+    function field(label, obj, key, opts) {
+      opts = opts || {};
+      var input = opts.area ? h('textarea', { rows: String(opts.rows || 4), maxlength: String(opts.max || 2500) }) : h('input', { type: opts.number ? 'number' : 'text', maxlength: String(opts.max || 200), placeholder: opts.placeholder || '' });
+      input.value = obj[key] ? String(obj[key]) : '';
+      input.addEventListener('input', function () { obj[key] = opts.number ? (input.value === '' ? 0 : Number(input.value)) : input.value; });
+      return h('label', { class: 'ap-f' + (opts.wide ? ' wide' : '') }, label, input);
+    }
+    function monthSel(label, obj, key) {
+      var sel = h('select', {}, [h('option', { value: '0' }, '—')].concat(MONTHS.map(function (m, i) { return h('option', { value: String(i + 1) }, m); })));
+      sel.value = String(obj[key] || 0);
+      sel.addEventListener('change', function () { obj[key] = Number(sel.value); });
+      return h('label', { class: 'ap-f' }, label, sel);
+    }
+    function listText(label, obj, key, hint) {
+      var input = h('input', { type: 'text', maxlength: '800', placeholder: hint });
+      input.value = (obj[key] || []).join(', ');
+      input.addEventListener('input', function () { obj[key] = input.value.split(',').map(function (x) { return x.trim(); }).filter(Boolean); });
+      return h('label', { class: 'ap-f wide' }, label, input);
+    }
+    function entryCard(title, onRemove, fields) {
+      var rm = h('button', { class: 'btn btn-sm', type: 'button' }, 'Remove');
+      rm.addEventListener('click', onRemove);
+      return h('div', { class: 'ap-entry' }, h('div', { class: 'ap-ehead' }, h('b', {}, title), rm), h('div', { class: 'ap-grid' }, fields));
+    }
+
+    function draw() {
+      var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
+      var node = [];
+      node.push(h('div', { class: 'ap-ext' }, h('span', { class: 'ap-ext-state' + (apply.extension ? ' ok' : '') }, apply.extension ? 'Browser extension connected' : 'Browser extension not detected'),
+        h('span', { class: 'ac-muted' }, ' · It fills sign-up, sign-in and application forms from this profile. You always review and press Submit yourself. ',
+          h('a', { href: 'apply-extension.html' }, 'How to install it'))));
+
+      if (!apply.profile) {
+        var gen = h('button', { class: 'btn btn-primary', type: 'button', disabled: !state.resume }, '✦ Fill my profile from my resume (uses 1 AI action)');
+        var blank = h('button', { class: 'btn', type: 'button' }, 'Start empty');
+        gen.addEventListener('click', function () {
+          gen.disabled = true; message(out, 'Reading your resume… (about 20 seconds)');
+          call('POST', '/api/career/app-profile/generate').then(function (d) { takeApply(d); setUsage(d.usage); draft = null; draw(); })
+            .catch(function (e) { gen.disabled = false; message(out, e.message, 'bad'); });
+        });
+        blank.addEventListener('click', function () { apply.profile = emptyProfile(); apply.problems = []; draft = null; draw(); });
+        node.push(h('div', { class: 'ap-start' }, h('p', {}, state.resume ? 'No application profile yet. We read your resume and fill in your details, every job and every education entry with its dates. You then check it once.' : 'Upload your resume first (step 1), then we can fill your profile from it.'),
+          h('div', { class: 'cr-actions' }, gen, blank), out));
+      } else {
+        draft = draft || JSON.parse(JSON.stringify(apply.profile));
+        draft.personal = draft.personal || {}; draft.preferences = draft.preferences || {};
+        var per = draft.personal, pref = draft.preferences;
+        if (apply.problems.length) node.push(h('div', { class: 'in-note ap-problems' }, h('div', {}, h('b', {}, 'To check before you apply'), h('ul', {}, apply.problems.map(function (x) { return h('li', {}, x); })))));
+        node.push(h('p', { class: 'ap-status' }, apply.confirmedAt ? '✔ Checked by you on ' + new Date(apply.confirmedAt).toLocaleDateString() + '. The Apply kit and the extension use this.' : 'Not confirmed yet. Check everything below, then press "Save and confirm".'));
+        node.push(h('h3', { class: 'ap-h' }, 'About you'), h('div', { class: 'ap-grid' }, [
+          field('Full name', per, 'fullName'), field('Email', per, 'email'), field('Phone', per, 'phone'), field('City', per, 'city'), field('State', per, 'state'), field('Country', per, 'country'),
+          field('Postal code', per, 'postalCode', { max: 20 }), field('Address', per, 'address'), field('LinkedIn', per, 'linkedin'), field('GitHub', per, 'github'), field('Website or portfolio', per, 'portfolio')]));
+        node.push(h('h3', { class: 'ap-h' }, 'Work experience (' + draft.work.length + ')'));
+        draft.work.forEach(function (w, i) {
+          var end = [monthSel('End month', w, 'endMonth'), field('End year', w, 'endYear', { number: true, max: 4 })];
+          if (w.current) end.forEach(function (n) { n.querySelector('input,select').disabled = true; });
+          var cur = h('input', { type: 'checkbox' }); cur.checked = !!w.current;
+          cur.addEventListener('change', function () { w.current = cur.checked; if (w.current) { w.endMonth = 0; w.endYear = 0; } draw(); });
+          node.push(entryCard('Job ' + (i + 1), function () { draft.work.splice(i, 1); draw(); }, [
+            field('Company', w, 'company'), field('Job title', w, 'title'), field('Location', w, 'location'),
+            monthSel('Start month', w, 'startMonth'), field('Start year', w, 'startYear', { number: true, max: 4 })].concat(end,
+            [h('label', { class: 'ap-f ap-check' }, cur, ' I currently work here'), field('Responsibilities (one per line)', w, 'responsibilities', { area: true, rows: 5, wide: true })])));
+        });
+        var addJob = h('button', { class: 'btn btn-sm', type: 'button' }, '+ Add a job');
+        addJob.addEventListener('click', function () { draft.work.push({ company: '', title: '', location: '', startMonth: 0, startYear: 0, endMonth: 0, endYear: 0, current: false, responsibilities: '' }); draw(); });
+        node.push(addJob);
+        node.push(h('h3', { class: 'ap-h' }, 'Education (' + draft.education.length + ')'));
+        draft.education.forEach(function (e, i) {
+          node.push(entryCard('Education ' + (i + 1), function () { draft.education.splice(i, 1); draw(); }, [
+            field('College or university', e, 'school', { wide: true }), field('Degree', e, 'degree'), field('Field of study', e, 'field'), field('Location', e, 'location'),
+            field('Start year', e, 'startYear', { number: true, max: 4 }), field('End year', e, 'endYear', { number: true, max: 4 }), field('Grade or percentage', e, 'grade', { max: 40 })]));
+        });
+        var addEdu = h('button', { class: 'btn btn-sm', type: 'button' }, '+ Add education');
+        addEdu.addEventListener('click', function () { draft.education.push({ school: '', degree: '', field: '', location: '', startYear: 0, endYear: 0, grade: '' }); draw(); });
+        node.push(addEdu);
+        node.push(h('h3', { class: 'ap-h' }, 'Skills and answers to common questions'), h('div', { class: 'ap-grid' }, [
+          listText('Skills (separated by commas)', draft, 'skills', 'e.g. Tissue culture, Doubled haploid'), listText('Languages', draft, 'languages', 'e.g. English, Hindi'),
+          field('Total experience', pref, 'totalExperience', { max: 40, placeholder: 'e.g. 6 years' }), field('Notice period', pref, 'noticePeriod', { max: 60, placeholder: 'e.g. 60 days' }),
+          field('Current salary', pref, 'currentCtc', { max: 40 }), field('Expected salary', pref, 'expectedCtc', { max: 40 }),
+          field('Work authorisation', pref, 'workAuthorization', { max: 100, placeholder: 'e.g. Indian citizen' }), field('Willing to relocate', pref, 'willingToRelocate', { max: 20, placeholder: 'Yes or No' })]));
+        var saveBtn = h('button', { class: 'btn', type: 'button' }, 'Save changes');
+        var confirmBtn = h('button', { class: 'btn btn-primary', type: 'button' }, 'Save and confirm');
+        var regen = h('button', { class: 'btn btn-sm', type: 'button' }, 'Fill again from my resume (1 AI action)');
+        var save = function (confirmed) {
+          saveBtn.disabled = confirmBtn.disabled = true; message(out, 'Saving…');
+          call('POST', '/api/career/app-profile', { profile: draft, confirm: confirmed }).then(function (d) { takeApply(d); draft = null; draw(); })
+            .catch(function (e) { saveBtn.disabled = confirmBtn.disabled = false; message(out, e.message, 'bad'); });
+        };
+        saveBtn.addEventListener('click', function () { save(false); });
+        confirmBtn.addEventListener('click', function () { save(true); });
+        regen.addEventListener('click', function () {
+          if (!window.confirm('Fill your profile again from your resume? Your edits will be replaced.')) return;
+          regen.disabled = true; message(out, 'Reading your resume… (about 20 seconds)');
+          call('POST', '/api/career/app-profile/generate').then(function (d) { takeApply(d); setUsage(d.usage); draft = null; draw(); }).catch(function (e) { regen.disabled = false; message(out, e.message, 'bad'); });
+        });
+        node.push(h('div', { class: 'cr-actions ap-save' }, saveBtn, confirmBtn, regen), out);
+      }
+
+      node.push(h('h3', { class: 'ap-h' }, 'Your applications (' + apply.apps.length + ')'));
+      node.push(apply.apps.length ? h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table ap-table' },
+        h('thead', {}, h('tr', {}, ['Company', 'Role', 'Status', ''].map(function (t) { return h('th', {}, t); }))),
+        h('tbody', {}, apply.apps.map(function (a) {
+          var sel = h('select', { 'aria-label': 'Status' }, [['applied', 'Applied'], ['interview', 'Interview'], ['offer', 'Offer'], ['rejected', 'Not selected']].map(function (o) { return h('option', { value: o[0] }, o[1]); }));
+          sel.value = a.status;
+          sel.addEventListener('change', function () { call('POST', '/api/career/applications', { url: a.url, title: a.title, company: a.company, status: sel.value }).then(function (d) { a.status = d.application.status; }); });
+          var del = h('button', { class: 'btn btn-sm', type: 'button' }, 'Remove');
+          del.addEventListener('click', function () { call('POST', '/api/career/applications/' + a.id + '/delete').then(function () { apply.apps = apply.apps.filter(function (x) { return x.id !== a.id; }); draw(); }); });
+          return h('tr', {}, h('td', { 'data-label': 'Company' }, h('b', {}, a.company || '—')), h('td', { 'data-label': 'Role' }, h('a', { href: a.url, target: '_blank', rel: 'noopener noreferrer' }, a.title || 'Job')),
+            h('td', { 'data-label': 'Status' }, sel), h('td', {}, del));
+        })))) : h('p', { class: 'ac-muted' }, 'Jobs you mark as applied appear here, so you can keep track.'));
+      body.replaceChildren.apply(body, node);
+    }
+    loadApply().then(draw).catch(function (e) { body.replaceChildren(h('p', { class: 'form-result bad' }, e.message)); });
+    return section;
+  }
+
   // ---------- one tab per step (the address keeps the step: career.html#cr-jobs) ----------
-  var STEPS = [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match & cover letter'], ['cr-jobs', 'AI Job search']];
+  var STEPS = [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match & cover letter'], ['cr-jobs', 'AI Job search'], ['cr-apply', 'Apply']];
   var activeStep = null;
   function stepIndex(id) { for (var i = 0; i < STEPS.length; i++) if (STEPS[i][0] === id) return i; return -1; }
   /** Where to start: the step in the address, else the first one not done yet. */
@@ -957,7 +1215,7 @@
   }
   function stepDone(id) {
     var r = state.resume;
-    return id === 'cr-resume' ? !!r : id === 'cr-ats' ? !!(r && r.ats) : id === 'cr-versions' ? state.versions.length > 0 : id === 'cr-match' ? state.matches.length > 0 : false;
+    return id === 'cr-resume' ? !!r : id === 'cr-ats' ? !!(r && r.ats) : id === 'cr-versions' ? state.versions.length > 0 : id === 'cr-match' ? state.matches.length > 0 : id === 'cr-apply' ? !!apply.confirmedAt : false;
   }
   function showStep(id, scroll) {
     if (stepIndex(id) === -1) id = 'cr-resume';
@@ -989,7 +1247,7 @@
 
   function render() {
     showError('');
-    var cards = [resumeCard(), atsCard(), versionsCard(), matchCard(), jobsCard()];
+    var cards = [resumeCard(), atsCard(), versionsCard(), matchCard(), jobsCard(), applyCard()];
     cards.forEach(function (c, i) { c.appendChild(stepNav(i)); });
     content.replaceChildren.apply(content, cards.concat([
       h('p', { class: 'ac-muted cr-privacy' }, '🔒 Your resume is private: it is used only to create your documents and is never shared. ',

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "ShortlistPrep Autofill",
+  "version": "0.1.0",
+  "description": "Fills job-application forms (create account, sign in, application steps) from your checked ShortlistPrep profile. You review everything and press Submit yourself.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["filler.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

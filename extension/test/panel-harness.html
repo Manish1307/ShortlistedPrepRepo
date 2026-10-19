@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Extension panel harness</title>
+<style>body{font:15px system-ui,Arial;max-width:640px;margin:20px auto;padding:0 14px}label{display:block;margin:8px 0 2px;font-size:13px;font-weight:600}input{width:100%;padding:7px;box-sizing:border-box}</style>
+</head><body>
+<h1>Portal (multi-step)</h1>
+<div id="step"></div>
+<pre id="log"></pre>
+<script>
+/* a stand-in for chrome.storage so the real content.js runs in a normal page */
+var mem = { profile: {
+  personal: { fullName: 'Priya Sharma', firstName: 'Priya', lastName: 'Sharma', email: 'priya@example.com', phone: '+91 98765 00021', city: 'Hyderabad' },
+  work: [{ company: 'GreenSeed Labs', title: 'Research Scientist', startMonth: 3, startYear: 2021, current: true, responsibilities: '- Lines' }],
+  education: [{ school: 'University of Hyderabad', degree: 'M.Sc.', field: 'Plant Biotechnology', startYear: 2016, endYear: 2018 }] }, auto: new URLSearchParams(location.search).get('auto') === '1' };
+var listeners = [];
+window.chrome = { storage: { local: {
+  get: function (keys, cb) { var o = {}; keys.forEach(function (k) { o[k] = mem[k]; }); setTimeout(function () { cb(o); }, 0); },
+  set: function (o) { var ch = {}; Object.keys(o).forEach(function (k) { ch[k] = { oldValue: mem[k], newValue: o[k] }; mem[k] = o[k]; }); listeners.forEach(function (l) { l(ch); }); },
+  remove: function () {} }, onChanged: { addListener: function (l) { listeners.push(l); } } } };
+
+function label(t, html) { return '<label>' + t + html + '</label>'; }
+var steps = {
+  signin: '<h2>Sign in</h2>' + label('Email Address', '<input type="email">') + label('Password', '<input type="password">') + '<button>Sign In</button>',
+  app: '<h2>My Information</h2>' + label('First Name', '<input>') + label('Last Name', '<input>') + label('Email', '<input type="email">') +
+    '<h2>Work Experience</h2><div><label>Job Title <input></label><label>Company <input></label></div><h2>Education</h2><div><label>School or University <input></label><label>Degree <input></label></div>'
+};
+function show(n) { document.getElementById('step').innerHTML = steps[n]; }
+show('signin');
+window.goNext = function () { show('app'); };
+</script>
+<script src="../filler.js"></script>
+<script src="../content.js"></script>
+</body></html>

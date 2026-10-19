@@ -165,6 +165,26 @@
     return form;
   }
 
+  /** The candidate's sector: required. It decides which employers AI Job search reads. */
+  function sectorForm(me) {
+    var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
+    var sel = h('select', { name: 'sector', required: true, 'aria-label': 'Sector' },
+      [h('option', { value: '' }, 'Choose your sector…')].concat((me.sectors || []).map(function (s) { return h('option', { value: s.id }, s.label); })));
+    sel.value = me.customer.sector || '';
+    var form = h('form', { class: 'ac-form', id: 'ac-sector-form', novalidate: true },
+      h('label', {}, 'Sector (required)', sel),
+      h('button', { class: 'btn btn-primary', type: 'submit' }, me.customer.sector ? 'Update sector' : 'Save sector'), out);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!sel.value) { out.className = 'form-result bad'; out.textContent = 'Please choose your sector.'; return; }
+      out.className = 'form-result'; out.textContent = 'Saving…';
+      call('POST', '/api/account/profile', { sector: sel.value }).then(function () { me.customer.sector = sel.value; render(me); }).catch(function (err) {
+        if (err.status === 401) return goSignIn(); out.className = 'form-result bad'; out.textContent = err.message;
+      });
+    });
+    return form;
+  }
+
   // ---------- sections ----------
   function licenceBlock(l) {
     var left = daysLeft(l.expiresAt);
@@ -268,6 +288,9 @@
     var stat = function (ico, colour, num, label) { return h('div', { class: 'ac-stat' }, tile(ico, colour), h('div', {}, h('b', {}, String(num)), h('span', {}, label))); };
     panels = {
       overview: h('div', { class: 'ac-panel' },
+        c.sector ? null : h('section', { class: 'ac-card ac-need' }, tile('class', 'sun'), h('div', {}, h('b', {}, 'Choose your sector'),
+          h('p', { class: 'ac-muted' }, 'It is required. We use it to search the right employers for you in AI Job search.'),
+          h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { var f = document.getElementById('ac-sector-form'); if (f) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.sector.focus(); } } }, 'Choose now'))),
         h('div', { class: 'ac-stats' },
           stat('key', 'purple', active.length, active.length === 1 ? 'Active licence' : 'Active licences'),
           stat('laptop', 'teal', machines, machines === 1 ? 'Computer' : 'Computers'),
@@ -278,7 +301,7 @@
             card('Your licence', main ? licenceBlock(main) : empty('No licence yet', 'Contact us to get started.'), me.licences.length > 1 ? go('licences') : null),
             card('Recent classes', classList(me.conversations, 3), me.conversations.length > 3 ? go('classes') : null)),
           h('div', { class: 'ac-stack' },
-            card('Profile', dl([['Name', c.name], ['Email', c.email], ['Organisation', c.organisation], ['Country', c.country], ['Last sign-in', dateTime(me.account.lastLogin)]])),
+            card('Profile', h('div', {}, dl([['Name', c.name], ['Email', c.email], ['Organisation', c.organisation], ['Country', c.country], ['Last sign-in', dateTime(me.account.lastLogin)]]), h('div', { style: 'margin-top:16px' }, sectorForm(me)))),
             card('AI focus', topicsBody(p, true), go('topics')),
             card('Get more interview calls', h('div', {},
               h('p', { class: 'ac-muted', style: 'margin-bottom:14px' }, 'Make your resume ATS-ready, create a resume for each role, and get a cover letter for every job you apply to.'),

@@ -11,6 +11,7 @@ const profiles = require('./profiles');
 const { ApiError } = require('./http');
 const { now } = require('./db');
 const { logActivity } = require('./activity');
+const { SECTORS } = require('./jobcatalogue');
 
 const SESSION_DAYS = 7;
 const DUMMY_HASH = auth.hashPassword('not-a-real-password');
@@ -137,7 +138,8 @@ function addRoutes(ctx) {
     }));
     const p = profiles.profileOf(db, c.id);
     return {
-      customer: { email: c.email, name: c.name, organisation: c.organisation, country: c.country, since: c.created_at },
+      customer: { email: c.email, name: c.name, organisation: c.organisation, country: c.country, sector: c.sector || '', since: c.created_at },
+      sectors: SECTORS.map(x => ({ id: x.id, label: x.label })),
       account: { lastLogin: c.last_login, passwordSetAt: c.password_set_at },
       licences: lics,
       orders: all('SELECT id, plan, amount_cents, currency, status, created_at FROM orders WHERE customer_id = ? ORDER BY id DESC', c.id),
@@ -146,6 +148,16 @@ function addRoutes(ctx) {
           (SELECT question FROM conversation_items i WHERE i.conversation_id = v.id ORDER BY position LIMIT 1) AS first_question
           FROM conversations v JOIN licences l ON l.id = v.licence_id WHERE l.customer_id = ? ORDER BY v.started_at DESC LIMIT 100`, c.id),
     };
+  });
+
+  // the candidate's sector: required, and the one AI Job search uses
+  add('POST', '/api/account/profile', { public: true }, (req, res, { body }) => {
+    const { customer } = customerOf(req);
+    const sector = String(body.sector || '').trim();
+    if (!SECTORS.some(x => x.id === sector)) throw new ApiError(400, 'Please choose your sector');
+    db.prepare('UPDATE customers SET sector = ? WHERE id = ?').run(sector, customer.id);
+    logActivity(db, customer.id, 'profile.sector', sector);
+    return { ok: true, sector };
   });
 
   add('GET', '/api/account/conversations/:id', { public: true }, (req, res, { params }) => {

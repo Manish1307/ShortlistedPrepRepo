@@ -11,6 +11,7 @@ const profiles = require('./profiles');
 const accounts = require('./accounts');
 const career = require('./career');
 const jobs = require('./jobs');
+const { SECTORS } = require('./jobcatalogue');
 const logos = require('./logos');
 const candidates = require('./candidates');
 const aiTokens = require('./tokens');
@@ -242,7 +243,7 @@ function buildRoutes(ctx) {
 
   add('GET', '/admin/api/customers', { admin: true }, (req, res, { query }) => {
     const term = likeTerm(query.get('q'));
-    return { customers: all(`SELECT c.*, (SELECT COUNT(*) FROM licences l WHERE l.customer_id = c.id) AS licence_count,
+    return { sectors: SECTORS.map(x => ({ id: x.id, label: x.label })), customers: all(`SELECT c.*, (SELECT COUNT(*) FROM licences l WHERE l.customer_id = c.id) AS licence_count,
         (SELECT COALESCE(SUM(amount_cents),0) FROM orders o WHERE o.customer_id = c.id AND o.status = 'paid') AS paid_cents
         FROM customers c WHERE c.email LIKE ? ESCAPE '\\' OR c.name LIKE ? ESCAPE '\\' OR c.organisation LIKE ? ESCAPE '\\'
         ORDER BY c.id DESC LIMIT 500`, term, term, term) };
@@ -252,21 +253,22 @@ function buildRoutes(ctx) {
     const customer = one('SELECT * FROM customers WHERE id = ?', params.id);
     if (!customer) throw new ApiError(404, 'Customer not found');
     return {
-      customer,
+      customer, sectors: SECTORS.map(x => ({ id: x.id, label: x.label })),
       licences: all('SELECT * FROM licences WHERE customer_id = ? ORDER BY id DESC', customer.id).map(present),
       orders: all('SELECT * FROM orders WHERE customer_id = ? ORDER BY id DESC', customer.id),
     };
   });
 
+  const sectorId = v => { const s = String(v || '').trim(); if (s && !SECTORS.some(x => x.id === s)) throw new ApiError(400, 'Unknown sector'); return s; };
   const customerFields = body => ({
     email: email(body.email), name: text(body.name, 100, { field: 'Name' }), organisation: text(body.organisation, 150, { field: 'Organisation' }),
-    country: text(body.country, 60, { field: 'Country' }), notes: text(body.notes, 2000, { field: 'Notes' }),
+    country: text(body.country, 60, { field: 'Country' }), sector: sectorId(body.sector), notes: text(body.notes, 2000, { field: 'Notes' }),
   });
 
   add('POST', '/admin/api/customers', { admin: true, perm: 'customers.write' }, (req, res, { body, admin }) => {
     const f = customerFields(body);
     if (one('SELECT id FROM customers WHERE email = ?', f.email)) throw new ApiError(409, 'A customer with that email already exists');
-    const r = db.prepare('INSERT INTO customers (email, name, organisation, country, notes, created_at) VALUES (?,?,?,?,?,?)').run(f.email, f.name, f.organisation, f.country, f.notes, now());
+    const r = db.prepare('INSERT INTO customers (email, name, organisation, country, sector, notes, created_at) VALUES (?,?,?,?,?,?,?)').run(f.email, f.name, f.organisation, f.country, f.sector, f.notes, now());
     audit(admin, 'customer.created', f.email);
     return { status: 201, body: { customer: one('SELECT * FROM customers WHERE id = ?', r.lastInsertRowid) } };
   });
@@ -277,7 +279,7 @@ function buildRoutes(ctx) {
     const f = customerFields({ ...current, ...body });
     const clash = one('SELECT id FROM customers WHERE email = ? AND id <> ?', f.email, current.id);
     if (clash) throw new ApiError(409, 'Another customer already uses that email');
-    db.prepare('UPDATE customers SET email=?, name=?, organisation=?, country=?, notes=? WHERE id=?').run(f.email, f.name, f.organisation, f.country, f.notes, current.id);
+    db.prepare('UPDATE customers SET email=?, name=?, organisation=?, country=?, sector=?, notes=? WHERE id=?').run(f.email, f.name, f.organisation, f.country, f.sector, f.notes, current.id);
     audit(admin, 'customer.updated', f.email);
     return { customer: one('SELECT * FROM customers WHERE id = ?', current.id) };
   });

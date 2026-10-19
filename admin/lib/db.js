@@ -225,6 +225,7 @@ function open(file) {
   addColumn(db, 'job_companies', 'last_used', 'TEXT');   // AI Job search: boards nobody searched lately are dropped
   addColumn(db, 'jobs', 'full_description', 'TEXT');      // Insight: a job's whole description, read when a candidate opens it
   addColumn(db, 'jobs', 'full_fetched_at', 'TEXT');
+  addColumn(db, 'customers', 'sector', "TEXT NOT NULL DEFAULT ''");   // the candidate's sector (domain): decides which employers AI Job search reads
   return db;
 }
 

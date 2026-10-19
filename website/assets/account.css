@@ -31,7 +31,7 @@
 .ac-ico.purple { background: var(--purple-l); color: var(--purple); } .ac-ico.teal { background: var(--teal-l); color: var(--teal-d); }
 .ac-ico.pink { background: var(--pink-l); color: #d63a86; } .ac-ico.sun { background: var(--sun-l); color: #a86c00; }
 .ac-stat b { display: block; font-size: 26px; line-height: 1.1; color: var(--ink); }
-.ac-stat span { display: block; color: var(--muted); font-size: 13.5px; font-weight: 600; line-height: 1.3; }
+.ac-stat div span { display: block; color: var(--muted); font-size: 13.5px; font-weight: 600; line-height: 1.3; }
 
 /* cards */
 .ac-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
@@ -428,3 +428,7 @@
 .co-all { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--purple-l); color: var(--purple-d); font-size: 12px; }
 .co-count { background: var(--tint); color: var(--body); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 700; }
 .co-chip.on .co-count { background: #fff; }
+
+/* the sector is required: a notice at the top of the overview */
+.ac-need { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 20px; border-color: #f3c76b; background: #fffaf0; }
+.ac-need b { display: block; font-size: 17px; margin-bottom: 4px; } .ac-need p { margin-bottom: 12px; }

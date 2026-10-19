@@ -169,7 +169,7 @@ async function start() {
   for (const [mail, role] of [['boss@example.com', 'owner'], ['help@example.com', 'support']]) {
     app.db.prepare("INSERT INTO admins (email, name, role, pass_hash, created_at) VALUES (?,?,?,?,datetime('now'))").run(mail, mail, role, hashPassword('correct-horse-battery'));
   }
-  const cust = app.db.prepare("INSERT INTO customers (email, name, created_at) VALUES ('asha@example.com', 'Asha', datetime('now'))").run().lastInsertRowid;
+  const cust = app.db.prepare("INSERT INTO customers (email, name, sector, created_at) VALUES ('asha@example.com', 'Asha', 'it', datetime('now'))").run().lastInsertRowid;
   app.db.prepare("INSERT INTO customer_accounts (customer_id, pass_hash, must_change, created_at, password_set_at) VALUES (?, ?, 0, datetime('now'), datetime('now'))").run(cust, hashPassword('a-long-password'));
   const admin = async email => {
     let cookie = '';
@@ -179,7 +179,7 @@ async function start() {
       return { status: r.status, json: await r.json() };
     };
     await call('POST', '/admin/api/login', { email, password: 'correct-horse-battery' });
-    return { get: u => call('GET', u), post: (u, b) => call('POST', u, b || {}) };
+    return { get: u => call('GET', u), post: (u, b) => call('POST', u, b || {}), patch: (u, b) => call('PATCH', u, b || {}) };
   };
   const site = async () => {
     const { token } = await fetch(base + '/api/account/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'asha@example.com', password: 'a-long-password' }) }).then(r => r.json());
@@ -583,5 +583,32 @@ test('the results can be narrowed to one company, still read a page at a time', 
     const page = (await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=high&page=1&company=Northwind`)).json;
     assert.ok(page.jobs.every(j => j.company === 'Northwind') && page.company === 'Northwind');
     assert.equal((await web.get(`/api/career/jobsearch/${search.id}?company=Nobody`)).json.search.result.company, '');   // not in the results: all companies
+  });
+});
+
+test('Sector: the candidate sets it in My account, the admin can set it, and AI Job search needs it', async () => {
+  await withServer(async s => {
+    s.addResume();
+    s.app.db.prepare("UPDATE customers SET sector = '' WHERE email = 'asha@example.com'").run();
+    const web = await s.site();
+    // no sector yet: the search is refused
+    const refused = await web.post('/api/career/jobsearch', { country: 'India' });
+    assert.equal(refused.status, 400);
+    assert.equal(refused.json.code, 'no-sector');
+    assert.equal((await web.get('/api/career/jobsearch')).json.sector, '');
+    // an unknown sector is refused, a real one is saved and shown in My account
+    assert.equal((await web.post('/api/account/profile', { sector: 'nonsense' })).status, 400);
+    assert.equal((await web.post('/api/account/profile', {})).status, 400);
+    assert.equal((await web.post('/api/account/profile', { sector: 'agri' })).status, 200);
+    const me = (await web.get('/api/account/me')).json;
+    assert.equal(me.customer.sector, 'agri');
+    assert.ok(me.sectors.some(x => x.id === 'agri'));
+    assert.equal((await web.get('/api/career/jobsearch')).json.sector, 'agri');
+    // the admin can change it
+    const admin = await s.admin('boss@example.com');
+    const id = s.app.db.prepare("SELECT id FROM customers WHERE email = 'asha@example.com'").get().id;
+    assert.equal((await admin.patch(`/admin/api/customers/${id}`, { sector: 'pharma' })).status, 200);
+    assert.equal((await web.get('/api/account/me')).json.customer.sector, 'pharma');
+    assert.equal((await admin.patch(`/admin/api/customers/${id}`, { sector: 'nonsense' })).status, 400);
   });
 });

@@ -401,7 +401,7 @@
   ];
   var LEVELS = [['', 'Level: let the AI decide'], ['Fresher / entry-level', 'Fresher / entry-level'], ['Mid-level', 'Mid-level'], ['Senior', 'Senior'], ['Lead / manager', 'Lead / manager']];
   var COUNTRIES = ['India', 'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'Ireland', 'Netherlands', 'Singapore', 'United Arab Emirates', 'Remote'];
-  var SECTORS = [['', 'Sector: let the AI decide from my resume'], ['it', 'IT, software & consulting'], ['agri', 'Agriculture, seeds & agri-biotech'], ['biotech', 'Biotech, life sciences & research labs'], ['pharma', 'Pharma, healthcare & medical devices'], ['fmcg', 'FMCG, food & beverages'], ['manufacturing', 'Manufacturing, engineering & energy'], ['finance', 'Banking, finance & accounting']];
+  var SECTORS = [['', 'Sector: not chosen yet (set it in My account)'], ['it', 'IT, software & consulting'], ['agri', 'Agriculture, seeds & agri-biotech'], ['biotech', 'Biotech, life sciences & research labs'], ['pharma', 'Pharma, healthcare & medical devices'], ['fmcg', 'FMCG, food & beverages'], ['manufacturing', 'Manufacturing, engineering & energy'], ['finance', 'Banking, finance & accounting'], ['other', 'Other (the AI chooses employers from my resume)']];
   var searchForm = { resume: 'all', level: '', sector: '', role: '', country: 'India', city: '', companies: '', days: '', remote: true };
   var pollTimer = null, cardGen = 0;
 
@@ -820,7 +820,7 @@
       .concat(state.versions.map(function (v) { return ['v' + v.id, 'Resume: ' + v.role]; }));
     var resumeSel = bind(h('select', { 'aria-label': 'Resume to match' }, resumeOptions.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'resume');
     var levelSel = bind(h('select', { 'aria-label': 'Level' }, LEVELS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'level');
-    var sectorSel = bind(h('select', { 'aria-label': 'Sector' }, SECTORS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'sector');
+    var sectorSel = bind(h('select', { 'aria-label': 'Sector (from My account → Profile)', disabled: true, title: 'Your sector comes from My account → Profile' }, SECTORS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'sector');
     var role = bind(h('input', { type: 'text', maxlength: '120', placeholder: 'Role or keywords, e.g. Power Platform, Project Manager (optional)', 'aria-label': 'Role or keywords' }), 'role');
     var country = bind(h('input', { type: 'text', maxlength: '80', list: 'js-countries', placeholder: 'Country, e.g. India', 'aria-label': 'Country' }), 'country');
     var city = bind(h('input', { type: 'text', maxlength: '80', placeholder: 'City, e.g. Noida (optional)', 'aria-label': 'City' }), 'city');
@@ -831,7 +831,7 @@
     var run = h('button', { class: 'btn btn-primary js-run', type: 'button', disabled: !state.resume }, '✦ Search jobs with AI');
     var hint = h('p', { class: 'ac-muted js-small' }, 'Pick your sector so we search the right employers. Leave "Companies" empty to search the main employers of that sector.');
 
-    function setRunning(on) { run.disabled = on || !state.resume; run.textContent = on ? 'Searching…' : '✦ Search jobs with AI'; }
+    function setRunning(on) { run.disabled = on || !state.resume || !f.sector; run.textContent = on ? 'Searching…' : '✦ Search jobs with AI'; }
     function showStatus(text, kind) {
       status.className = 'js-status' + (kind ? ' ' + kind : '');
       status.replaceChildren();
@@ -854,7 +854,7 @@
     run.addEventListener('click', function () {
       if (!f.country.trim() && !f.city.trim() && !confirm('No country or city given: search jobs everywhere?')) return;
       setRunning(true); showStatus('Starting your search…', 'busy');
-      call('POST', '/api/career/jobsearch', { resume: f.resume, level: f.level, sector: f.sector, role: f.role.trim(), country: f.country.trim(), city: f.city.trim(),
+      call('POST', '/api/career/jobsearch', { resume: f.resume, level: f.level, role: f.role.trim(), country: f.country.trim(), city: f.city.trim(),
         companies: f.companies.trim(), days: f.days ? Number(f.days) : 0, remote: f.remote })
         .then(function (d) { result.replaceChildren(); poll(d.search.id); })
         .catch(function (e) { setRunning(false); showStatus(e.message, 'bad'); });
@@ -864,6 +864,8 @@
       return call('GET', '/api/career/jobsearch').then(function (d) {
         if (d.elsewhere) ELSEWHERE = d.elsewhere;
         searches = d.searches;
+        f.sector = d.sector || ''; sectorSel.value = f.sector; setRunning(false);
+        hint.replaceChildren(f.sector ? 'We search the main employers of your sector. Leave "Companies" empty to use them.' : h('span', {}, 'Your sector is required. ', h('a', { href: 'account.html#overview' }, 'Choose it in My account → Profile'), ' to search jobs.'));
         var past = searches.filter(function (s) { return s.status !== 'running'; });
         history.replaceChildren(past.length ? h('details', { class: 'cr-history' }, h('summary', {}, 'Earlier searches (' + past.length + ')'),
           past.map(function (s) {

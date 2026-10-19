@@ -1,4 +1,5 @@
 'use strict';
+const { SECTORS } = require('./jobcatalogue');
 // Dashboard → Candidates: what each customer does with My account and the Career toolkit. Progress through the
 // steps (resume, ATS check, role resumes, job matches, AI job searches), their documents to download, the job
 // search results, AI use per day and an activity log (activity.js). Every signed-in admin may look; downloads
@@ -15,7 +16,7 @@ function addRoutes(ctx) {
   const { db, add, audit, one, all } = ctx;
 
   const rows = q => all(`
-    SELECT c.id, c.email, c.name, c.organisation, c.created_at,
+    SELECT c.id, c.email, c.name, c.organisation, c.sector, c.created_at,
            a.customer_id IS NOT NULL AS has_login, a.disabled AS login_disabled, a.last_login,
            r.customer_id IS NOT NULL AS has_resume, r.file_name, r.uploaded_at, r.ats_at, json_extract(r.ats_json, '$.score') AS ats_score,
            (SELECT COUNT(*) FROM career_versions v WHERE v.customer_id = c.id) AS versions,
@@ -37,7 +38,7 @@ function addRoutes(ctx) {
   const present = r => {
     const s = steps(r);
     return {
-      id: r.id, email: r.email, name: r.name, organisation: r.organisation, joinedAt: r.created_at,
+      id: r.id, email: r.email, name: r.name, organisation: r.organisation, sector: r.sector || '', sectorLabel: (SECTORS.find(x => x.id === r.sector) || {}).label || '', joinedAt: r.created_at,
       login: { exists: !!r.has_login, disabled: !!r.login_disabled, lastLogin: r.last_login },
       resume: r.has_resume ? { fileName: r.file_name, uploadedAt: r.uploaded_at, atsScore: r.ats_score, atsAt: r.ats_at } : null,
       versions: r.versions, matches: r.matches, searches: r.searches, aiActions: r.ai_total,
@@ -71,7 +72,7 @@ function addRoutes(ctx) {
     const ats = r && parse(r.ats_json);
     const since = new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10);
     return {
-      candidate: row ? present(row) : { id: c.id, email: c.email, name: c.name, organisation: c.organisation, joinedAt: c.created_at, login: { exists: false }, resume: null, steps: {}, done: 0 },
+      candidate: row ? present(row) : { id: c.id, email: c.email, name: c.name, organisation: c.organisation, sector: c.sector || '', sectorLabel: (SECTORS.find(x => x.id === c.sector) || {}).label || '', joinedAt: c.created_at, login: { exists: false }, resume: null, steps: {}, done: 0 },
       resume: r ? {
         fileName: r.file_name, uploadedAt: r.uploaded_at, chars: r.source_text.length, preview: r.source_text.slice(0, 1500),
         ats: ats ? { score: ats.score, verdict: ats.verdict, checkedAt: r.ats_at, checks: ats.checks || [], keywords: ats.keywords || { present: [], missing: [] },

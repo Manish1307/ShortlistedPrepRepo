@@ -85,6 +85,7 @@ const SECTORS = [
   { id: 'pharma', label: 'Pharma, healthcare & medical devices', companies: ['Novartis', 'Pfizer', 'MSD', 'Sanofi', 'AstraZeneca', 'GSK', 'Roche', 'Abbott', 'Medtronic', 'Zoetis', 'IQVIA', 'Labcorp', 'Danaher'] },
   { id: 'fmcg', label: 'FMCG, food & beverages', companies: ['Unilever', 'Mondelez', 'Mars', 'Coca-Cola', 'Corteva'] },
   { id: 'manufacturing', label: 'Manufacturing, engineering & energy', companies: ['3M', 'Bosch', 'Baker Hughes', 'Avery Dennison', 'Shell', 'Danaher', 'Western Digital'] },
+  { id: 'other', label: 'Other (the AI chooses employers from my resume)', companies: [] },
   { id: 'finance', label: 'Banking, finance & accounting', companies: ['Barclays', 'BlackRock', 'Citi', 'Wells Fargo', 'Mastercard', 'Visa', 'KPMG India', 'EY'] },
 ];
 

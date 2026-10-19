@@ -196,13 +196,16 @@
   }
 
   // ---------- customers ----------
+  let sectorList = [];   // the candidate sectors (domains), from the server
+  const sectorLabel = id => (sectorList.find(s => s.id === id) || {}).label || '';
   async function customers(el, query = '') {
-    const { customers: rows } = await get('/admin/api/customers?q=' + encodeURIComponent(query));
+    const { customers: rows, sectors } = await get('/admin/api/customers?q=' + encodeURIComponent(query));
+    sectorList = sectors || sectorList;
     el.replaceChildren(
       head('Customers', searchBox(v => customers(el, v), 'Search name, email, organisation', query),
         can('customers.write') ? h('button', { class: 'btn primary', onclick: () => customerForm(null, () => customers(el, query)) }, '+ New customer') : null),
       table([
-        { label: 'Email', render: r => r.email }, { label: 'Name', render: r => r.name || '—' }, { label: 'Organisation', render: r => r.organisation || '—' },
+        { label: 'Email', render: r => r.email }, { label: 'Name', render: r => r.name || '—' }, { label: 'Organisation', render: r => r.organisation || '—' }, { label: 'Sector', render: r => sectorLabel(r.sector) || '—' },
         { label: 'Licences', render: r => r.licence_count }, { label: 'Paid', render: r => money(r.paid_cents) }, { label: 'Joined', render: r => date(r.created_at) },
       ], rows, r => customerDetail(r.id, () => customers(el, query)), query ? 'No customers match your search.' : 'No customers yet. Add one, or record an order.'));
   }
@@ -211,7 +214,8 @@
     const f = h('div', {},
       field('Email', { name: 'email', type: 'email', required: true, value: existing ? existing.email : '' }),
       h('div', { class: 'row2' }, field('Name', { name: 'name', value: existing ? existing.name : '' }), field('Organisation', { name: 'organisation', value: existing ? existing.organisation : '' })),
-      field('Country', { name: 'country', value: existing ? existing.country : '' }),
+      h('div', { class: 'row2' }, field('Country', { name: 'country', value: existing ? existing.country : '' }),
+        field('Sector (domain)', { name: 'sector', type: 'select', options: [{ value: '', label: 'Not chosen yet' }].concat(sectorList.map(s => ({ value: s.id, label: s.label }))), value: existing ? existing.sector || '' : '' }, 'Decides which employers AI Job search reads. The candidate can also set it in My account.')),
       field('Notes (private)', { name: 'notes', type: 'textarea', value: existing ? existing.notes : '', maxlength: 2000 }));
     dialog(existing ? 'Edit customer' : 'New customer', f, [{
       label: 'Save', kind: 'primary',
@@ -253,11 +257,12 @@
   async function customerDetail(id, done) {
     const d = await get(`/admin/api/customers/${id}`);
     const c = d.customer;
+    sectorList = d.sectors || sectorList;
     let closeDetail = () => {};
     const login = await accountSection(c, () => { closeDetail(); customerDetail(id, done); });
     const body = h('div', {},
       h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Name'), h('dd', {}, c.name || '—'), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'),
-        h('dt', {}, 'Country'), h('dd', {}, c.country || '—'), h('dt', {}, 'Joined'), h('dd', {}, dateTime(c.created_at)), h('dt', {}, 'Notes'), h('dd', {}, c.notes || '—')),
+        h('dt', {}, 'Country'), h('dd', {}, c.country || '—'), h('dt', {}, 'Sector'), h('dd', {}, sectorLabel(c.sector) || 'Not chosen yet'), h('dt', {}, 'Joined'), h('dd', {}, dateTime(c.created_at)), h('dt', {}, 'Notes'), h('dd', {}, c.notes || '—')),
       h('h3', {}, 'Licences'),
       d.licences.length ? d.licences.map(l => h('div', { class: 'list-item' }, h('span', { class: 'mono' }, l.key), h('span', {}, `${l.plan} · `, pill(l.effective_status), ` · ${l.expires_at ? 'to ' + date(l.expires_at) : 'lifetime'}`))) : h('p', { class: 'muted' }, 'None.'),
       h('h3', { style: 'margin-top:14px' }, 'Orders'),
@@ -798,7 +803,7 @@
       head(c.name || c.email, h('button', { class: 'btn', onclick: back }, '← All candidates')),
       h('div', { class: 'card' },
         h('dl', { class: 'kv' },
-          h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'),
+          h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'), h('dt', {}, 'Sector'), h('dd', {}, c.sectorLabel || 'Not chosen yet'),
           h('dt', {}, 'Website login'), h('dd', {}, !c.login.exists ? 'No login yet' : c.login.disabled ? 'Turned off' : `Active · last sign-in ${c.login.lastLogin ? dateTime(c.login.lastLogin) : 'never'}`),
           h('dt', {}, 'Last active'), h('dd', {}, c.lastActive ? `${dateTime(c.lastActive)} (${ago(c.lastActive)})` : '—'),
           h('dt', {}, 'AI actions'), h('dd', {}, `${c.aiActions || 0} in total`)),

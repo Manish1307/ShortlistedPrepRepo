@@ -346,7 +346,7 @@ function addRoutes(ctx) {
       else {
         const named = (await Promise.all(strings(a.employers, 20, 80).map(resolve))).filter(r => r.row);
         // the sector the candidate picked, else the one the AI chose from the resume
-        const sector = SECTORS.find(x => x.id === p.sector) || SECTORS.find(x => x.id === (String(a.sector || '').trim() || 'it'));   // no sector given at all: the IT list, as before
+        const sector = (p.sector !== 'other' && SECTORS.find(x => x.id === p.sector)) || SECTORS.find(x => x.id === (String(a.sector || '').trim() || 'it'));   // no sector given at all: the IT list, as before
         const all2 = catalogue.concat(sectorCompanies);
         const fromSector = !sector ? [] : sector.companies === null ? builtIn()
           : sector.companies.map(n => all2.find(c => c.name === n)).filter(Boolean).map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url) }));
@@ -490,9 +490,10 @@ function addRoutes(ctx) {
     const c = me(req);
     require('./career').checkQuota(db, c.id);
     const resume = /^(all|ats|v\d+)$/.test(String(body.resume || '')) ? String(body.resume) : 'all';
+    if (!c.sector) throw new ApiError(400, 'Choose your sector first: My account → Profile → Sector.', 'no-sector');
     const p = {
       resume, country: text(body.country, 80, { field: 'Country' }), city: text(body.city, 80, { field: 'City' }),
-      sector: SECTORS.some(x => x.id === body.sector) ? String(body.sector) : '', role: text(body.role, 120, { field: 'Role' }), level: LEVELS.includes(body.level) ? body.level : '',
+      sector: c.sector, role: text(body.role, 120, { field: 'Role' }), level: LEVELS.includes(body.level) ? body.level : '',
       days: [7, 14, 30].includes(Number(body.days)) ? Number(body.days) : 0, remote: body.remote !== false,
       companies: text(body.companies, 4000, { field: 'Companies' }),
     };
@@ -512,7 +513,7 @@ function addRoutes(ctx) {
 
   add('GET', '/api/career/jobsearch', { public: true }, req => {
     const c = me(req);
-    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length, sectors: SECTORS.map(x => ({ id: x.id, label: x.label })), elsewhere: SEARCH_ELSEWHERE };
+    return { searches: all('SELECT * FROM career_job_searches WHERE customer_id = ? ORDER BY id DESC', c.id).map(r => presentSearch(r, false)), builtInCompanies: catalogue.length, sector: c.sector || '', sectors: SECTORS.map(x => ({ id: x.id, label: x.label })), elsewhere: SEARCH_ELSEWHERE };
   });
 
   add('GET', '/api/career/jobsearch/:id', { public: true }, (req, res, { params, query }) => {

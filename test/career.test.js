@@ -215,7 +215,7 @@ test('Groq is used when there is no Gemini key, or when Gemini is busy', async (
     const asha = await s.site('asha@example.com');
     await asha.post('/api/career/resume', { text: RESUME });
     assert.equal((await asha.post('/api/career/ats')).status, 200);
-    assert.equal(s.ai.seen.filter(x => x.url.startsWith('/gemini/')).length, 2);             // both Gemini models tried
+    assert.equal(s.ai.seen.filter(x => x.url.startsWith('/gemini/')).length, 3);             // all three Gemini models tried
     assert.ok(s.ai.seen.some(x => x.url === '/groq/chat/completions'));
   });
 });

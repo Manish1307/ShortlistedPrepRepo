@@ -345,10 +345,10 @@ function addRoutes(ctx) {
       else {
         const named = (await Promise.all(strings(a.employers, 20, 80).map(resolve))).filter(r => r.row);
         resolved = a.builtInCompaniesFit === false ? named : [...named, ...builtIn()];
-        if (!resolved.length) resolved = builtIn();
       }
       const rows = [...new Map(resolved.filter(r => r.row).map(r => [r.row.id, r.row])).values()];
-      if (!rows.length) throw new ApiError(400, 'None of those companies could be found. Check the names, or paste the link of their careers page.');
+      if (!rows.length) throw new ApiError(400, typed.length ? 'None of those companies could be found. Check the names, or paste the link of their careers page.'
+        : `We could not read the career sites of employers in ${profile.field || 'your field'}. In "Companies", type the names or paste the careers-page links of companies you want to apply to (for example Syngenta, Bayer, Corteva, UPL, or a university or institute).`);
       const { loading } = await gather(db, rows, fetchOpts, (done, total) => step(`Reading live openings from career sites: ${done} of ${total}…`), budget);
 
       // 3. the jobs within the filters; the country the AI chose is dropped if it leaves nothing

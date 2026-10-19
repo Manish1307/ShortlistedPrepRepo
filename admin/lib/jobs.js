@@ -29,6 +29,14 @@ const KEEP_SEARCHES = 20;         // per candidate
 const BUCKETS = ['high', 'medium', 'stretch'];
 const PAGE_SIZE = 5;              // jobs per page of a group on the website
 const DESCRIPTION_FRESH = 7 * DAY;  // a job's full description, read for Insight, is kept this long
+const DESCRIPTION_BUDGET = 25000;   // a search waits at most this long for the descriptions of the jobs it scores
+
+/** The part of a description that says what the job needs (from "Requirements", "Skills"… when there is such a heading), n characters. */
+function keyPart(description, n) {
+  const t = String(description || '').replace(/\s+/g, ' ').trim();
+  const at = t.search(/\b(requirements?|qualifications?|skills?|must have|what you (will )?(need|bring)|you have|responsibilities)\b/i);
+  return (at > 200 ? t.slice(Math.max(0, at - 80)) : t).slice(0, n);
+}
 const LEVELS = ['', 'Fresher / entry-level', 'Mid-level', 'Senior', 'Lead / manager'];
 
 const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting machine for candidates in India.
@@ -99,7 +107,7 @@ async function syncCompany(db, company, opts = {}, list = null) {
       for (const j of list) {
         if (!j.title || !j.url || !/^https:\/\//i.test(j.url)) continue;
         upsert.run(company.id, j.externalId, String(j.title).slice(0, 300), String(j.location || '').slice(0, 300), String(j.country || '').slice(0, 80),
-          String(j.department || '').slice(0, 160), String(j.employmentType || '').slice(0, 80), j.postedAt, j.url, String(j.description || '').slice(0, 2000), stamp, stamp);
+          String(j.department || '').slice(0, 160), String(j.employmentType || '').slice(0, 80), j.postedAt, j.url, String(j.description || '').slice(0, sources.DETAIL_PAGES.has(company.provider) ? 2000 : 8000), stamp, stamp);   // boards without job pages we read keep more
       }
       db.prepare('UPDATE jobs SET active = 0 WHERE company_id = ? AND last_seen < ?').run(company.id, stamp);                 // closed since the last fetch
       db.prepare('DELETE FROM jobs WHERE company_id = ? AND active = 0 AND last_seen < ?').run(company.id, new Date(Date.now() - 30 * DAY).toISOString());
@@ -347,10 +355,21 @@ function addRoutes(ctx) {
       const picked = new Set(first);
       const batch = first.concat(order.filter(j => !picked.has(j)).slice(0, AI_BATCH - first.length));
 
-      // 5. score them with the Master Prompt
+      // 5. their descriptions: some careers sites list jobs without one (SuccessFactors, Workday, Oracle), and a fit
+      // score from the title alone is a guess. Read those from the job pages (kept a week), within a time limit.
+      step(`Reading the descriptions of the ${batch.length} most relevant jobs…`);
+      const thin = batch.filter(j => String(j.description || '').length < jobprep.MIN_DESCRIPTION);
+      const reading = (async () => {
+        for (let i = 0; i < thin.length; i += PARALLEL) {
+          await Promise.all(thin.slice(i, i + PARALLEL).map(async j => { j.description = (await jobDescription(j.id)) || j.description; }));
+        }
+      })();
+      await Promise.race([reading, sleep(DESCRIPTION_BUDGET)]);
+
+      // 6. score them with the Master Prompt
       step(`Scoring the ${batch.length} most relevant of ${pool.length.toLocaleString('en-IN')} live jobs against your resume…`);
       const lines = batch.map(j => JSON.stringify({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country,
-        posted: (j.posted_at || '').slice(0, 10), summary: String(j.description || '').replace(/\s+/g, ' ').slice(0, 350) }));
+        posted: (j.posted_at || '').slice(0, 10), description: keyPart(j.description, 700) || '(none given: score from the title only, and say so in "why")' }));
       const labels = resumes.map(r => r.label);
       const out = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, {
         system: prompt + '\n\n' + SCORING_RULES,
@@ -455,6 +474,32 @@ function addRoutes(ctx) {
     return { search: presentSearch(row, true, pageSize(query.get('size'))), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
   });
 
+  // A company's logo for the results, by its web address. The icon services answer an unknown address with a
+  // placeholder picture (a globe), which a page cannot tell from a real logo; here a missing icon is a plain 404, so
+  // the page shows the company's initials instead. Kept in memory for a day; candidates' browsers never contact the
+  // icon service themselves.
+  const logos = new Map();   // domain -> { at, type, body } (body null: no logo)
+  const logoBase = ctx.logoBase || 'https://icons.duckduckgo.com/ip3';
+  add('GET', '/api/logo/:domain', { public: true }, async (req, res, { params }) => {
+    const domain = String(params.domain || '').toLowerCase();
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain) || domain.length > 100) throw new ApiError(400, 'Not a web address');
+    let hit = logos.get(domain);
+    if (!hit || Date.now() - hit.at > DAY) {
+      hit = { at: Date.now(), type: '', body: null };
+      try {
+        const r = await fetch(`${logoBase}/${domain}.ico`, { signal: AbortSignal.timeout(6000) });
+        const type = String(r.headers.get('content-type') || '');
+        const body = r.ok && /^image\//.test(type) ? Buffer.from(await r.arrayBuffer()) : null;
+        if (body && body.length > 0 && body.length < 200 * 1024) hit = { at: Date.now(), type, body };
+      } catch (_) { /* no answer: no logo for now */ }
+      if (logos.size > 1000) logos.delete(logos.keys().next().value);
+      logos.set(domain, hit);
+    }
+    if (!hit.body) throw new ApiError(404, 'No logo');
+    res.writeHead(200, { 'Content-Type': hit.type, 'Content-Length': hit.body.length, 'Cache-Control': 'public, max-age=604800', 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff' });
+    res.end(hit.body);
+  });
+
   // one page of one group: ?bucket=high|medium|stretch&page=2&size=5
   add('GET', '/api/career/jobsearch/:id/jobs', { public: true }, (req, res, { params, query }) => {
     const c = me(req);
@@ -467,8 +512,10 @@ function addRoutes(ctx) {
   });
 
   // Insight: the job's skill matrix (from its own description), the skill gaps to a full fit, learning links, revision
-  // topics and interview questions. Made once per job (one AI action) and kept with the search. refresh: make it again,
-  // only for an older one made before the skill matrix was taken from the job description (version 2).
+  // topics and interview questions, all taken from the job description. Made once per job (one AI action) and kept with
+  // the search. refresh: make it again, only for an older one (before jobprep.VERSION). description: the job
+  // description pasted by the candidate, when the careers site gives none we can read.
+  // Without a description there is no Insight: guessing from the job title gave requirements the job never asked for.
   add('POST', '/api/career/jobsearch/:id/prep', { public: true }, async (req, res, { params, body }) => {
     const c = me(req);
     const row = searchRow(params.id, c.id);
@@ -476,23 +523,28 @@ function addRoutes(ctx) {
     if (!result) throw new ApiError(404, 'Search not found');
     const job = result.jobs.find(j => j.id === Number(body.jobId));
     if (!job) throw new ApiError(404, 'Job not found in this search');
-    if (job.prep && !(body.refresh && (job.prep.version || 1) < 2)) return { prep: job.prep, usage: require('./career').usage(db, c.id) };
+    const pasted = text(body.description, jobprep.MAX_DESCRIPTION, { field: 'Job description' });
+    if (job.prep && !pasted && !(body.refresh && (job.prep.version || 1) < jobprep.VERSION)) return { prep: job.prep, usage: require('./career').usage(db, c.id) };
+    if (pasted && pasted.length < jobprep.MIN_DESCRIPTION) throw new ApiError(400, 'Paste the whole job description (it looks too short).');
+    const jd = pasted || String(await jobDescription(job.id)).trim();
+    if (jd.length < jobprep.MIN_DESCRIPTION) {
+      throw new ApiError(422, `We could not read this job's description from ${job.company}'s careers site, and an Insight without it would be guesswork. Open the job, copy its description and paste it here.`, 'no-description');
+    }
     require('./career').checkQuota(db, c.id);
     const resumes = resumesFor(c.id, 'all');
     const resume = resumes.find(r => r.label === job.resume) || resumes[0];
     const posting = one('SELECT department, employment_type FROM jobs WHERE id = ?', job.id) || {};
-    const jd = String(await jobDescription(job.id)).trim();
     const out = await completeJson({ ...ai, meter: aiTokens.meter(db, c.id) }, {
       system: jobprep.PREP_PROMPT,
       user: [`JOB: ${job.title} at ${job.company} (${job.location || job.country || 'location not given'})`,
         posting.department ? `TEAM: ${posting.department}` : '', `CURRENT FIT SCORE: ${job.score}/100`,
-        job.why ? `WHY THIS SCORE: ${job.why}` : '', job.gap ? `MAIN GAP NOTED: ${job.gap}` : '',
-        jd ? `JOB DESCRIPTION:\n${jd}` : 'JOB DESCRIPTION: (the careers site gave none: leave "requirements" empty and base the gaps on the job title and company)',
+        `JOB DESCRIPTION:\n${jd}`,
         `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 15000)}`].filter(Boolean).join('\n'),
-      maxTokens: 5000,
+      maxTokens: 6000,
     });
     const prep = jobprep.cleanPrep(out, job.score, jd);
-    if (!prep.gaps.length && !prep.interviewQuestions.length) throw new ApiError(502, 'The AI could not prepare this job this time. Please try again.', 'ai');
+    if (pasted) prep.description = 'pasted';
+    if (!prep.matrix) throw new ApiError(502, 'The AI could not match this job\'s requirements to its description this time. Please try again.', 'ai');
     // save it with the search (read again: another job may have been prepared meanwhile)
     const fresh = parse(one('SELECT result_json FROM career_job_searches WHERE id = ?', row.id).result_json);
     const target = fresh.jobs.find(j => j.id === job.id);

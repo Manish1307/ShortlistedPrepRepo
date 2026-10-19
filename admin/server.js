@@ -19,7 +19,7 @@ const { ApiError, readJson, sendJson, parseCookies, SECURITY_HEADERS } = require
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
 
-function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false, aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget } = {}) {
+function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false, aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget, logoBase } = {}) {
   const db = open(path.join(dataDir, 'admin.db'));
   const signer = new Signer(dataDir);
   aikeys.setup(db);
@@ -33,7 +33,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
     track: new auth.Limiter({ max: 120, windowMs: 60 * 1000 }),
     opportunity: new auth.Limiter({ max: 8, windowMs: 60 * 60 * 1000 }),
   };
-  const routes = buildRoutes({ db, signer, vault, limiters, tokens, upstream: aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget });
+  const routes = buildRoutes({ db, signer, vault, limiters, tokens, upstream: aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget, logoBase });
   const compiled = routes.map(r => ({
     ...r,
     regex: new RegExp('^' + r.pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'),

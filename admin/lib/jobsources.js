@@ -133,7 +133,7 @@ async function getJson(fetchImpl, url, init) {
  * url, description}. source: {provider, board, defaultCountry?}. Throws with a readable message when the board fails.
  */
 async function fetchJobs(source, { fetchImpl = fetch, base = {}, now = Date.now } = {}) {
-  const job = j => ({ ...j, title: String(j.title || '').replace(/\s+/g, ' ').trim(), country: j.country || countryOf(j.location) || source.defaultCountry || '', description: String(j.description || '').slice(0, 4000) });
+  const job = j => ({ ...j, title: String(j.title || '').replace(/\s+/g, ' ').trim(), country: j.country || countryOf(j.location) || source.defaultCountry || '', description: String(j.description || '').slice(0, 8000) });
   const p = source.provider;
   if (p === 'greenhouse') {
     const data = await getJson(fetchImpl, `${base.greenhouse || 'https://boards-api.greenhouse.io/v1/boards'}/${encodeURIComponent(source.board)}/jobs?content=true`);
@@ -291,7 +291,8 @@ async function fetchJobs(source, { fetchImpl = fetch, base = {}, now = Date.now 
     return all.slice(0, MAX_JOBS).map(j => job({
       externalId: String(j.id_icims || j.id), title: j.title, location: j.location || [j.city, j.country_code].filter(Boolean).join(', '),
       department: j.job_category || '', employmentType: j.job_schedule_type || '', postedAt: iso(j.posted_date),
-      url: `https://www.amazon.jobs${j.job_path}`, description: stripHtml([j.description_short, j.basic_qualifications].filter(Boolean).join('\n')),
+      url: `https://www.amazon.jobs${j.job_path}`, description: [j.description || j.description_short, j.basic_qualifications && 'Basic qualifications\n' + j.basic_qualifications,
+        j.preferred_qualifications && 'Preferred qualifications\n' + j.preferred_qualifications].filter(Boolean).map(stripHtml).join('\n'),
     }));
   }
   if (p === 'capgemini') {
@@ -313,6 +314,24 @@ async function fetchJobs(source, { fetchImpl = fetch, base = {}, now = Date.now 
 }
 
 const FULL_DESCRIPTION = 15000;   // characters of one job's full description
+
+/** The inside of each <span itemprop="description">…</span>, with the spans nested in it (some sites have two: the company, then the job). */
+function describedSpans(html) {
+  const out = [], open = /<span[^>]*itemprop="description"[^>]*>/gi;
+  let o;
+  while ((o = open.exec(html))) {
+    const tag = /<(\/?)span\b[^>]*>/gi;
+    tag.lastIndex = o.index + o[0].length;
+    let depth = 1, m, end = html.length;
+    while ((m = tag.exec(html))) { depth += m[1] ? -1 : 1; if (depth === 0) { end = m.index; break; } }
+    out.push(html.slice(o.index + o[0].length, end));
+    open.lastIndex = end;
+  }
+  return out;
+}
+
+/** Boards whose single-job pages fetchDescription() reads; the others keep a longer description from their job list. */
+const DETAIL_PAGES = new Set(['greenhouse', 'lever', 'smartrecruiters', 'ashby', 'workday', 'sfclassic', 'sfunified', 'oraclehcm']);
 
 /**
  * One job's whole description, for its skill matrix. The job lists keep only the start of each description (and
@@ -336,6 +355,17 @@ async function fetchDescription(source, job, { fetchImpl = fetch, base = {} } = 
     const d = await getJson(fetchImpl, `${base.ashby || 'https://api.ashbyhq.com/posting-api/job-board'}/${board}`);
     const j = (d.jobs || []).find(x => String(x.id) === String(job.externalId));
     text = j ? (j.descriptionPlain || stripHtml(j.descriptionHtml)) : '';
+  } else if (p === 'sfclassic' || p === 'sfunified') {
+    // SAP SuccessFactors job pages (both designs) carry the whole description in <span itemprop="description">
+    const u = new URL(job.url);
+    const url = base[p] ? `${base[p]}/${u.host}${u.pathname}` : job.url;
+    text = describedSpans(await getText(fetchImpl, url, { headers: { Accept: 'text/html' } })).map(stripHtml).filter(Boolean).join('\n');
+  } else if (p === 'oraclehcm') {
+    const [host, site] = String(source.board || '').split('/');
+    const origin = base.oraclehcm ? `${base.oraclehcm}/${host}` : `https://${host}`;
+    const d = await getJson(fetchImpl, `${origin}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails?expand=all&onlyData=true&finder=ById;Id=%22${id}%22,siteNumber=${encodeURIComponent(site || '')}`);
+    const r = (d.items || [])[0] || {};
+    text = ['ExternalDescriptionStr', 'ExternalResponsibilitiesStr', 'ExternalQualificationsStr'].map(k => stripHtml(r[k])).filter(Boolean).join('\n');
   } else if (p === 'workday') {
     // the job's link is https://<tenant>.<wd>.myworkdayjobs.com/<site>/job/...; its JSON is at /wday/cxs/<tenant>/<site>/job/...
     const [tenant, site] = String(source.board || '').split('/');
@@ -347,4 +377,4 @@ async function fetchDescription(source, job, { fetchImpl = fetch, base = {} } = 
   return text == null ? null : text.slice(0, FULL_DESCRIPTION);
 }
 
-module.exports = { parseBoardUrl, fetchJobs, fetchDescription, countryOf, workdayDate, stripHtml, MAX_JOBS };
+module.exports = { parseBoardUrl, fetchJobs, fetchDescription, DETAIL_PAGES, countryOf, workdayDate, stripHtml, MAX_JOBS };

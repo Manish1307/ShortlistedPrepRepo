@@ -10,11 +10,23 @@ const PREP_PROMPT = `You are an expert career coach and technical interview trai
 You get the candidate's resume, one job posting, and the fit score the candidate already has for it.
 Explain exactly what stands between the candidate and a 100/100 fit, and how to close each gap fast.
 
+ACCURACY COMES FIRST. Everything you write about the JOB must come from its JOB DESCRIPTION; everything about the
+CANDIDATE must come from the resume. Never use what roles with this title "usually" involve, and never mention a
+skill, tool, duty or domain the job description does not mention (for example: no RFPs, presales, SOWs, account
+growth, cloud migration or FinOps unless the description names them). Ignore the company introduction, benefits and
+equal-opportunity text: they are not requirements. Do not describe the candidate's employer or situation (for example
+"internal candidate") unless the resume says so.
+
 RULES:
 - Never claim the candidate has skills or experience the resume does not show.
-- "gaps" are the skills, tools, certifications or experience the job wants that the resume lacks or shows weakly.
+- "gaps" are the requirements (from "requirements") the resume lacks or shows weakly.
   Give each gap "points": how much closing it would raise the fit score. The points of all gaps should add up to about
   (100 - current fit score).
+- "revise" topics are requirements the resume already shows ("match" or "partial") that the interview will probe:
+  name each with the job description's own words (e.g. "Spring Boot and Hibernate", "AWS SQS and CloudWatch").
+- "interviewQuestions" must each be about a responsibility or requirement in the job description.
+- "matched" lists only requirements from the job description that the resume shows.
+- "plan" and "tips" use only the gaps above and the job description.
 - "searchQuery" must be a short search phrase that finds good tutorials for that exact skill, e.g. "Power Platform ALM pipelines tutorial".
 - "provider" is the company that owns the official documentation for the skill: one of
   microsoft, aws, google, oracle, salesforce, sap, servicenow, atlassian, ibm, redhat, kubernetes, python, java, scrum, pmi, other.
@@ -69,6 +81,9 @@ function learningLinks(query, provider) {
   return links;
 }
 
+const VERSION = 3;              // 2: matrix from the job description; 3: gaps, topics and questions from it too, never a guess
+const MIN_DESCRIPTION = 300;    // characters: shorter is not a job description we can trust
+const MAX_DESCRIPTION = 15000;  // characters a candidate may paste
 const str = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
 const list = (v, n, max) => (Array.isArray(v) ? v : []).map(x => str(x, max)).filter(Boolean).slice(0, n);
 
@@ -81,6 +96,19 @@ function inDescription(row, jd) {
   if (row.quote && flat(row.quote).trim().length > 2 && jd.includes(flat(row.quote))) return true;
   const words = flat(row.skill).trim().split(' ').filter(w => w && !NOISE.has(w));
   return words.length > 0 && words.every(w => jd.includes(' ' + w + ' ') || (w.length > 4 && jd.includes(' ' + w.replace(/s$/, ''))));
+}
+
+const words = t => flat(t).trim().split(' ').filter(w => w.length > 1 && !NOISE.has(w));
+/** Whether a phrase is about the job description: at least half its words are in it (text: flat(jd)). */
+function mentions(text, phrase) {
+  const w = words(phrase);
+  return w.length > 0 && w.filter(x => text.includes(' ' + x + ' ')).length / w.length >= 0.5;
+}
+/** Whether two skill names are the same requirement: they share at least half the words of the shorter one. */
+function sameSkill(a, b) {
+  const x = words(a), y = words(b);
+  if (!x.length || !y.length) return false;
+  return x.filter(w => y.includes(w)).length / Math.min(x.length, y.length) >= 0.5;
 }
 
 /**
@@ -121,9 +149,19 @@ function skillMatrix(requirements, jd) {
  */
 function cleanPrep(out, fit, jd) {
   const matrix = jd ? skillMatrix(out.requirements, jd) : null;
-  const gaps = (Array.isArray(out.gaps) ? out.gaps : []).slice(0, 8).map(g => {
-    const skill = str(g && g.skill, 80);
+  const text = flat(jd);
+  // a gap must be a requirement of the matrix that the resume lacks or shows weakly; it takes that requirement's name
+  const open = matrix ? matrix.rows.filter(r => r.status !== 'match') : [];
+  const used = new Set();
+  const gaps = (Array.isArray(out.gaps) ? out.gaps : []).slice(0, 10).map(g => {
+    let skill = str(g && g.skill, 80);
     if (!skill) return null;
+    if (jd) {
+      const row = open.find(r => sameSkill(r.skill, skill));
+      if (!row || used.has(row.skill)) return null;
+      used.add(row.skill);
+      skill = row.skill;
+    }
     const provider = Object.prototype.hasOwnProperty.call(OFFICIAL, g.provider) ? g.provider : 'other';
     const query = str(g.searchQuery, 100) || `${skill} tutorial`;
     const certification = str(g.certification, 80);
@@ -136,15 +174,18 @@ function cleanPrep(out, fit, jd) {
     };
   }).filter(Boolean).sort((a, b) => b.points - a.points);
   return {
-    version: 2, fit, summary: str(out.summary, 300), matrix, description: jd ? 'full' : 'none', matched: list(out.matched, 20, 60), gaps,
+    version: VERSION, fit, summary: str(out.summary, 300), matrix, description: jd ? 'full' : 'none',
+    matched: list(out.matched, 20, 60).filter(m => !jd || mentions(text, m)), gaps,
     gapPoints: gaps.reduce((n, g) => n + g.points, 0),
+    // topics to revise are things the job description talks about
     revise: (Array.isArray(out.revise) ? out.revise : []).slice(0, 8).map(r => {
       const topic = str(r && r.topic, 80);
-      return topic ? { topic, links: learningLinks(str(r.searchQuery, 100) || `${topic} interview questions`, 'other').filter(l => ['youtube', 'articles'].includes(l.kind)) } : null;
+      if (!topic || (jd && !mentions(text, topic))) return null;
+      return { topic, links: learningLinks(str(r.searchQuery, 100) || `${topic} interview questions`, 'other').filter(l => ['youtube', 'articles'].includes(l.kind)) };
     }).filter(Boolean),
     plan: list(out.plan, 6, 240), interviewQuestions: list(out.interviewQuestions, 10, 240), tips: list(out.tips, 5, 240),
     createdAt: new Date().toISOString(),
   };
 }
 
-module.exports = { PREP_PROMPT, learningLinks, cleanPrep, skillMatrix };
+module.exports = { PREP_PROMPT, learningLinks, cleanPrep, skillMatrix, VERSION, MIN_DESCRIPTION, MAX_DESCRIPTION };

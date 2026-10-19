@@ -20,7 +20,8 @@ const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString();
 
 /** The whole description of Contoso's job 1 (its job list has only the first line). */
 const FULL_JD = '&lt;p&gt;We need a Senior .NET Developer.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;5+ years of C# and .NET experience&lt;/li&gt;&lt;li&gt;Hands-on Azure DevOps pipelines&lt;/li&gt;' +
-  '&lt;li&gt;Docker containers&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Nice to have: Agile ways of working&lt;/p&gt;';
+  '&lt;li&gt;Docker containers&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Nice to have: Agile ways of working&lt;/p&gt;' +
+  '&lt;p&gt;You will build and run the payment APIs used by our customers, review code, and keep the services fast and reliable in production, working closely with product and QA.&lt;/p&gt;';
 
 /** A fake of the five job-board APIs. greenhouse.jobs can be changed between syncs. */
 async function fakeBoards() {
@@ -40,6 +41,16 @@ async function fakeBoards() {
       const send = body => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
       if (u.pathname === '/gh/contoso/jobs') return send({ jobs: state.greenhouse });
       if (u.pathname === '/gh/contoso/jobs/1') return send({ id: 1, content: FULL_JD });
+      if (u.pathname === '/icons/stripe.com.ico') { res.setHeader('Content-Type', 'image/x-icon'); return res.end(Buffer.from([0, 0, 1, 0, 1])); }
+      if (u.pathname === '/icons/unknown-co.com.ico') { res.statusCode = 404; res.setHeader('Content-Type', 'image/png'); return res.end(Buffer.from('globe')); }   // a placeholder picture with a 404
+      if (u.pathname === '/sfc/careers.example.com/job/Technical-Manager/172654-en_US') {   // SuccessFactors: the company, then the job, with spans inside
+        res.setHeader('Content-Type', 'text/html');
+        return res.end('<html><span itemprop="description"><p>About us</p></span><div class="job"><span xml:lang="en-US" itemprop="description" class="x"><div><h2>Skill Requirements</h2>' +
+          '<ul><li><span style="font-family:aptos">Strong hands-on expertise in Java 17, Spring Boot</span></li><li>Hands-on AWS experience with EC2, S3, SQS</li></ul></div></span></div><span>footer</span></html>');
+      }
+      if (u.pathname === '/orc/fa-x.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails') {
+        return send({ items: [{ ExternalDescriptionStr: '<p>Tax consulting role</p>', ExternalResponsibilitiesStr: '<ul><li>Prepare returns</li></ul>', ExternalQualificationsStr: '<p>CA qualified</p>' }] });
+      }
       if (u.pathname === '/lever/fabrikam/l1') return send({ descriptionPlain: 'Build APIs', lists: [{ text: 'Requirements', content: '<li>Node.js</li><li>PostgreSQL</li>' }], additionalPlain: 'Hybrid' });
       if (u.pathname === '/sr/Northwind/postings/s1') return send({ jobAd: { sections: { jobDescription: { title: 'Job', text: '<p>Test our apps</p>' }, qualifications: { title: 'Qualifications', text: '<ul><li>Selenium</li></ul>' } } } });
       if (u.pathname === '/wd/wday/cxs/woodgrove/External/job/Pune/Cloud_0') return send({ jobPostingInfo: { jobDescription: '<p>Terraform and AWS</p>' } });
@@ -111,7 +122,7 @@ async function fakeGemini() {
       const system = body.systemInstruction.parts[0].text, user = body.contents[0].parts[0].text;
       let out;
       if (/expert career coach/.test(system)) {
-        out = { summary: 'Close to a full fit.', matched: ['C#', '.NET'],
+        out = { summary: 'Close to a full fit.', matched: ['C#', '.NET', 'Presales and RFP writing'],
           requirements: [
             { skill: 'C# / .NET', type: 'technical', priority: 'must', quote: '5+ years of C# and .NET experience', weight: 40, status: 'match', evidence: 'Contoso, 6 years' },
             { skill: 'Azure DevOps', type: 'technical', priority: 'must', quote: 'Hands-on  Azure DevOps pipelines.', weight: 30, status: 'partial', evidence: 'Some pipelines' },
@@ -119,8 +130,10 @@ async function fakeGemini() {
             { skill: 'Agile', type: 'functional', priority: 'nice', quote: 'Agile ways of working', weight: 20, status: 'unknown' },
             { skill: 'Kubernetes', type: 'technical', priority: 'must', quote: 'Kubernetes clusters', weight: 25, status: 'missing' }],                // not in the description: dropped
           gaps: [{ skill: 'Docker', points: 6, importance: 'medium', why: 'Containers', howToClose: 'Build one app', hours: 10, searchQuery: 'Docker for .NET developers', provider: 'docker', certification: '' },
-            { skill: 'Azure DevOps', points: 9, importance: 'high', why: 'CI/CD', howToClose: 'Set up a pipeline', hours: 12, searchQuery: 'Azure DevOps pipelines tutorial', provider: 'microsoft', certification: 'AZ-400' }],
-          revise: [{ topic: 'ASP.NET Core middleware', searchQuery: 'ASP.NET Core middleware interview' }],
+            { skill: 'Azure DevOps pipelines', points: 9, importance: 'high', why: 'CI/CD', howToClose: 'Set up a pipeline', hours: 12, searchQuery: 'Azure DevOps pipelines tutorial', provider: 'microsoft', certification: 'AZ-400' },
+            { skill: 'Presales & Account Mining', points: 5, importance: 'medium', why: 'Usual for managers', howToClose: 'Write an RFP', hours: 10, searchQuery: 'RFP', provider: 'other', certification: '' },   // not in the description: dropped
+            { skill: 'Kubernetes', points: 4, importance: 'low', why: 'Containers', howToClose: 'Learn it', hours: 10, searchQuery: 'k8s', provider: 'other', certification: '' }],             // its row was dropped: so is the gap
+          revise: [{ topic: 'C# and .NET', searchQuery: 'C# .NET interview questions' }, { topic: 'Cloud migration and FinOps', searchQuery: 'FinOps' }],
           plan: ['Week 1: Azure DevOps'], interviewQuestions: ['What is middleware?'], tips: ['Lead with your API work'] };
       } else if (/This step only analyses the candidate/.test(system)) {
         out = { level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
@@ -142,7 +155,7 @@ async function fakeGemini() {
 
 async function start() {
   const boards = await fakeBoards(), ai = await fakeGemini();
-  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase,
+  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase, logoBase: boards.base + '/icons',
     jobCatalogue: [{ name: 'Contoso', url: 'https://boards.greenhouse.io/contoso' }, { name: 'Northwind', url: 'https://careers.smartrecruiters.com/Northwind' }] });
   const base = await listen(app.server);
   aikeys.addKey(app.db, app.vault, { provider: 'gemini', label: 'Gemini', key: 'AIza' + 'g'.repeat(35) + 'GGGG', makeDefault: true });
@@ -312,6 +325,9 @@ test('AI Job search: live jobs from the built-in companies, filtered by country 
     assert.match(scoring.systemInstruction.parts[0].text, /^CUSTOM MASTER PROMPT[\s\S]*Never invent companies, jobs or links/);
     assert.match(scoring.contents[0].parts[0].text, /=== RESUME: Scrum Master ===/);
     assert.match(scoring.contents[0].parts[0].text, /Country: India/);
+    // a job listed without a usable description is scored with the one read from its own page
+    assert.match(scoring.contents[0].parts[0].text, /Hands-on Azure DevOps pipelines/);
+    assert.match(scoring.contents[0].parts[0].text, /none given: score from the title only/);   // Northwind's jobs have no page we can read
 
     const list = (await web.get('/api/career/jobsearch')).json;
     assert.equal(list.searches.length, 1);
@@ -396,8 +412,13 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     const r = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id });
     assert.equal(r.status, 200);
     const prep = r.json.prep;
-    assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Azure DevOps', 9], ['Docker', 6]]);      // biggest gap first
+    // gaps are requirements of the matrix (named as in it), biggest first; "Presales & Account Mining" is not in the
+    // description and Kubernetes' row was dropped, so neither is a gap
+    assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Azure DevOps', 9], ['Docker', 6]]);
     assert.equal(prep.gapPoints, 15);
+    assert.deepEqual(prep.matched, ['C#', '.NET']);                                          // "Presales and RFP writing" is not in the description
+    assert.deepEqual(prep.revise.map(x => x.topic), ['C# and .NET']);                        // "Cloud migration and FinOps" is not either
+    assert.match(s.ai.seen[calls].systemInstruction.parts[0].text, /no RFPs, presales/);
     // the AI was given the job's whole description, read from its own page on the board, and it is kept for a week
     const asked = s.ai.seen[calls].contents[0].parts[0].text;
     assert.match(asked, /Nice to have: Agile ways of working/);
@@ -410,7 +431,7 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     assert.deepEqual([prep.matrix.checked, prep.matrix.dropped, prep.matrix.types], [true, 1, { technical: 3, functional: 1 }]);
     assert.equal(prep.matrix.rows.find(r => r.skill === 'Azure DevOps').quote, 'Hands-on  Azure DevOps pipelines.');   // found whatever the spacing
     assert.equal(prep.matrix.rows.find(r => r.skill === 'Docker').quote, '');                                         // not word for word: no quote shown
-    assert.deepEqual([prep.version, prep.description], [2, 'full']);
+    assert.deepEqual([prep.version, prep.description], [3, 'full']);
     assert.equal(prep.matrix.rows.reduce((n, r) => n + r.weight, 0), 100);
     assert.equal(prep.matrix.score, 50);
     assert.deepEqual(prep.matrix.counts, { match: 1, partial: 1, missing: 2 });
@@ -444,6 +465,22 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     const remade = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: job.id, refresh: true });
     assert.ok(remade.json.prep.matrix);
     assert.equal(remade.json.usage.used, used + 1);
+
+    // a job whose careers site gives no description we can read: no guessing from its title, and no AI action used;
+    // the candidate pastes the description instead
+    const scrum = (await web.jobsOf(search)).find(j => j.title === 'Scrum Master');
+    const calls2 = s.ai.seen.length;
+    const none = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: scrum.id });
+    assert.deepEqual([none.status, none.json.code], [422, 'no-description']);
+    assert.match(none.json.error, /paste it here/);
+    assert.equal(s.ai.seen.length, calls2);
+    assert.equal((await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: scrum.id, description: 'Too short' })).status, 400);
+    const pastedJd = 'Scrum Master for our payments teams. You will facilitate Agile ways of working, coach teams on Scrum, and keep Jira boards healthy. ' +
+      'Requirements: 5+ years of C# and .NET experience, hands-on Azure DevOps pipelines, Docker containers. Nice to have: Agile ways of working at scale, and experience with payments products.';
+    const fromPaste = await web.post(`/api/career/jobsearch/${search.id}/prep`, { jobId: scrum.id, description: pastedJd });
+    assert.equal(fromPaste.status, 200);
+    assert.equal(fromPaste.json.prep.description, 'pasted');
+    assert.match(s.ai.seen[calls2].contents[0].parts[0].text, /Scrum Master for our payments teams/);
   });
 });
 
@@ -490,6 +527,10 @@ test('a job\'s whole description is read from its own page on Greenhouse, Lever,
     assert.equal(await sources.fetchDescription({ provider: 'ashby', board: 'tailspin' }, { externalId: 'a1' }, opts), 'Roadmaps');
     assert.equal(await sources.fetchDescription({ provider: 'workday', board: 'woodgrove/External', wd: 'wd5' },
       { externalId: 'R0', url: 'https://woodgrove.wd5.myworkdayjobs.com/External/job/Pune/Cloud_0' }, opts), 'Terraform and AWS');
+    assert.equal(await sources.fetchDescription({ provider: 'sfclassic', board: 'careers.example.com' },
+      { externalId: '172654', url: 'https://careers.example.com/job/Technical-Manager/172654-en_US' }, opts),
+    'About us\nSkill Requirements\n Strong hands-on expertise in Java 17, Spring Boot \n Hands-on AWS experience with EC2, S3, SQS');
+    assert.equal(await sources.fetchDescription({ provider: 'oraclehcm', board: 'fa-x.oraclecloud.com/CX' }, { externalId: 'R1' }, opts), 'Tax consulting role\nPrepare returns\nCA qualified');
     assert.equal(await sources.fetchDescription({ provider: 'amazon', board: 'IND' }, { externalId: '1' }, opts), null);   // no single-job page: the list's text is used
     await assert.rejects(sources.fetchDescription({ provider: 'greenhouse', board: 'contoso' }, { externalId: '404' }, opts));
   } finally { await boards.close(); }
@@ -503,4 +544,16 @@ test('company logos: the built-in companies\' web addresses, else the host of th
   assert.equal(companyDomain('Acme', 'https://careers.acme.co.in/jobs'), 'acme.co.in');
   assert.equal(companyDomain('Acme', 'https://boards.greenhouse.io/acme'), '');   // a job board says nothing about the company
   assert.equal(companyDomain('Acme', ''), '');
+});
+
+test('company logos come through our own server: a real icon, else a plain 404 so the page shows initials', async () => {
+  await withServer(async s => {
+    const real = await fetch(s.base + '/api/logo/stripe.com');
+    assert.equal(real.status, 200);
+    assert.equal(real.headers.get('content-type'), 'image/x-icon');
+    assert.match(real.headers.get('cache-control'), /max-age=604800/);
+    assert.deepEqual([...Buffer.from(await real.arrayBuffer())], [0, 0, 1, 0, 1]);
+    assert.equal((await fetch(s.base + '/api/logo/unknown-co.com')).status, 404);      // the icon service's placeholder is not passed on
+    assert.equal((await fetch(s.base + '/api/logo/not%20a%20domain')).status, 400);
+  });
 });

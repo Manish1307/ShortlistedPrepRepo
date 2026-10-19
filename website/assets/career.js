@@ -34,7 +34,7 @@
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (r.status === 401) { goSignIn(); throw new Error('Please sign in again.'); }
           if (r.status === 403 && j.code === 'password_change') { location.replace('account.html'); throw new Error(j.error); }
-          if (!r.ok) throw new Error(j.error || 'Something went wrong (' + r.status + ')');
+          if (!r.ok) { var err = new Error(j.error || 'Something went wrong (' + r.status + ')'); err.code = j.code; throw err; }
           return j;
         });
       });
@@ -428,12 +428,13 @@
   }
   function insightView(p, job, refresh, tab) {
     var reach = Math.min(100, p.fit + p.gapPoints);
-    var exact = (p.version || 1) >= 2;
+    var exact = (p.version || 1) >= 2;     // the skill matrix comes from the job description
+    var current = (p.version || 1) >= 3;   // and so do the gaps, topics and questions
     var buttons = {}, panels = {};
     var uid = 'in' + job.id;
 
-    var oldNote = exact ? null : h('div', { class: 'in-note' },
-      h('span', {}, 'This Insight was made before skill matrices were taken word for word from the job description.'),
+    var oldNote = current ? null : h('div', { class: 'in-note' },
+      h('span', {}, 'This Insight was made before every part of it was checked against the job description, so some of it may not fit this job.'),
       h('button', { class: 'btn btn-sm btn-primary', type: 'button', onclick: refresh }, 'Update Insight (uses 1 AI action)'));
     var noDescription = function () {
       return h('div', { class: 'in-note' }, h('span', {}, 'The careers site does not publish this job\'s description, so an exact skill matrix cannot be made for it.'),
@@ -453,12 +454,12 @@
 
     var bodies = {
       gap: function () {
-        return h('div', {}, oldNote,
+        return h('div', {},
           p.matrix ? [h('p', { class: 'ac-muted pp-intro' }, 'Each requirement of this job against your resume. Click a row to see how to close that gap.'), matrixView(p.matrix, p.fit, toGap)]
-            : exact ? noDescription() : null);
+            : noDescription());
       },
       skills: function () {
-        return h('div', {}, exact ? (p.matrix ? skillsView(p.matrix) : noDescription()) : oldNote);
+        return h('div', {}, exact && p.matrix ? skillsView(p.matrix) : exact ? noDescription() : h('p', { class: 'ac-muted' }, 'Update this Insight to see the job\'s technical and functional requirements.'));
       },
       close: function () {
         return h('div', {},
@@ -512,7 +513,9 @@
       panels[t[0]] = h('div', { class: 'in-panel', role: 'tabpanel', id: uid + '-' + t[0] + '-p', 'aria-labelledby': uid + '-' + t[0], tabindex: '0' }, bodies[t[0]]());
     });
     var box = h('div', { class: 'pp in' },
+      oldNote,
       p.summary ? h('p', { class: 'pp-summary' }, p.summary) : null,
+      p.description === 'pasted' ? h('p', { class: 'ac-muted pp-intro' }, 'Made from the job description you pasted.') : null,
       tabs, INSIGHT_TABS.map(function (t) { return panels[t[0]]; }),
       h('p', { class: 'ac-muted pp-note' }, 'Links open a search on YouTube, Udemy, Coursera, official documentation and article sites, so you always see current material. Made ' + dateTime(p.createdAt) + '.'));
     select(tab || 'gap');
@@ -543,16 +546,29 @@
     var cell = h('td', { colspan: String(cols), class: 'pp-cell' });
     var row = h('tr', { class: 'pp-row' }, cell);
     function show(p, tab) { cell.replaceChildren(insightView(p, job, function () { load(true, 'gap'); }, tab)); }
-    function load(refresh, tab) {
-      if (job.insightData && refresh !== true) { show(job.insightData, tab); return; }
-      var text = job.insight && refresh !== true ? 'Opening Insight…' : 'Reading the job description and building your Insight… (about 20 seconds)';
+    function load(refresh, tab, description) {
+      if (job.insightData && refresh !== true && !description) { show(job.insightData, tab); return; }
+      var text = job.insight && refresh !== true && !description ? 'Opening Insight…' : 'Reading the job description and building your Insight… (about 20 seconds)';
       cell.replaceChildren(h('p', { class: 'js-status busy' }, h('span', { class: 'js-status-in' }, h('span', { class: 'js-spin', 'aria-hidden': 'true' }), h('span', {}, text))));
-      call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id, refresh: refresh === true }).then(function (d) {
+      call('POST', '/api/career/jobsearch/' + searchId + '/prep', { jobId: job.id, refresh: refresh === true, description: description || undefined }).then(function (d) {
         job.insightData = d.prep; job.insight = true; setUsage(d.usage); show(d.prep, tab);
       }).catch(function (e) {
-        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, tab); } }, 'Try again');
+        if (e.code === 'no-description') { cell.replaceChildren(pasteBox(e.message)); return; }
+        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, tab, description); } }, 'Try again');
         cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', retry));
       });
+    }
+    /** The careers site gave no description we can read: the candidate pastes it from the job page. */
+    function pasteBox(why) {
+      var area = h('textarea', { rows: '8', maxlength: '15000', placeholder: 'Paste the whole job description here: summary, responsibilities and requirements…', 'aria-label': 'Job description for ' + job.title });
+      var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
+      var go = h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () {
+        if (area.value.trim().length < 300) { message(out, 'Paste the whole job description (it looks too short).', 'bad'); area.focus(); return; }
+        load(false, 'gap', area.value.trim());
+      } }, 'Build my Insight');
+      return h('div', { class: 'pp in' },
+        h('div', { class: 'in-note' }, h('span', {}, why), h('a', { class: 'btn btn-sm', href: job.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the job at ' + job.company + ' ↗')),
+        area, h('div', { class: 'cr-actions' }, go), out);
     }
     return { row: row, load: load };
   }
@@ -653,7 +669,7 @@
   function companyCell(j) {
     var initials = String(j.company || '?').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase() || '?';
     var badge = h('span', { class: 'jb-initials', 'aria-hidden': 'true' }, initials);
-    var logo = j.domain ? h('img', { class: 'jb-logo', src: 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(j.domain) + '&sz=64', alt: '', width: '28', height: '28', loading: 'lazy', referrerpolicy: 'no-referrer' }) : null;
+    var logo = j.domain ? h('img', { class: 'jb-logo', src: API + '/api/logo/' + encodeURIComponent(j.domain), alt: '', width: '28', height: '28', loading: 'lazy' }) : null;   // 404 when there is none: the initials show
     if (logo) logo.addEventListener('error', function () { logo.replaceWith(badge); });
     return h('span', { class: 'jb-co' }, logo || badge, h('span', {}, j.company));
   }

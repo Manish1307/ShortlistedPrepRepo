@@ -413,3 +413,4 @@
   .in-tab[aria-selected="true"] { background: var(--purple-l); border-color: var(--purple); }
   .jb-pager { justify-content: flex-start; }
 }
+.pp.in > textarea { width: 100%; margin-top: 4px; }

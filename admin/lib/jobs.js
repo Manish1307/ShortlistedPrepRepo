@@ -27,6 +27,7 @@ const AI_BATCH = 60;              // jobs the AI scores per search
 const MAX_COMPANIES = 30;         // typed by the candidate
 const KEEP_SEARCHES = 20;         // per candidate
 const BUCKETS = ['high', 'medium', 'stretch'];
+const MIN_SCORE = 20;             // a job scored below this is from another field: not shown
 const PAGE_SIZE = 5;              // jobs per page of a group on the website
 const DESCRIPTION_FRESH = 7 * DAY;  // a job's full description, read for Insight, is kept this long
 const DESCRIPTION_BUDGET = 25000;   // a search waits at most this long for the descriptions of the jobs it scores
@@ -39,16 +40,20 @@ function keyPart(description, n) {
 }
 const LEVELS = ['', 'Fresher / entry-level', 'Mid-level', 'Senior', 'Lead / manager'];
 
-const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting machine for candidates in India.
+const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting machine for candidates in India, in EVERY field: IT, science and research
+(agriculture, biotech, pharma, laboratories), engineering, manufacturing, healthcare, finance, sales, education and more.
+Never assume the candidate works in IT. Decide the candidate's field from the resume first, then judge every job only inside that field.
 
 1. Analyse the candidate's resume(s) in depth: skills, tools, domain, education, years of experience and achievements.
    Work out their real level (fresher / entry-level, mid-level, senior, lead or manager) and the roles they should target.
    Suggest fresher or entry-level roles only when the resume shows little or no work experience.
-2. Respect the candidate's search preferences (country, city, role, level) when they give them.
+2. Respect the candidate's search preferences (country, city, role, level) when they give them. When they leave something
+   open, decide it yourself from the resume: the industries, the kinds of employers, the location and the experience level.
 3. For each job posting, give a fit score from 0 to 100:
    - required skills and tools the candidate actually has (40%)
    - experience level match: not too junior, not too senior (25%)
-   - role and domain relevance (20%)
+   - role and domain relevance (20%). A job in a different field from the candidate's (e.g. a software or data job for a
+     plant-science researcher) scores under 20, even if one word of the title matches
    - location fit with the candidate's preferences (15%)
 4. Put every job in one group:
    - "high": high probability, apply first (score 75 or more)
@@ -62,19 +67,26 @@ const DEFAULT_MASTER_PROMPT = `Act as an expert AI recruiter and job-hunting mac
 const ANALYSIS_RULES = `RULES (always apply):
 - This step only analyses the candidate. Do not list or invent jobs.
 - Never claim skills or experience the resume does not show.
+- Do not default to IT. Use the candidate's real field; for a lab, research or agri candidate name seed, agri-biotech, pharma and research employers.
 - Reply with ONLY a JSON object:
 {
   "level": "e.g. Mid-level (6 years)",
   "summary": "one or two sentences about the candidate",
   "strengths": ["3-6 strongest areas"],
+  "field": "the candidate's professional field, e.g. plant biotechnology, software engineering, pharma quality",
   "targetRoles": ["3-6 job titles to target, best first"],
-  "searchTerms": ["6-15 short job-title words or phrases that find matching postings, e.g. program manager, power platform, scrum master"],
+  "searchTerms": ["6-15 short job-title phrases from THE CANDIDATE'S OWN FIELD that find matching postings (not generic single words)"],
+  "avoidTerms": ["3-10 job-title phrases from OTHER fields that share words with the target roles and must be excluded, e.g. data scientist for a lab scientist"],
+  "employers": ["10-20 real employers in India (or the chosen country) that hire for this field"],
+  "builtInCompaniesFit": true or false (true ONLY if the field is IT, software, IT services, consulting or general business),
+  "country": "the best country to search when the candidate gave none, else empty",
   "resumeFixes": ["up to 6 specific fixes to the resume before applying"]
 }`;
 
 const SCORING_RULES = `RULES (always apply):
 - Score ONLY the job postings listed below, using their exact "id". Never invent companies, jobs or links.
 - Never claim the candidate has skills or experience the resume does not show.
+- A job from a different field than the candidate's (e.g. software or data for a lab scientist) must score under 20, whatever its title words.
 - Reply with ONLY a JSON object:
 { "matches": [ { "id": 123, "score": 0-100, "bucket": "high" | "medium" | "stretch", "why": "one sentence", "gap": "short phrase or none", "resume": "label of the best resume to send" } ] }
 Include every listed job in "matches".`;
@@ -313,43 +325,60 @@ function addRoutes(ctx) {
   async function runSearch(id, customerId, p, resumes) {
     const step = progress => db.prepare('UPDATE career_job_searches SET progress = ? WHERE id = ?').run(progress, id);
     try {
-      // 1. the companies' career sites
+      // 1. the candidate's profile first: the AI decides the field, the employers, the country and the job titles to look for
+      step('Analysing your resume…');
       const typed = companyList(p.companies);
-      step(typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : 'Getting ready to search…');
-      const resolved = typed.length ? await Promise.all(typed.map(resolve))
-        : catalogue.map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url), builtIn: true }));
-      const rows = resolved.filter(r => r.row).map(r => r.row);
+      const prompt = masterPrompt(db).prompt;
+      const resumeBlock = resumes.map(r => `=== RESUME: ${r.label} ===\n${r.text.slice(0, resumes.length > 1 ? 8000 : 20000)}`).join('\n\n').slice(0, 40000);
+      const wishes = [`Country: ${p.country || '(decide from the resume)'}`, `City: ${p.city || 'any'}`, `Role or keywords: ${p.role || '(let the AI decide)'}`, `Level: ${p.level || '(let the AI decide from the resume)'}`,
+        `Companies: ${typed.length ? typed.join(', ') : '(let the AI decide which kinds of employers fit)'}`].join('\n');
+      const a = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
+      const profile = { level: String(a.level || '').slice(0, 100), summary: String(a.summary || '').slice(0, 400), strengths: strings(a.strengths, 6, 120),
+        targetRoles: strings(a.targetRoles, 6, 80), resumeFixes: strings(a.resumeFixes, 6, 300), field: String(a.field || '').slice(0, 100) };
+
+      // 2. the companies' career sites: the ones typed; else the employers the AI names for the candidate's field
+      // (the built-in list of IT and consulting firms only when the field fits it)
+      step(typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : `Finding employers${profile.field ? ' in ' + profile.field : ''}…`);
+      const builtIn = () => catalogue.map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url), builtIn: true }));
+      let resolved;
+      if (typed.length) resolved = await Promise.all(typed.map(resolve));
+      else {
+        const named = (await Promise.all(strings(a.employers, 20, 80).map(resolve))).filter(r => r.row);
+        resolved = a.builtInCompaniesFit === false ? named : [...named, ...builtIn()];
+        if (!resolved.length) resolved = builtIn();
+      }
+      const rows = [...new Map(resolved.filter(r => r.row).map(r => [r.row.id, r.row])).values()];
       if (!rows.length) throw new ApiError(400, 'None of those companies could be found. Check the names, or paste the link of their careers page.');
       const { loading } = await gather(db, rows, fetchOpts, (done, total) => step(`Reading live openings from career sites: ${done} of ${total}…`), budget);
 
-      // 2. the jobs within the candidate's filters
-      const where = [`j.active = 1`, `j.company_id IN (${rows.map(() => '?').join(',')})`], params = rows.map(r => r.id);
-      if (p.country) {
-        where.push(`(j.country = ? OR j.location LIKE ? ESCAPE '\\'${p.remote ? " OR (j.country IN ('', 'Remote') AND j.location LIKE '%remote%')" : ''})`);   // remote, but not tied to another country
-        params.push(p.country, likeTerm(p.country));
-      }
-      if (p.city) { where.push("j.location LIKE ? ESCAPE '\\'"); params.push(likeTerm(p.city)); }
-      if (p.days) { where.push('j.posted_at >= ?'); params.push(new Date(Date.now() - p.days * DAY).toISOString()); }
-      const pool = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.posted_at, j.url, substr(j.description, 1, 1500) AS description, c.name AS company, c.careers_url
-                        FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE ${where.join(' AND ')}
-                        ORDER BY j.posted_at IS NULL, j.posted_at DESC LIMIT 20000`, ...params);
+      // 3. the jobs within the filters; the country the AI chose is dropped if it leaves nothing
+      const poolFor = country => {
+        const where = [`j.active = 1`, `j.company_id IN (${rows.map(() => '?').join(',')})`], params = rows.map(r => r.id);
+        if (country) {
+          where.push(`(j.country = ? OR j.location LIKE ? ESCAPE '\\'${p.remote ? " OR (j.country IN ('', 'Remote') AND j.location LIKE '%remote%')" : ''})`);   // remote, but not tied to another country
+          params.push(country, likeTerm(country));
+        }
+        if (p.city) { where.push("j.location LIKE ? ESCAPE '\\'"); params.push(likeTerm(p.city)); }
+        if (p.days) { where.push('j.posted_at >= ?'); params.push(new Date(Date.now() - p.days * DAY).toISOString()); }
+        return all(`SELECT j.id, j.title, j.location, j.country, j.department, j.posted_at, j.url, substr(j.description, 1, 1500) AS description, c.name AS company, c.careers_url
+                    FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE ${where.join(' AND ')}
+                    ORDER BY j.posted_at IS NULL, j.posted_at DESC LIMIT 20000`, ...params);
+      };
+      let pool = poolFor(p.country || String(a.country || '').slice(0, 80));
+      if (!pool.length && !p.country) pool = poolFor('');
       if (!pool.length) throw new ApiError(400, `No live openings were found${p.country ? ' in ' + p.country : ''}${p.city ? ', ' + p.city : ''} at ${typed.length ? 'those companies' : 'the companies we searched'}. Try a wider location, a longer date range, or other companies.`);
 
-      // 3. the candidate's profile (and the job titles to look for)
-      step('Analysing your resume…');
-      const prompt = masterPrompt(db).prompt;
-      const resumeBlock = resumes.map(r => `=== RESUME: ${r.label} ===\n${r.text.slice(0, resumes.length > 1 ? 8000 : 20000)}`).join('\n\n').slice(0, 40000);
-      const wishes = [`Country: ${p.country || 'any'}`, `City: ${p.city || 'any'}`, `Role or keywords: ${p.role || '(let the AI decide)'}`, `Level: ${p.level || '(let the AI decide from the resume)'}`].join('\n');
-      const a = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
-      const profile = { level: String(a.level || '').slice(0, 100), summary: String(a.summary || '').slice(0, 400), strengths: strings(a.strengths, 6, 120),
-        targetRoles: strings(a.targetRoles, 6, 80), resumeFixes: strings(a.resumeFixes, 6, 300) };
-
-      // 4. the most relevant jobs: the role typed and the profile's job titles found in the title (most) and description
-      const role = String(p.role || '').toLowerCase().trim();
-      const phrases = [...new Set([...strings(a.searchTerms, 15, 60), ...profile.targetRoles, ...(role ? [role] : [])].map(s => s.toLowerCase()))].filter(s => s.length > 1);
+      // 4. the most relevant jobs: the roles typed and the profile's job titles found in the title (most) and description;
+      // jobs whose title is from another field (avoidTerms) are left out
+      const roles = String(p.role || '').toLowerCase().split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+      const role = roles.join(' ');
+      const avoid = strings(a.avoidTerms, 10, 60).map(s => s.toLowerCase());
+      const phrases = [...new Set([...strings(a.searchTerms, 15, 60), ...profile.targetRoles, ...roles].map(s => s.toLowerCase()))].filter(s => s.length > 1);
       const relevance = j => {
         const title = j.title.toLowerCase(), rest = (j.department + ' ' + j.description).toLowerCase();
-        let n = !role ? 0 : title.includes(role) ? 12 : rest.includes(role) ? 3 : 0;
+        if (avoid.some(t => title.includes(t))) return 0;
+        let n = 0;
+        for (const r of roles) n += title.includes(r) ? 12 : rest.includes(r) ? 3 : 0;
         for (const ph of phrases) {
           if (title.includes(ph)) { n += 6; continue; }
           const words = ph.split(/\s+/).filter(w => w.length > 2 && !STOP.has(w));
@@ -361,7 +390,8 @@ function addRoutes(ctx) {
       };
       const ranked = pool.map((j, i) => ({ j, r: relevance(j), i })).filter(x => x.r > 0).sort((x, y) => y.r - x.r || x.i - y.i);
       // no single company fills the batch: each gets a fair share first, then the best of the rest fill it up
-      const order = ranked.length ? ranked.map(x => x.j) : pool;
+      if (!ranked.length) throw new ApiError(400, `No live openings matching ${profile.field ? '"' + profile.field + '"' : 'your profile'} were found at ${typed.length ? 'those companies' : 'the employers we searched'}. Try adding the names or careers links of companies in your field, or a wider location.`);
+      const order = ranked.map(x => x.j);
       const share = Math.max(10, Math.ceil(AI_BATCH / rows.length)), perCompany = new Map();
       const first = order.filter(j => { const n = perCompany.get(j.company) || 0; perCompany.set(j.company, n + 1); return n < share; }).slice(0, AI_BATCH);
       const picked = new Set(first);
@@ -397,7 +427,7 @@ function addRoutes(ctx) {
           bucket: BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch',
           why: String(m.why || m.reason || '').slice(0, 300), gap: String(m.gap || '').slice(0, 160),
           resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '', domain: companyDomain(j.company, j.careers_url) };
-      }).sort((x, y) => y.score - x.score);
+      }).filter(j => j.score >= MIN_SCORE).sort((x, y) => y.score - x.score);
       // nothing usable (e.g. the AI answered with made-up ids only): an error, not counted against today's limit
       if (!jobs.length) throw new ApiError(502, 'The AI could not score the jobs this time. Please try again.', 'ai');
 

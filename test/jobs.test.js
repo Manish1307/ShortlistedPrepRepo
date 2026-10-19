@@ -373,7 +373,7 @@ test('AI Job search: failures say why and are not counted; one search at a time'
     const empty = await web.search({ country: 'Japan' });
     assert.equal(empty.json.search.status, 'failed');
     assert.match(empty.json.search.error, /No live openings were found in Japan/);
-    assert.equal(s.ai.seen.length, 0);                                            // no AI call when there are no jobs
+    assert.equal(s.ai.seen.length, 1);                                            // only the resume analysis: no jobs are scored when there are none
 
     s.ai.madeUpOnly(true);
     const bad = await web.search({ country: 'India' });

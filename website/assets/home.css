@@ -468,3 +468,33 @@ html:not([data-auth="member"]) [data-member] { display: none !important; }
   .vi-step, .vi-step.flip { grid-template-columns: 1fr; gap: 16px; } .vi-step.flip .vi-text { order: 0; }
   .vi-steps { gap: 30px; }
 }
+
+/* ---- light theme for the sections that were dark (same look as the desktop apps): white, soft purple and teal gradients ---- */
+.home-gap { background: radial-gradient(900px 520px at 8% 0%, rgba(125, 42, 232, .13), transparent 60%), radial-gradient(800px 520px at 100% 100%, rgba(0, 196, 204, .15), transparent 60%), linear-gradient(180deg, #faf7ff 0%, #ffffff 55%, #f1fcfd 100%); color: var(--body); }
+.home-gap .home-sec-head h2 { color: var(--ink); }
+.home-gap .home-sec-head .lead { color: var(--body); }
+.gap-pill { background: #fff3cd; color: #7a4d00; }
+.gap-grad { background: linear-gradient(90deg, #00a3aa, #7d2ae8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gap-text h3 { color: var(--ink); }
+.gap-text p { color: var(--body); }
+.home-gap .jr-list li { color: var(--ink); }
+.home-gap .jr-list li::before { background: #d9f5ea; color: #0a8a5c; }
+.gap-case { border: 1px solid var(--bd); background: linear-gradient(135deg, #ffffff, #f7f1ff); color: var(--body); box-shadow: var(--shadow-s); }
+.gap-case b { background: #fff3cd; color: #7a4d00; }
+.gap-art { background: linear-gradient(135deg, #efe4ff 0%, #e2fafb 100%); box-shadow: 0 30px 70px -38px rgba(125, 42, 232, .4); border: 1px solid #e3d6fb; }
+.gap-flow div { background: #fff; border: 1px solid var(--bd); box-shadow: var(--shadow-s); }
+.gap-flow div b { color: var(--ink); } .gap-flow div small { color: var(--muted); }
+.gap-flow div.win { background: var(--grad); border-color: transparent; } .gap-flow div.win b, .gap-flow div.win small { color: #fff; }
+.gap-flow i { color: var(--purple); }
+.home-gap .gap-cta .muted { color: var(--muted); }
+
+.m-during { background: linear-gradient(150deg, #e6fafb 0%, #f4ecff 100%); border: 1px solid #cdeff1; color: var(--body); }
+.m-during h3, .m-during .jr-list li { color: var(--ink); }
+.m-during .moment-tag { background: var(--grad); color: #fff; }
+.m-during .jr-list li::before { background: #d9f5ea; color: #0a8a5c; }
+
+.mini-dark { background: linear-gradient(180deg, #ffffff, #f6f0ff); color: var(--ink); }
+.mini-dark .mini-head b { color: var(--purple); } .mini-dark .mini-head small { color: var(--muted); }
+.mini-dark .mini-q { background: #f0e8ff; color: var(--ink); }
+.mini-tip { background: linear-gradient(135deg, #e6fafb, #efe3ff); color: var(--body); }
+.mini-tip b { color: var(--purple-d); }

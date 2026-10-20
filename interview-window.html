@@ -134,6 +134,32 @@
     .qrow .mini { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 16px; }
     .qrow .body { padding: 0 16px 16px; border-top: 1px dashed var(--line); }
     .qrow .said { white-space: pre-wrap; color: var(--muted); }
+    /* "Tell me about yourself" */
+    .introbox { display: grid; gap: 4px; padding: 14px 16px; margin-bottom: 16px; border-radius: 14px; border: 1px solid #d9c8fa; background: linear-gradient(135deg, #e9fbfc, #f1e8ff); font-size: 14px; }
+    .introbox b { font-size: 15px; }
+    .timer.short { background: #fff3cd; color: #7a4d00; } .timer.good { background: #d9f5ea; color: #0a7a55; } .timer.long { background: #ffe5ea; color: #9d1f38; }
+    .pts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+    .pts li { padding-left: 2px; }
+    .ptlabel { display: inline-block; min-width: 86px; margin-right: 10px; padding: 1px 9px; border-radius: 999px; background: #f0e6ff; color: #5b21b6; font-size: 11.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; text-align: center; }
+    .ptbullet { font-weight: 600; }
+    .ptref { margin: 3px 0 0 96px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+    .pts li > .hint, .pts li > .ptref { margin-left: 0; }
+    .ptitle { font-weight: 800; margin-bottom: 4px; }
+    .script { margin-top: 12px; } .script summary { cursor: pointer; font-weight: 700; color: var(--accent); } .script .text { margin-top: 8px; white-space: pre-wrap; }
+    .review .bars5 { display: grid; gap: 8px; margin: 4px 0 18px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--raise); }
+    .bar-row { display: grid; grid-template-columns: 150px 1fr 26px; gap: 12px; align-items: center; font-size: 13.5px; font-weight: 600; }
+    .bar-track { height: 8px; border-radius: 999px; background: var(--raise-2); overflow: hidden; } .bar-fill { height: 100%; border-radius: inherit; background: var(--grad); transition: width .5s var(--ease); }
+    .review .box { margin-top: 16px; } .review .cols { margin-top: 16px; }
+    .vchips { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 10px; }
+    .vchips span { padding: 3px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+    .vchips .ok, .st.ok { background: #d9f5ea; color: #0a7a55; } .vchips .part, .st.part { background: #fff3cd; color: #8a5a00; } .vchips .no, .st.no { background: #ffe5ea; color: #b4235e; }
+    .claim { display: grid; grid-template-columns: auto 1fr; gap: 12px; padding: 10px 0; border-top: 1px dashed var(--line); }
+    .claim .st { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; } .claim .st .i { width: 15px; height: 15px; }
+    .claim .ctext { font-weight: 600; } .claim .clabel { display: block; font-size: 12.5px; margin-top: 2px; background: none !important; }
+    .claim .clabel.ok { color: #0a7a55; } .claim .clabel.part { color: #8a5a00; } .claim .clabel.no { color: #b4235e; }
+    .claim .ptref { margin-left: 0; }
+    .review .better .btn { margin-top: 12px; }
+    @media (max-width: 960px) { .bar-row { grid-template-columns: 110px 1fr 24px; } }
     @media (max-width: 960px) { .setup, .stage, .report, .cols { grid-template-columns: 1fr; } .modes { flex-direction: column; } .form { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -170,6 +196,7 @@
           <div id="modes" class="modes">
             <button type="button" data-mode="generic" class="on"><i data-icon="building"></i>Company practice<small>Pick a company, role and round</small></button>
             <button type="button" data-mode="resume"><i data-icon="doc"></i>My resume<small>Personalised and scenario questions from your resume</small></button>
+            <button type="button" data-mode="intro"><i data-icon="user"></i>Tell me about yourself<small>Your introduction, checked against your resume</small></button>
           </div>
           <div id="resumeForm" class="hidden">
             <div class="form">
@@ -187,6 +214,30 @@
             </div>
             <div id="prevSets" class="prev hidden"></div>
             <p class="note">The questions come only from the resume you pick. They are saved to your ShortlistPrep account, so you can find them again in My account and your support team can see them.</p>
+          </div>
+          <div id="introForm" class="hidden">
+            <div class="introbox">
+              <b>The question every interview starts with.</b>
+              <span>Answer "Tell me about yourself" out loud or by typing. We check every fact against your resume, score your answer, show what to change, and give you personalised points to cover.</span>
+            </div>
+            <div class="form">
+              <div class="field full">
+                <label for="introResume">Resume to check against</label>
+                <select id="introResume"></select>
+              </div>
+              <div class="field">
+                <label for="introRole">Target role (optional)</label>
+                <input id="introRole" type="text" maxlength="120" placeholder="e.g. Seed breeder, Data analyst" />
+              </div>
+              <div class="field">
+                <label for="introCompany">Company (optional)</label>
+                <input id="introCompany" type="text" maxlength="100" placeholder="e.g. Corteva" />
+              </div>
+              <div class="field full">
+                <label class="check"><input id="speakI" type="checkbox" checked /> Read the question aloud</label>
+              </div>
+            </div>
+            <p class="note">We also use the topics your support team set for you. Your answer and the review are saved to your ShortlistPrep account.</p>
           </div>
           <div class="form" id="genericForm">
             <div class="field">

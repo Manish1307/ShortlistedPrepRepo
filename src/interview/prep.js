@@ -39,6 +39,10 @@ class InterviewPrepClient {
   resumes() { return this._call('GET', '/api/app/interview/resumes'); }
   /** Personalised questions from one resume (one AI action; saved on the server). */
   makeSet({ resumeKey, role }) { return this._call('POST', '/api/app/interview/questions', { resumeKey: String(resumeKey || ''), role: String(role || '') }, 120000).then(d => d.set); }
+  /** The introduction guide (personalised bullet points and a script) for a resume, role and company. Kept by the server. */
+  introGuide({ resumeKey, role, company, refresh }) { return this._call('POST', '/api/app/interview/intro/guide', { resumeKey: String(resumeKey || ''), role: String(role || ''), company: String(company || ''), refresh: refresh === true }, 120000).then(d => d.intro); }
+  /** The review of the candidate's answer to "Tell me about yourself", checked against the resume. */
+  introReview({ resumeKey, role, company, answer, seconds }) { return this._call('POST', '/api/app/interview/intro/review', { resumeKey: String(resumeKey || ''), role: String(role || ''), company: String(company || ''), answer: String(answer || ''), seconds: Number(seconds) || 0 }, 150000).then(d => d.intro); }
   /** An earlier set, with its questions and answers. */
   getSet(id) { return this._call('GET', '/api/app/interview/sets/' + encodeURIComponent(id)).then(d => d.set); }
 }

@@ -95,11 +95,11 @@ function metricsOf(answer, seconds) {
   const spoken = Math.max(0, Math.round(Number(seconds) || 0));
   const est = Math.round(w / 2.4);   // about 145 words a minute
   const fillers = (String(answer || '').match(FILLER) || []).length;
-  const shown = spoken >= 10 ? spoken : est;
+  const shown = est;   // how long it takes to SAY these words: fair for typed and spoken answers alike (the timer also counts thinking and typing)
   return {
     words: w, seconds: spoken, estSeconds: est, fillers,
     length: shown < 40 ? 'short' : shown <= 110 ? 'good' : 'long',
-    note: shown < 40 ? 'Too short: about ' + shown + ' seconds. Aim for 60 to 90.' : shown <= 110 ? 'A good length: about ' + shown + ' seconds.' : 'Long: about ' + shown + ' seconds. Aim for 60 to 90.',
+    note: shown < 40 ? 'Too short: aim for 60 to 90 seconds.' : shown <= 110 ? 'A good length.' : 'Too long: aim for 60 to 90 seconds.',
   };
 }
 

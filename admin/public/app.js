@@ -256,14 +256,21 @@
 
   /** The customer's personalised interview questions (made in the Virtual Interview app or on the website), with their model answers. */
   async function interviewSection(customerId) {
-    const { sets } = await get(`/admin/api/customers/${customerId}/interview`);
+    const { sets, intros = [] } = await get(`/admin/api/customers/${customerId}/interview`);
     const kinds = { personal: 'From the resume', scenario: 'Scenario' };
+    const statusText = { supported: 'in resume', partly: 'partly in resume', not_in_resume: 'NOT in resume' };
+    const introList = intros.length ? [h('h3', { style: 'margin-top:14px' }, `Tell me about yourself (${intros.length})`), ...intros.map(x => h('details', { class: 'list-item', style: 'display:block' },
+      h('summary', {}, h('b', {}, (x.kind === 'attempt' && x.review ? `Score ${x.review.score}/10` : 'Guide') + ' · ' + x.resumeLabel + (x.role ? ' · ' + x.role : '') + (x.company ? ' · ' + x.company : '')), ` · ${dateTime(x.createdAt)} · ${x.source === 'app' ? 'Virtual Interview app' : 'website'}`),
+      x.kind === 'attempt' && x.review ? h('div', { class: 'small' }, h('p', {}, x.review.verdict), h('p', { class: 'muted' }, 'Answer: ' + x.answer),
+        h('ul', {}, x.review.claims.map(c => h('li', {}, `${c.claim} (${statusText[c.status] || c.status})${c.note ? ': ' + c.note : ''}`))),
+        h('p', {}, h('b', {}, 'More impressive version: '), x.review.impressive))
+        : h('ul', { class: 'small' }, ((x.guide && x.guide.points) || []).map(p => h('li', {}, `${p.label}: ${p.bullet}`)))))] : [];
     return h('div', {}, h('h3', { style: 'margin-top:14px' }, `Interview prep (${sets.length})`),
       sets.length ? sets.map(set => h('details', { class: 'list-item', style: 'display:block' },
         h('summary', {}, h('b', {}, set.resumeLabel + (set.role ? ' · ' + set.role : '')), ` · ${dateTime(set.createdAt)} · ${set.questions.length} questions · ${set.source === 'app' ? 'Virtual Interview app' : 'website'}`),
         h('ol', { class: 'small' }, set.questions.map(q => h('li', {}, h('span', { class: 'muted' }, kinds[q.kind] + ': '), q.question,
           q.resumeRef ? h('div', { class: 'muted' }, 'Resume: "' + q.resumeRef + '"') : null, h('div', { class: 'muted' }, 'Answer: ' + q.answer)))))) 
-        : h('p', { class: 'muted small' }, 'No personalised question sets yet. They are made in the Virtual Interview app or in My account → Interview prep.'));
+        : h('p', { class: 'muted small' }, 'No personalised question sets yet. They are made in the Virtual Interview app or in My account → Interview prep.'), ...introList);
   }
 
   async function customerDetail(id, done) {

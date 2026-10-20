@@ -52,6 +52,8 @@
     list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
     flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
     chevron: '<path d="M6 9l6 6 6-6"/>',
+    alert: '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
   };
 
   function icon(name, cls) {

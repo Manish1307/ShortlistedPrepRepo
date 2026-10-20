@@ -14,7 +14,8 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
-  function show(view) { ['viewSetup', 'viewSet', 'viewInterview', 'viewReport'].forEach(v => $(v).classList.toggle('hidden', v !== view)); window.scrollTo(0, 0); }
+  let introActive = false;   // practising "Tell me about yourself"
+  function show(view) { ['viewSetup', 'viewSet', 'viewInterview', 'viewReport'].forEach(v => $(v).classList.toggle('hidden', v !== view)); if (view !== 'viewInterview') introActive = false; window.scrollTo(0, 0); }
   function banner(text, kind) { const b = $('banner'); b.textContent = text || ''; b.className = 'banner' + (kind === 'info' ? ' info' : '') + (text ? '' : ' hidden'); }
   function chip(id, kind, text) { const c = $(id); c.className = 'chip ' + kind; c.lastChild.textContent = text; }
   const scoreClass = s => (s >= 7 ? 'good' : s >= 5 ? 'mid' : 'bad');
@@ -83,7 +84,7 @@
       $('gateActivate').classList.toggle('hidden', lic.state === 'check-needed');
     }
     paintChips();
-    if (isLicensed() && mode === 'resume') loadResumes();
+    if (isLicensed() && mode !== 'generic') loadResumes();
   }
   async function activateLicence() {
     const key = $('gateKey').value.trim().toUpperCase();
@@ -118,10 +119,11 @@
     [...$('modes').children].forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
     $('genericForm').classList.toggle('hidden', mode !== 'generic');
     $('resumeForm').classList.toggle('hidden', mode !== 'resume');
+    $('introForm').classList.toggle('hidden', mode !== 'intro');
     $('genericNote').classList.toggle('hidden', mode !== 'generic');
-    $('btnStart').textContent = mode === 'resume' ? 'Get my personalised questions →' : 'Start interview →';
+    $('btnStart').textContent = mode === 'resume' ? 'Get my personalised questions →' : mode === 'intro' ? 'Start: Tell me about yourself →' : 'Start interview →';
     banner('');
-    if (mode === 'resume' && isLicensed()) loadResumes();
+    if (mode !== 'generic' && isLicensed()) loadResumes();
   }
 
   let resumesLoaded = false;
@@ -140,6 +142,7 @@
       sel.appendChild(el('option', '', 'No resume yet'));
       banner('You have no resume yet. Upload it in the Career toolkit on the website (step 1), then come back here.');
     } else res.resumes.forEach(r => { const o = el('option', '', r.label); o.value = r.key; sel.appendChild(o); });
+    $('introResume').replaceChildren(...[...$('resume').options].map(o => o.cloneNode(true)));
     const prev = $('prevSets');
     prev.textContent = '';
     prev.classList.toggle('hidden', !res.sets.length);
@@ -243,6 +246,7 @@
   async function startInterview() {
     readSetup();
     if (!isLicensed()) { banner(LICENCE_TEXT[(info.licence || {}).state] || 'Activate your ClassCue licence first.'); return; }
+    if (mode === 'intro') return startIntro();
     if (mode === 'resume') return makeResumeSet();
     if (!info.hasKey) { banner('AI is not available for this licence yet. Check the licence, then try again.'); return; }
     banner('');
@@ -266,7 +270,7 @@
   }
 
   let timerId = null, seconds = 0;
-  function startTimer() { stopTimer(); seconds = 0; $('timer').textContent = '0:00'; timerId = setInterval(() => { seconds++; $('timer').textContent = fmtTime(seconds); }, 1000); }
+  function startTimer() { stopTimer(); seconds = 0; $('timer').textContent = '0:00'; timerId = setInterval(() => { seconds++; $('timer').textContent = fmtTime(seconds); introTimerTick(); }, 1000); }
   function stopTimer() { clearInterval(timerId); timerId = null; }
 
   function nextQuestion() {
@@ -280,7 +284,7 @@
     const tags = $('qtags');
     tags.textContent = '';
     tags.appendChild(el('span', 'tag', current.topic || 'General'));
-    if (current.kind) tags.appendChild(el('span', 'tag fu', current.kind === 'scenario' ? 'Scenario' : 'From your resume'));
+    if (current.kind && current.kind !== 'intro') tags.appendChild(el('span', 'tag fu', current.kind === 'scenario' ? 'Scenario' : 'From your resume'));
     if (current.followUpOf) tags.appendChild(el('span', 'tag fu', 'Follow-up'));
     $('qref').textContent = current.resumeRef ? `From your resume: "${current.resumeRef}"` : '';
     $('qref').classList.toggle('hidden', !current.resumeRef);
@@ -301,6 +305,7 @@
     busy = false; paintChips();
     paintProgress();
     startTimer();
+    introQuestionSetup();
     if (setup.speak) say(current.question);
     $('answer').focus();
   }
@@ -315,6 +320,7 @@
     $('btnSubmit').disabled = true; $('btnSkip').disabled = true; paintChips();
     const fb = $('feedback');
     fb.textContent = '';
+    if (current.kind === 'intro') { if (await reviewIntro(answer, fb)) current = null; return; }
     const loading = el('div', 'card');
     fb.appendChild(loading);
     const pg = B.progress(loading, { title: 'The interviewer is reviewing your answer', expectedSec: 10, stages: ['Reading your answer', 'Scoring it', 'Writing feedback'] });
@@ -513,6 +519,243 @@
   }
   function hush() { if (window.speechSynthesis) speechSynthesis.cancel(); $('avatar').classList.remove('talking'); }
 
+  // ---- "Tell me about yourself": answer it, then see it checked against your resume ----------------------
+
+  const INTRO_QUESTION = 'Tell me about yourself.';
+  let intro = null;   // { resumeKey, role, company, guide }
+
+  /** The talking points: a label, one sentence to say, and the resume line it comes from. */
+  function pointsList(points) {
+    const ul = el('ul', 'pts');
+    points.forEach(p => {
+      const li = el('li');
+      li.appendChild(el('span', 'ptlabel', p.label));
+      li.appendChild(el('span', 'ptbullet', p.bullet));
+      if (p.resumeRef) li.appendChild(el('div', 'ptref', `From your resume: "${p.resumeRef}"`));
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
+  function startIntro() {
+    if (!$('introResume').value) { banner('Choose a resume first.'); return; }
+    banner('');
+    intro = { resumeKey: $('introResume').value, role: $('introRole').value.trim(), company: $('introCompany').value.trim(), guide: null };
+    Object.assign(setup, { company: 'Any', role: intro.role || 'the role on my resume', round: 'resume', level: 'resume', speak: $('speakI').checked });
+    items = []; startedAt = new Date().toISOString();
+    queue = [{ question: INTRO_QUESTION, topic: 'Introduction', kind: 'intro', points: [], reference: '' }];
+    $('whoLine').textContent = `Tell me about yourself · ${intro.role || 'checked against your resume'}`;
+    show('viewInterview');
+    introActive = true;
+    nextQuestion();
+  }
+
+  /** Per-question set-up for the introduction: no skipping, a timer that shows the 60 to 90 second target, and a peek button for the talking points. */
+  function introQuestionSetup() {
+    const on = !!(current && current.kind === 'intro');
+    $('btnSkip').classList.toggle('hidden', on);
+    $('timer').className = 'timer';
+    if (on) {
+      $('qref').textContent = 'Aim for 60 to 90 seconds: who you are now, two or three achievements, your strengths, and why this role. We check every fact against your resume.';
+      $('qref').classList.remove('hidden');
+      $('btnShow').classList.remove('hidden');
+      B.setButton($('btnShow'), 'eye', 'Peek at my talking points');
+    }
+  }
+  function introTimerTick() {
+    if (!(current && current.kind === 'intro')) return;
+    $('timer').className = 'timer ' + (seconds < 45 ? 'short' : seconds <= 120 ? 'good' : 'long');
+  }
+
+  async function peekPoints() {
+    const box = $('modelAnswer');
+    const open = box.classList.contains('hidden');
+    if (!open) { box.classList.add('hidden'); $('btnShow').setAttribute('aria-expanded', 'false'); B.setButton($('btnShow'), 'eye', 'Peek at my talking points'); return; }
+    box.classList.remove('hidden');
+    $('btnShow').setAttribute('aria-expanded', 'true');
+    B.setButton($('btnShow'), 'eye-off', 'Hide my talking points');
+    if (!intro.guide) {
+      box.textContent = '';
+      const pg = B.progress(box, { title: 'Preparing your talking points', expectedSec: 20, compact: true, stages: ['Reading your resume', 'Choosing what to say'] });
+      const res = await api.introGuide(intro);
+      pg.stop();
+      if (!res || !res.ok) { box.textContent = res ? res.message : 'Could not get your talking points.'; return; }
+      intro.guide = res.intro.guide;
+    }
+    box.textContent = '';
+    box.appendChild(el('div', 'ptitle', 'Cover these points, in this order'));
+    box.appendChild(pointsList(intro.guide.points));
+    if (intro.guide.script) {
+      const d = el('details', 'script');
+      d.appendChild(el('summary', '', 'See a suggested 90-second introduction'));
+      d.appendChild(el('div', 'text', intro.guide.script));
+      box.appendChild(d);
+    }
+  }
+
+  async function reviewIntro(answer, fb) {
+    const loading = el('div', 'card');
+    fb.appendChild(loading);
+    const pg = B.progress(loading, { title: 'Checking your introduction against your resume', expectedSec: 28, stages: ['Reading your answer', 'Checking every fact', 'Writing your suggestions'] });
+    fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const res = await api.introReview({ ...intro, answer, seconds });
+    pg.stop();
+    if (!res || !res.ok) {
+      fb.textContent = '';
+      const card = el('div', 'card');
+      card.appendChild(el('p', 'verdict', res ? res.message : 'Could not review your answer.'));
+      const row = el('div', 'row');
+      const retry = el('button', 'btn primary', 'Try again');
+      retry.addEventListener('click', () => { busy = false; submitAnswer(); });
+      const edit = el('button', 'btn ghost', 'Edit my answer');
+      edit.addEventListener('click', () => { busy = false; fb.textContent = ''; $('answer').readOnly = false; $('btnSubmit').disabled = false; paintChips(); startTimer(); introQuestionSetup(); });
+      row.append(retry, edit); card.appendChild(row); fb.appendChild(card);
+      return false;
+    }
+    intro.last = res.intro;
+    if (res.intro.guide) intro.guide = res.intro.guide;
+    renderIntroReview(res.intro);
+    return true;
+  }
+
+  function retryIntro() {
+    $('feedback').textContent = '';
+    queue = [{ question: INTRO_QUESTION, topic: 'Introduction', kind: 'intro', points: [], reference: '' }];
+    nextQuestion();
+    window.scrollTo(0, 0);
+  }
+
+  const STATUS = { supported: ['ok', 'check', 'In your resume'], partly: ['part', 'alert', 'Only partly in your resume'], not_in_resume: ['no', 'x', 'Not in your resume'] };
+  const SUBSCORES = [['structure', 'Structure'], ['relevance', 'Relevance'], ['impact', 'Impact'], ['authenticity', 'Matches your resume'], ['delivery', 'Delivery']];
+
+  function renderIntroReview(r) {
+    const rv = r.review;
+    const fb = $('feedback');
+    fb.textContent = '';
+    const card = el('div', 'card review');
+
+    // score and verdict
+    const head = el('div', 'fbHead');
+    const sc = el('div', 'score ' + scoreClass(rv.score));
+    sc.appendChild(document.createTextNode(String(rv.score)));
+    sc.appendChild(el('small', '', '/ 10'));
+    head.appendChild(sc);
+    const words = el('div');
+    words.appendChild(el('p', 'verdict', rv.verdict || ''));
+    const m = rv.metrics || {};
+    words.appendChild(el('div', 'hint', `${m.words || 0} words · about ${m.estSeconds || 0} seconds when spoken${m.fillers ? ' · ' + m.fillers + ' filler word' + (m.fillers === 1 ? '' : 's') : ''}. ${m.note || ''}`));
+    head.appendChild(words);
+    card.appendChild(head);
+
+    // the five scores
+    const bars = el('div', 'bars5');
+    SUBSCORES.forEach(([key, label]) => {
+      const row = el('div', 'bar-row');
+      row.appendChild(el('span', '', label));
+      const track = el('div', 'bar-track'); const fill = el('div', 'bar-fill');
+      fill.style.width = (rv.scores[key] * 10) + '%';
+      track.appendChild(fill); row.appendChild(track);
+      row.appendChild(el('b', '', String(rv.scores[key])));
+      bars.appendChild(row);
+    });
+    card.appendChild(bars);
+
+    // every fact, checked against the resume
+    const check = el('div', 'box');
+    check.appendChild(heading('shield', 'Checked against your resume'));
+    const v = rv.verified || {};
+    const chips = el('div', 'vchips');
+    chips.appendChild(el('span', 'ok', `${v.supported || 0} in your resume`));
+    chips.appendChild(el('span', 'part', `${v.partly || 0} partly`));
+    chips.appendChild(el('span', 'no', `${v.notInResume || 0} not in your resume`));
+    check.appendChild(chips);
+    rv.claims.forEach(c => {
+      const [cls, icon, label] = STATUS[c.status] || STATUS.partly;
+      const row = el('div', 'claim');
+      const st = el('span', 'st ' + cls); st.appendChild(B.icon(icon)); st.title = label;
+      row.appendChild(st);
+      const body = el('div');
+      body.appendChild(el('div', 'ctext', c.claim));
+      body.appendChild(el('small', 'clabel ' + cls, label + (c.note ? ': ' + c.note : '')));
+      if (c.evidence) body.appendChild(el('div', 'ptref', `From your resume: "${c.evidence}"`));
+      row.appendChild(body);
+      check.appendChild(row);
+    });
+    (rv.numberFlags || []).forEach(f => {
+      const row = el('div', 'claim');
+      const st = el('span', 'st part'); st.appendChild(B.icon('alert')); row.appendChild(st);
+      const body = el('div');
+      body.appendChild(el('div', 'ctext', `You said "${f.text}"`));
+      body.appendChild(el('small', 'clabel part', f.note));
+      row.appendChild(body);
+      check.appendChild(row);
+    });
+    card.appendChild(check);
+
+    // what worked, what to change
+    const cols = el('div', 'cols');
+    cols.appendChild(list('What worked', rv.strengths, 'good', 'check'));
+    cols.appendChild(list('Change this', rv.improvements.concat(rv.trim.map(t => 'Cut or shorten: ' + t)), 'fix', 'chart'));
+    card.appendChild(cols);
+
+    // what the resume has that you did not say
+    if (rv.missing.length) {
+      const miss = el('div', 'box better');
+      miss.appendChild(heading('spark', 'Your resume has strong points you left out'));
+      const ul = el('ul', 'pts');
+      rv.missing.forEach(x => {
+        const li = el('li');
+        li.appendChild(el('span', 'ptbullet', x.point));
+        if (x.why) li.appendChild(el('div', 'hint', x.why));
+        if (x.resumeRef) li.appendChild(el('div', 'ptref', `From your resume: "${x.resumeRef}"`));
+        ul.appendChild(li);
+      });
+      miss.appendChild(ul);
+      card.appendChild(miss);
+    }
+
+    // a more impressive version, built only from the resume
+    if (rv.impressive) {
+      const better = el('div', 'box better');
+      better.appendChild(heading('bulb', 'A more impressive version, using only what your resume shows'));
+      better.appendChild(el('div', 'text', rv.impressive));
+      const copy = el('button', 'btn sm', '');
+      B.setButton(copy, 'copy', 'Copy');
+      copy.addEventListener('click', () => { try { navigator.clipboard.writeText(rv.impressive); B.setButton(copy, 'check', 'Copied'); setTimeout(() => B.setButton(copy, 'copy', 'Copy'), 1500); } catch (_) { /* no clipboard */ } });
+      better.appendChild(copy);
+      card.appendChild(better);
+    }
+
+    // personalised bullets to cover
+    if (rv.points.length) {
+      const pts = el('div', 'box');
+      pts.appendChild(heading('list', 'Points to cover in your introduction'));
+      pts.appendChild(pointsList(rv.points));
+      card.appendChild(pts);
+    }
+    if (rv.followUps.length) {
+      const f = el('div', 'box');
+      f.appendChild(heading('chat', 'Questions to expect next'));
+      const ul = el('ul'); rv.followUps.forEach(q => ul.appendChild(el('li', '', q))); f.appendChild(ul);
+      card.appendChild(f);
+    }
+    const note = el('p', 'hint');
+    note.textContent = 'Saved to your ShortlistPrep account (My account → Interview prep).';
+    card.appendChild(note);
+
+    const row = el('div', 'row');
+    row.style.marginTop = '18px';
+    const again = el('button', 'btn primary big', 'Try again with these tips');
+    again.addEventListener('click', retryIntro);
+    const done = el('button', 'btn ghost', 'Finish');
+    done.addEventListener('click', () => { $('feedback').textContent = ''; stopTimer(); current = null; show('viewSetup'); });
+    row.append(again, done);
+    card.appendChild(row);
+    fb.appendChild(card);
+    fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    again.focus();
+  }
+
   // ---- start up ------------------------------------------------------------------------------------
 
   async function init() {
@@ -539,6 +782,7 @@
       B.setButton($('btnShowAll'), anyClosed ? 'eye-off' : 'eye', anyClosed ? 'Hide all answers' : 'Show all answers');
     });
     $('btnShow').addEventListener('click', () => {
+      if (current && current.kind === 'intro') return peekPoints();
       const box = $('modelAnswer');
       const open = box.classList.contains('hidden');
       box.classList.toggle('hidden', !open);
@@ -551,7 +795,7 @@
     $('btnStart').addEventListener('click', startInterview);
     $('btnSubmit').addEventListener('click', submitAnswer);
     $('btnSkip').addEventListener('click', skipQuestion);
-    $('btnEnd').addEventListener('click', () => { if (!busy) finish(); });
+    $('btnEnd').addEventListener('click', () => { if (busy) return; if (introActive) { stopMic(false); stopTimer(); hush(); $('feedback').textContent = ''; current = null; show('viewSetup'); } else finish(); });
     $('btnRepeat').addEventListener('click', () => { if (current) say(current.question); });
     $('btnMic').addEventListener('click', () => (listening ? stopMic(false) : startMic()));
     $('answer').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submitAnswer(); } });

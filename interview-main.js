@@ -25,6 +25,8 @@ const { WhisperServer } = require('./src/stt/whisperServer');
 const coach = require('./src/interview/coach');
 
 // started as "electron interview-main.js": use the same name, settings and keys as the teacher assistant
+// the screenshot runs keep painting even when another window covers this one
+if (process.argv.some(a => a.startsWith('--shots'))) { app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion'); app.commandLine.appendSwitch('disable-renderer-backgrounding'); app.commandLine.appendSwitch('disable-backgrounding-occluded-windows'); }
 app.setName('teacher-notes-app');
 app.setPath('userData', process.env.TNA_USER_DATA || path.join(app.getPath('appData'), 'teacher-notes-app'));   // TNA_USER_DATA: a separate folder for tests
 
@@ -192,6 +194,8 @@ const viaServer = fn => async (event, p) => {
 };
 ipcMain.handle('iv:resumes', viaServer(() => prep.resumes()));
 ipcMain.handle('iv:make-set', viaServer(async p => ({ set: await prep.makeSet({ resumeKey: String(p.resumeKey || ''), role: String(p.role || '') }) })));
+ipcMain.handle('iv:intro-guide', viaServer(async p => ({ intro: await prep.introGuide({ resumeKey: String(p.resumeKey || ''), role: String(p.role || ''), company: String(p.company || ''), refresh: p.refresh === true }) })));
+ipcMain.handle('iv:intro-review', viaServer(async p => ({ intro: await prep.introReview({ resumeKey: String(p.resumeKey || ''), role: String(p.role || ''), company: String(p.company || ''), answer: String(p.answer || ''), seconds: Number(p.seconds) || 0 }) })));
 ipcMain.handle('iv:get-set', viaServer(async p => ({ set: await prep.getSet(String(p.id || '')) })));
 
 ipcMain.handle('iv:questions', (event, p) => {
@@ -324,6 +328,47 @@ async function runShots() {
   app.quit();
 }
 
+// ---- "--shots-intro": the "Tell me about yourself" flow against a test server, a screenshot of each step, then quit ----
+// Needs the same environment as --shots.   electron interview-main.js --shots-intro
+async function runIntroShots() {
+  const dir = process.env.TNA_IV_SHOTS || app.getPath('temp');
+  const wc = win.webContents;
+  const js = code => wc.executeJavaScript(code);
+  const wait = async (cond, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await js(cond)) return true; await new Promise(r => setTimeout(r, 250)); } return false; };
+  const shot = async name => { await new Promise(r => setTimeout(r, 600)); const img = (await wc.capturePage()).resize({ width: 1200, quality: 'best' }); fs.writeFileSync(path.join(dir, name + '.jpg'), img.toJPEG(88)); };
+  const scrollTo = sel => js("(() => { const e = document.querySelector(" + JSON.stringify(sel) + "); if (e) { e.scrollIntoView({ block: 'start' }); window.scrollBy(0, -90); } return !!e; })()");
+  const report = {};
+  await new Promise(r => setTimeout(r, 1500));
+  win.setSize(1180, 860);
+  await js("document.getElementById('gateKey').value = " + JSON.stringify(process.env.TNA_IV_KEY || '') + "; document.getElementById('gateActivate').click(); true");
+  report.activated = await wait("document.getElementById('gate').classList.contains('hidden')", 20000);
+  await js("document.querySelector('#modes [data-mode=intro]').click(); true");
+  report.resumes = await wait("document.getElementById('introResume').options.length > 0 && !/Loading/.test(document.getElementById('introResume').options[0].textContent)", 20000);
+  await js("document.getElementById('introRole').value = 'Seed breeder'; document.getElementById('introCompany').value = 'Corteva'; document.getElementById('speakI').checked = false; window.scrollTo(0, 0); true");
+  await shot('i1-setup');
+  await js("document.getElementById('btnStart').click(); true");
+  report.practising = await wait("!document.getElementById('viewInterview').classList.contains('hidden') && document.getElementById('question').textContent.length > 5", 20000);
+  const answer = "Hello, I am Anita. I have a PhD in genetics and 12 years of experience in plant biotechnology. Currently I work at GreenSeed Labs as a research scientist, where I use doubled haploid technology to speed up our breeding work in maize. Before that I was at AgriGen Institute, where I did marker-assisted selection in rice. I enjoy reading and travelling, and I am looking for a role where I can grow in plant breeding.";
+  await js("document.getElementById('answer').value = " + JSON.stringify(answer) + "; true");
+  await new Promise(r => setTimeout(r, 1200));
+  await js("document.getElementById('btnShow').click(); true");          // peek at the talking points
+  report.peek = await wait("!!document.querySelector('#modelAnswer .pts')", 60000);
+  report.views = await js("['viewSetup','viewInterview'].map(v => v + ':' + document.getElementById(v).classList.contains('hidden')).join(' ') + ' | ' + document.body.innerText.slice(0, 60).replace(/\s+/g, ' ')");
+  await js("window.scrollTo(0, 0); true");
+  await shot('i2-answer');
+  await js("document.getElementById('btnShow').click(); document.getElementById('btnSubmit').click(); true");
+  report.review = await wait("!!document.querySelector('#feedback .review')", 90000);
+  await js("window.scrollTo(0, 0); true");
+  await scrollTo('#feedback .review'); await shot('i3-review');
+  await scrollTo('#feedback .review .vchips'); await shot('i4-checked');
+  await scrollTo('#feedback .review .cols'); await shot('i5-improve');
+  await scrollTo('#feedback .review .box.better:nth-of-type(2)'); await shot('i6-impressive');
+  await js("(() => { const b = [...document.querySelectorAll('#feedback .review .box')].find(x => /Points to cover/.test(x.textContent)); if (b) { b.scrollIntoView({ block: 'start' }); window.scrollBy(0, -90); } return !!b; })()"); await shot('i7-points');
+  report.claims = await js("document.querySelectorAll('#feedback .review .claim').length");
+  console.log('IV-INTRO ' + JSON.stringify(report));
+  app.quit();
+}
+
 app.whenReady().then(() => {
   // only this window may use the microphone
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
@@ -338,6 +383,7 @@ app.whenReady().then(() => {
     await syncLicence();
     if (process.argv.includes('--smoke')) runSmoke();
     if (process.argv.includes('--shots')) runShots();
+    if (process.argv.includes('--shots-intro')) runIntroShots();
   });
   setInterval(() => { syncLicence(); }, 30 * 60 * 1000).unref();
 });

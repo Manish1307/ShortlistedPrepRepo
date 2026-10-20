@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('interviewAPI', {
   resumes: () => ipcRenderer.invoke('iv:resumes'),
   makeSet: p => ipcRenderer.invoke('iv:make-set', p),
   getSet: id => ipcRenderer.invoke('iv:get-set', { id }),
+  introGuide: p => ipcRenderer.invoke('iv:intro-guide', p),
+  introReview: p => ipcRenderer.invoke('iv:intro-review', p),
   save: s => ipcRenderer.invoke('iv:save', s),
   sendAudio: buffer => ipcRenderer.send('iv:audio', buffer),
   setListening: on => ipcRenderer.send('iv:listening', !!on),

@@ -284,6 +284,61 @@
           h('ol', { class: 'pp-qlist' }, list.map(function (q) { return ivQuestion(q, ++n); }))) : null;
       }), h('div', { class: 'iv-actions' }, del)));
   }
+  // ---- "Tell me about yourself": the guide and the reviews of your answers (made in the Virtual Interview app) ----
+  var IV_STATUS = { supported: ['ok', 'In your resume'], partly: ['part', 'Only partly in your resume'], not_in_resume: ['no', 'Not in your resume'] };
+  function ivPoints(points) {
+    return h('ul', { class: 'iv-pts' }, points.map(function (p) {
+      return h('li', {}, h('span', { class: 'iv-label' }, p.label), ' ', p.bullet, p.resumeRef ? h('div', { class: 'iv-ref' }, 'From your resume: "' + p.resumeRef + '"') : null);
+    }));
+  }
+  function ivIntro(x, onDelete) {
+    var rv = x.review, attempt = x.kind === 'attempt' && rv;
+    var del = h('button', { class: 'btn btn-sm', type: 'button' }, 'Delete');
+    del.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('Delete this?')) onDelete(); });
+    var parts = [];
+    if (attempt) {
+      var v = rv.verified || {};
+      parts.push(h('p', { class: 'iv-verdict' }, rv.verdict),
+        h('div', { class: 'iv-chips' }, h('span', { class: 'ok' }, (v.supported || 0) + ' in your resume'), h('span', { class: 'part' }, (v.partly || 0) + ' partly'), h('span', { class: 'no' }, (v.notInResume || 0) + ' not in your resume')),
+        h('h5', {}, 'Your answer'), h('p', { class: 'iv-answer' }, x.answer),
+        h('h5', {}, 'Checked against your resume'),
+        rv.claims.map(function (c) {
+          var st = IV_STATUS[c.status] || IV_STATUS.partly;
+          return h('div', { class: 'iv-claim' }, h('span', { class: 'iv-st ' + st[0] }, st[0] === 'ok' ? '✓' : st[0] === 'no' ? '✕' : '!'),
+            h('div', {}, h('b', {}, c.claim), h('div', { class: 'iv-note ' + st[0] }, st[1] + (c.note ? ': ' + c.note : '')), c.evidence ? h('div', { class: 'iv-ref' }, 'From your resume: "' + c.evidence + '"') : null));
+        }),
+        rv.improvements.length ? [h('h5', {}, 'What to change'), h('ul', { class: 'iv-pts' }, rv.improvements.map(function (t) { return h('li', {}, t); }))] : null,
+        rv.missing.length ? [h('h5', {}, 'Strong points in your resume you left out'), h('ul', { class: 'iv-pts' }, rv.missing.map(function (m) { return h('li', {}, m.point, m.why ? h('div', { class: 'iv-ref' }, m.why) : null); }))] : null,
+        rv.impressive ? [h('h5', {}, 'A more impressive version, using only what your resume shows'), h('p', { class: 'iv-answer' }, rv.impressive)] : null,
+        rv.points.length ? [h('h5', {}, 'Points to cover in your introduction'), ivPoints(rv.points)] : null);
+    } else if (x.guide) {
+      parts.push(h('h5', {}, 'Cover these points, in this order'), ivPoints(x.guide.points),
+        x.guide.script ? [h('h5', {}, 'A suggested 90-second introduction'), h('p', { class: 'iv-answer' }, x.guide.script)] : null);
+    }
+    return h('details', { class: 'ac-class' },
+      h('summary', {},
+        h('span', { class: 'ac-class-main' }, h('b', {}, (attempt ? 'Your introduction: ' + rv.score + ' out of 10' : 'Introduction guide') + ' · ' + x.resumeLabel + (x.role ? ' · ' + x.role : '') + (x.company ? ' · ' + x.company : '')),
+          h('span', {}, dateTime(x.createdAt) + (x.source === 'app' ? ' · made in the Virtual Interview app' : ''))),
+        h('span', { class: 'ac-chev' }, icon('chev', 18))),
+      h('div', { class: 'ac-class-body iv-intro-body' }, parts, h('div', { class: 'iv-actions' }, del)));
+  }
+  function ivIntroBlock(d, reload, status) {
+    var sel = h('select', { 'aria-label': 'Resume' }, d.resumes.map(function (r) { return h('option', { value: r.key }, r.label); }));
+    var role = h('input', { type: 'text', maxlength: '120', placeholder: 'Target role (optional)', 'aria-label': 'Target role' });
+    var company = h('input', { type: 'text', maxlength: '100', placeholder: 'Company (optional)', 'aria-label': 'Company' });
+    var go = h('button', { class: 'btn btn-primary', type: 'button', disabled: !d.resumes.length }, '✦ Make my introduction guide (uses 1 AI action)');
+    go.addEventListener('click', function () {
+      go.disabled = true; status.className = 'form-result'; status.textContent = 'Reading your resume and choosing your talking points… (about 20 seconds)';
+      call('POST', '/api/account/interview/intro/guide', { resumeKey: sel.value, role: role.value.trim(), company: company.value.trim() }).then(reload)
+        .catch(function (e) { go.disabled = false; status.className = 'form-result bad'; status.textContent = e.message; });
+    });
+    var del = function (id) { call('POST', '/api/account/interview/intro/' + id + '/delete').then(reload).catch(function (e) { status.className = 'form-result bad'; status.textContent = e.message; }); };
+    return h('div', { class: 'iv-intro' },
+      h('h3', {}, 'Tell me about yourself'),
+      h('p', { class: 'ac-muted' }, 'Practise the question every interview starts with in the Virtual Interview app. We check your answer against your resume, show what to change, and give you personalised points to cover. Your guides and reviews are kept here.'),
+      d.resumes.length ? h('div', { class: 'iv-form three' }, sel, role, company, go) : null,
+      (d.intros || []).length ? h('div', { class: 'iv-sets' }, d.intros.map(function (x) { return ivIntro(x, function () { del(x.id); }); })) : h('p', { class: 'ac-muted', style: 'margin-top:12px' }, 'No introduction practice yet.'));
+  }
   function interviewPanel() {
     var body = h('div', {}, h('p', { class: 'ac-muted' }, 'Loading…'));
     var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
@@ -301,7 +356,8 @@
         h('p', { class: 'ac-muted', style: 'margin-bottom:14px' }, 'Practice questions made only from your own resume, with a model answer for each. The same questions appear in the Virtual Interview app on your computer, and your support team can see them.'),
         d.resumes.length ? h('div', { class: 'iv-form' }, sel, role, go) : empty('No resume yet', 'Upload your resume in the Career toolkit (step 1) and your questions will be made from it.'),
         out,
-        d.sets.length ? h('div', { class: 'iv-sets' }, d.sets.map(function (s) { return ivSet(s, function () { del(s.id); }); })) : (d.resumes.length ? h('p', { class: 'ac-muted', style: 'margin-top:14px' }, 'No question sets yet.') : null));
+        d.sets.length ? h('div', { class: 'iv-sets' }, d.sets.map(function (s) { return ivSet(s, function () { del(s.id); }); })) : (d.resumes.length ? h('p', { class: 'ac-muted', style: 'margin-top:14px' }, 'No question sets yet.') : null),
+        ivIntroBlock(d, load, out));
     }
     function load() { return call('GET', '/api/account/interview').then(draw).catch(function (e) { body.replaceChildren(h('p', { class: 'form-result bad' }, e.message)); }); }
     load();

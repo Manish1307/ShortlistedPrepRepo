@@ -212,7 +212,7 @@
 
 
   /** The candidate's plan (Pricing): what it includes, what is used, and the way to change it. */
-  function planBlock() {
+  function planBlock(me) {
     var e = me.entitlements; if (!e) return null;
     var p = e.plan;
     return h('div', {},
@@ -426,7 +426,7 @@
           stat('calendar', 'sun', left === null ? (main && main.status === 'active' ? '∞' : '—') : Math.max(0, left), left === null ? (main && main.status === 'active' ? 'Never expires' : 'No active licence') : 'Days left on licence')),
         h('div', { class: 'ac-grid' },
           h('div', { class: 'ac-stack' },
-            card('Your plan', planBlock()),
+            card('Your plan', planBlock(me)),
             card('Your licence', main ? licenceBlock(main) : empty('No licence yet', 'Contact us to get started.'), me.licences.length > 1 ? go('licences') : null),
             card('Recent classes', classList(me.conversations, 3), me.conversations.length > 3 ? go('classes') : null)),
           h('div', { class: 'ac-stack' },

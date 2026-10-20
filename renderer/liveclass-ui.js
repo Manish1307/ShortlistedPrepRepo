@@ -37,9 +37,8 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
-  const DASHBOARD_URL = 'http://localhost:4180';
+  const DASHBOARD_URL = 'https://shortlistprep.com/account.html';   // My account on the ShortlistPrep website
   const SOURCES = { mic: 'Mic', system: 'System', both: 'Mic + System' };
-  const LANGUAGES = { en: 'English', hi: 'Hindi', es: 'Spanish', fr: 'French', de: 'German' };
   const PROVIDERS = { groq: 'Groq', gemini: 'Gemini', claude: 'Claude', demo: 'Demo', proxy: 'Groq' };   // proxy: Groq through the licence server
 
   // ---- state ---------------------------------------------------------------------------------------
@@ -47,7 +46,7 @@
   const state = {
     startedAt: Date.now(), ended: false, collapsed: false,
     listening: false, starting: false, source: 'both', theme: 'light', zoom: DEFAULTS.zoom, opacity: DEFAULTS.opacity, font: DEFAULTS.font,
-    language: 'en', autoAnswer: false, editing: false,
+    autoAnswer: false, editing: false,
     engine: { state: 'starting', message: '' }, info: null, notice: null, reading: 0,
     licence: { state: live ? 'checking' : 'active', dev: !live },
     heard: [],         // { text, isQuestion }: the latest phrases, shown in the strip
@@ -184,8 +183,6 @@
     $('themeLight').classList.toggle('sel', state.theme === 'light');
     $('themeDark').classList.toggle('sel', state.theme === 'dark');
     $('autoAnswer').setAttribute('aria-checked', String(state.autoAnswer));
-    $('language').value = state.language;
-    $('langFoot').textContent = LANGUAGES[state.language] || state.language;
     $('sourceLabel').textContent = SOURCES[state.source] || state.source;
     $('btnMic').classList.toggle('muted', !state.listening);
     $('btnMic').title = state.listening ? 'Stop listening' : 'Start listening';
@@ -516,7 +513,6 @@
   $('thumbDown').addEventListener('click', () => vote(-1));
 
   for (const b of document.querySelectorAll('#settings [data-act]')) b.addEventListener('click', () => setting(b.dataset.act));
-  $('language').addEventListener('change', e => { state.language = e.target.value; applyView(); });
   $('autoAnswer').addEventListener('click', () => {
     state.autoAnswer = !state.autoAnswer;
     api.setAutoAnswer(state.autoAnswer);
@@ -589,9 +585,6 @@
     if (!info) return;
     state.source = info.audioSource || state.source;
     state.autoAnswer = !!info.autoAnswer;
-    state.language = info.language || 'en';
-    $('language').disabled = live;   // the speech model's language comes from the assistant's settings
-    if (live) $('language').title = 'Set by the speech model in the assistant settings';
     applyInfo(info);
     applyEngine(info.engine);
     applyView();

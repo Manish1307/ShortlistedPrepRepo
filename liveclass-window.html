@@ -98,10 +98,14 @@
     .ended { margin-top: 8px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 14px; display: flex; align-items: center; gap: 10px; }
 
     /* ---- settings menu (kebab) ---- */
-    .settings { right: 0; top: 52px; width: 264px; display: grid; gap: 2px; }
+    .settings { right: 0; top: 52px; width: 264px; max-width: calc(100vw - 24px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .srow { display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 9px; font-size: 13px; font-weight: 600; }
     .srow .lbl { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .srow .lbl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .srow .lbl span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .srow .val { flex: none; }
+    .srow .ibtn { flex: none; }
+    #focusRowWrap .lbl { align-items: flex-start; } #focusRowWrap .lbl .i { margin-top: 2px; }
+    #focusRow { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
     .srow .lbl .i { color: var(--accent); }
     .srow.link { cursor: pointer; transition: background .12s; }
     .srow.link:hover { background: var(--raise); }
@@ -181,10 +185,6 @@
       <div class="srow"><div class="lbl">Font size</div><span class="val" id="fontVal"></span>
         <button class="ibtn" data-act="font+" title="Larger text">+</button><button class="ibtn" data-act="font-" title="Smaller text">−</button><button class="ibtn" data-act="font0" title="Reset font size"><i data-icon="reset"></i></button></div>
       <hr />
-      <div class="srow"><div class="lbl"><i data-icon="globe"></i><span>Language</span></div>
-        <select id="language" title="Spoken language">
-          <option value="en">English</option><option value="hi">Hindi</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option>
-        </select></div>
       <div class="srow"><div class="lbl">Auto Answer</div><button class="switch" id="autoAnswer" role="switch" aria-checked="false" title="Answer student questions as soon as they are heard"></button></div>
       <hr />
       <div class="srow link" id="btnEdit" title="Edit the current question">
@@ -224,7 +224,7 @@
         <span>Answer</span><span>·</span><span id="stamp">–</span>
         <button class="thumb" id="thumbUp" title="Helpful" aria-label="Helpful"><i data-icon="thumb-up"></i></button>
         <button class="thumb" id="thumbDown" title="Not helpful" aria-label="Not helpful"><i data-icon="thumb-down"></i></button>
-        <span class="grow"></span><span id="langFoot"></span>
+        <span class="grow"></span>
       </div>
     </div>
 

@@ -54,12 +54,12 @@
   async function guard(fn) { try { return await fn(); } catch (err) { toast(err.message, true); return undefined; } }
 
   const money = (cents, cur) => {
-    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'USD' }).format((cents || 0) / 100); }
+    try { return new Intl.NumberFormat((cur || 'INR') === 'INR' ? 'en-IN' : undefined, { style: 'currency', currency: cur || 'INR' }).format((cents || 0) / 100); }
     catch (_) { return `${((cents || 0) / 100).toFixed(2)} ${cur || ''}`; }
   };
   const date = s => (s ? new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
   const dateTime = s => (s ? new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
-  const moneyList = list => (list && list.length ? list.map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'USD'));
+  const moneyList = list => (list && list.some(r => r.cents) ? list.filter(r => r.cents).map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'INR'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
     'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
@@ -308,7 +308,7 @@
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num), sub ? h('div', { class: 'sub' }, sub) : null);
     const max = Math.max(1, ...o.signupSeries.map(s => s.count));
     const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'New customers per day, last 30 days' },
-      o.signupSeries.map(s => { const i = h('i', { class: s.count ? '' : 'zero', title: `${s.date}: ${s.count}` }); i.style.height = Math.max(2, (s.count / max) * 100) + '%'; return i; }));
+      o.signupSeries.map(s => { const i = h('i', { class: s.count ? '' : 'zero', title: `${s.date}: ${s.count}` }); i.style.height = Math.max(2, (s.count / max) * 85) + '%'; return h('div', { class: 'bar' }, h('span', { class: s.count ? '' : 'z' }, s.count), i); }));
     el.replaceChildren(
       head('Overview'),
       h('div', { class: 'cards' },
@@ -732,7 +732,7 @@
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num), sub ? h('div', { class: 'sub' }, sub) : null);
     const max = Math.max(1, ...a.series.map(s => s.visitors));
     const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'Visitors per day' },
-      a.series.map(s => { const i = h('i', { class: s.visitors ? '' : 'zero', title: s.date + ': ' + s.visitors + ' visitors, ' + s.views + ' page views' }); i.style.height = Math.max(2, (s.visitors / max) * 100) + '%'; return i; }));
+      a.series.map(s => { const i = h('i', { class: s.visitors ? '' : 'zero', title: s.date + ': ' + s.visitors + ' visitors, ' + s.views + ' page views' }); i.style.height = Math.max(2, (s.visitors / max) * 85) + '%'; return h('div', { class: 'bar' }, h('span', { class: s.visitors ? '' : 'z' }, s.visitors), i); }));
     const list = (title, rows, empty) => h('div', { class: 'card' }, h('h2', {}, title),
       rows.length ? rows.map(r => h('div', { class: 'list-item' }, h('span', {}, r.name || r.path), h('span', {}, r.visitors + (r.views !== undefined ? ' visitors · ' + r.views + ' views' : ' visitors')))) : h('p', { class: 'muted' }, empty));
     el.replaceChildren(

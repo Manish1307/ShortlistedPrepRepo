@@ -140,6 +140,12 @@ CREATE TABLE IF NOT EXISTS career_job_searches (
   result_json TEXT, error TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, finished_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_career_job_searches ON career_job_searches(customer_id);
+CREATE TABLE IF NOT EXISTS interview_sets (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE, licence_id INTEGER,
+  resume_key TEXT NOT NULL DEFAULT '', resume_label TEXT NOT NULL DEFAULT '', role TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT 'web',
+  questions_json TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_interview_sets ON interview_sets(customer_id);
 CREATE TABLE IF NOT EXISTS career_activity (
   id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   at TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''

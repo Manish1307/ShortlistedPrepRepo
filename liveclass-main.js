@@ -2,7 +2,7 @@
 // Live Class overlay: a floating toolbar, live transcript strip and question/answer card for use while teaching.
 // It hears questions with the same offline speech engine and answers them with the same AI service, model, subject
 // and prompts as the teacher assistant (saved Settings are shared; change them in the assistant's Settings).
-// It needs an active ClassCue licence (the same one as the assistant), checked with the licence server. The AI runs
+// It needs an active ShortlistPrep licence (the same one as the assistant), checked with the licence server. The AI runs
 // through that server's AI proxy: Groq for answers and Gemini for screenshots, with the keys chosen per licence in the
 // admin dashboard (AI keys), and the keys never reach this computer (only a short-lived access token does).
 // A server without the proxy sends the keys instead (kept in memory only); without either, the key saved on this

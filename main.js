@@ -14,8 +14,8 @@ const { WhisperServer } = require('./src/stt/whisperServer');
 const { LicenceClient, computerId } = require('./src/licence/client');
 const licenceSettings = require('./src/licence/settings');
 
-// Installed copies keep their settings, keys and licence in %APPDATA%ClassCue (development keeps teacher-notes-app).
-if (app.isPackaged) app.setName('ClassCue');
+// Installed copies keep their settings, keys and licence in %APPDATA%ShortlistPrep (development keeps teacher-notes-app).
+if (app.isPackaged) app.setName('ShortlistPrep');
 
 // Installed: the speech engine sits next to the app (resources\whisper), because programs cannot run from inside app.asar.
 const WHISPER_DIR = process.env.TNA_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
@@ -742,9 +742,9 @@ ipcMain.handle('session:export', async (event, format) => {
   if (!data.entries.length && !data.transcript.length) return { ok: false, message: 'Nothing to export yet.' };
   const ext = ['txt', 'csv', 'json'].includes(format) ? format : 'txt';
   // No "Save as" window: Windows dialogs are separate windows that a screen share could capture. The file goes to a fixed folder.
-  const dir = path.join(app.getPath('documents'), 'ClassCue');
+  const dir = path.join(app.getPath('documents'), 'ShortlistPrep');
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
-  const filePath = path.join(dir, `ClassCue-session-${stamp}.${ext}`);
+  const filePath = path.join(dir, `ShortlistPrep-session-${stamp}.${ext}`);
   const content = ext === 'csv' ? '﻿' + exporter.formatCsv(data)                    // BOM so Excel reads accents and symbols correctly
     : ext === 'json' ? exporter.formatJson(data)
       : exporter.formatText(data).replace(/\n/g, '\r\n');                                // Windows Notepad line breaks

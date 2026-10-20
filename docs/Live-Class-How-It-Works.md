@@ -213,7 +213,7 @@ The same file runs in Node and in the browser (a UMD module).
 - Auto Answer changed inside Live Class lasts for that session only.
 
 **Licence.**
-- Live Class needs an active ClassCue licence: the same one as the Private Assistant (`licence.json` in the same folder).
+- Live Class needs an active ShortlistPrep licence: the same one as the Private Assistant (`licence.json` in the same folder).
 - At start-up and every 30 minutes it calls the licence server's `POST /api/app/config`. The licence part of the answer is signed (Ed25519) and checked against `src/licence/public-key.pem`, as in the assistant.
 - Without an active licence, a panel in the card asks for the licence key, and listening, Answer, Chat and Screenshot are locked. The ⋮ menu shows the plan and the days left.
 - While developing, `TNA_LICENCE=off` skips the check.

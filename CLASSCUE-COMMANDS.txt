@@ -178,7 +178,7 @@ Open a terminal in that folder before running any command below.
     - "Export" menu (top of the assistant tab): saves every question, answer
       and response time, plus everything that was heard, as a text file
       (Notepad), a spreadsheet CSV (Excel) or JSON. The file goes straight to
-      Documents\ClassCue (no "Save as" window, which could show in a screen share).
+      Documents\ShortlistPrep (no "Save as" window, which could show in a screen share).
     - "Clear" starts a fresh list: click it twice. Export first if you want to keep it.
     - No tooltips and no pop-up boxes are used in the assistant window, because
       Windows draws those as separate windows that a screen share could capture.
@@ -217,7 +217,7 @@ Open a terminal in that folder before running any command below.
  7. BEFORE YOU LAUNCH (CHECKLIST)
 ---------------------------------------------------------------------
 
-  [ ] Choose the real product name (ClassCue is a placeholder) and check
+  [ ] Choose the real product name (ShortlistPrep is a placeholder) and check
       the name and domain are free.
   [ ] Replace the example prices, company name, address and support email
       in website\site.config.json.

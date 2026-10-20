@@ -1,4 +1,4 @@
-// ClassCue admin dashboard. Everything shown is inserted as text (never as HTML), so a customer's name or
+// ShortlistPrep admin dashboard. Everything shown is inserted as text (never as HTML), so a customer's name or
 // message can never run code in this page.
 (function () {
   'use strict';
@@ -136,7 +136,7 @@
       error,
       h('button', { class: 'btn primary', type: 'submit', style: 'width:100%' }, 'Sign in'));
     root.replaceChildren(h('div', { class: 'login-wrap' }, h('div', { class: 'login' },
-      h('div', { class: 'logo' }, 'C'), h('h1', {}, 'ClassCue admin'), h('p', { class: 'muted' }, 'Sign in to manage customers, licences and releases.'), form)));
+      h('div', { class: 'logo' }, 'S'), h('h1', {}, 'ShortlistPrep admin'), h('p', { class: 'muted' }, 'Sign in to manage customers, licences and releases.'), form)));
     const first = form.querySelector('input'); if (first) first.focus();
   }
 
@@ -262,7 +262,7 @@
     } }, icon('menu'));
     const bar = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
       burger,
-      h('a', { class: 'brand', href: '#', onclick: e => { e.preventDefault(); go('overview'); } }, h('span', { class: 'logo' }, 'C'), h('span', { class: 'brand-text' }, 'ClassCue', h('small', {}, 'Admin'))),
+      h('a', { class: 'brand', href: '#', onclick: e => { e.preventDefault(); go('overview'); } }, h('span', { class: 'logo' }, 'S'), h('span', { class: 'brand-text' }, 'ShortlistPrep', h('small', {}, 'Admin'))),
       nav, h('div', { class: 'top-right' }, youWrap)));
     return bar;
   }
@@ -284,7 +284,7 @@
     if (!me) return renderLogin();
     const content = h('main', { class: 'main', id: 'content' });
     root.replaceChildren(h('div', { class: 'shell' }, header(), banner(), content));
-    document.title = (PAGES[view] || PAGES.overview).label + ' · ClassCue admin';
+    document.title = (PAGES[view] || PAGES.overview).label + ' · ShortlistPrep admin';
     const seen = openCount + ':' + newOppCount;
     await guard(() => VIEWS[view](content));
     if (seen !== openCount + ':' + newOppCount && me) { const shellEl = root.firstChild; shellEl.replaceChild(header(), shellEl.children[0]); shellEl.replaceChild(banner(), shellEl.children[1]); }
@@ -380,7 +380,7 @@
   /** The generated password, shown once, with a message ready to send to the customer. */
   function showLogin(c, r) {
     const where = r.siteUrl ? `${r.siteUrl}/login.html` : 'the website (Sign in, top right)';
-    const message = `Hello ${c.name || ''},\n\nYour ClassCue account is ready.\nSign in at: ${where}\nEmail: ${r.email}\nPassword: ${r.password}\n\nYou will be asked to choose your own password when you first sign in.`.replace('Hello ,', 'Hello,');
+    const message = `Hello ${c.name || ''},\n\nYour ShortlistPrep account is ready.\nSign in at: ${where}\nEmail: ${r.email}\nPassword: ${r.password}\n\nYou will be asked to choose your own password when you first sign in.`.replace('Hello ,', 'Hello,');
     dialog('Login created', h('div', {},
       h('p', {}, 'Send these details to the customer. The password is shown only now; make a new one if it is lost.'),
       h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', { class: 'mono' }, r.email), h('dt', {}, 'Password'), h('dd', { class: 'mono', style: 'font-size:18px;font-weight:700' }, r.password),
@@ -713,7 +713,7 @@
       pages.length ? h('div', {}, h('h2', {}, 'Pages this visitor viewed'), pages.map(p => h('div', { class: 'list-item' }, h('span', {}, p.path), h('span', { class: 'muted small' }, dateTime(p.at))))) : null,
       h('h2', {}, 'History'),
       notes.length ? notes.map(n => h('div', { class: 'list-item' }, h('span', {}, n.body), h('span', { class: 'muted small' }, n.author + ' · ' + dateTime(n.created_at)))) : h('p', { class: 'muted' }, 'No notes yet.'),
-      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(o.email) + '?subject=' + encodeURIComponent('Your ClassCue ' + (o.kind === 'demo' ? 'demo' : 'request')) }, 'Reply by email')));
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(o.email) + '?subject=' + encodeURIComponent('Your ShortlistPrep ' + (o.kind === 'demo' ? 'demo' : 'request')) }, 'Reply by email')));
     const buttons = [];
     if (write) buttons.push({ label: 'Save', kind: 'primary', run: () => guard(async () => {
       const v = values(body);

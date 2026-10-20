@@ -28,8 +28,8 @@
   },
   "build": {
     "appId": "com.classcue.app",
-    "productName": "ClassCue",
-    "copyright": "Copyright © 2026 ClassCue",
+    "productName": "ShortlistPrep",
+    "copyright": "Copyright © 2026 ShortlistPrep",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -79,7 +79,7 @@
         }
       ],
       "icon": "build/icon.png",
-      "artifactName": "ClassCue-Setup-${version}.${ext}"
+      "artifactName": "ShortlistPrep-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -87,7 +87,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "ClassCue",
+      "shortcutName": "ShortlistPrep",
       "deleteAppDataOnUninstall": false
     }
   }

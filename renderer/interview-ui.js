@@ -66,8 +66,8 @@
   // ---- interview -------------------------------------------------------------------------------------
 
   const LICENCE_TEXT = {
-    checking: 'Checking your ClassCue licence…',
-    none: 'Mock Interview needs a ClassCue licence. Enter your licence key to activate this computer.',
+    checking: 'Checking your ShortlistPrep licence…',
+    none: 'Mock Interview needs a ShortlistPrep licence. Enter your licence key to activate this computer.',
     expired: 'Your licence has expired. Renew it, or enter a new licence key.',
     revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
     removed: 'This computer was removed from the licence. Enter the key again to activate it.',
@@ -202,7 +202,7 @@
   function showSet(set) {
     resumeSet = set;
     $('setTitle').textContent = 'Your personalised questions';
-    $('setSub').textContent = `${set.questions.length} questions made only from "${set.resumeLabel}"${set.role ? ' for ' + set.role : ''}. Saved to your ClassCue account. Read them, open the answers, or practise them with the interviewer.`;
+    $('setSub').textContent = `${set.questions.length} questions made only from "${set.resumeLabel}"${set.role ? ' for ' + set.role : ''}. Saved to your ShortlistPrep account. Read them, open the answers, or practise them with the interviewer.`;
     const list = $('setList');
     list.textContent = '';
     let n = 0;
@@ -245,7 +245,7 @@
 
   async function startInterview() {
     readSetup();
-    if (!isLicensed()) { banner(LICENCE_TEXT[(info.licence || {}).state] || 'Activate your ClassCue licence first.'); return; }
+    if (!isLicensed()) { banner(LICENCE_TEXT[(info.licence || {}).state] || 'Activate your ShortlistPrep licence first.'); return; }
     if (mode === 'intro') return startIntro();
     if (mode === 'resume') return makeResumeSet();
     if (!info.hasKey) { banner('AI is not available for this licence yet. Check the licence, then try again.'); return; }
@@ -740,7 +740,7 @@
       card.appendChild(f);
     }
     const note = el('p', 'hint');
-    note.textContent = 'Saved to your ClassCue account (My account → Interview prep).';
+    note.textContent = 'Saved to your ShortlistPrep account (My account → Interview prep).';
     card.appendChild(note);
 
     const row = el('div', 'row');

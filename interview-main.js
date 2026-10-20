@@ -2,7 +2,7 @@
 // AI Mock Interviewer: a separate, normal window (NOT hidden from screen sharing) for practising interviews.
 // The AI asks questions for a chosen company, role and round; the candidate answers by voice (offline speech
 // engine) or by typing; the AI scores each answer with feedback and builds a report.
-// Needs a ClassCue licence (activated here, checked with the licence server). AI comes through the licence server (no key
+// Needs a ShortlistPrep licence (activated here, checked with the licence server). AI comes through the licence server (no key
 // on this computer), and the candidate can pick one of their resumes to get personalised and scenario questions made only
 // from it: they are saved on the server, so they also show in My account and in the dashboard.   npm run interview
 
@@ -167,12 +167,12 @@ ipcMain.handle('iv:info', event => {
   const names = { gemini: 'Google Gemini', groq: 'Groq', claude: 'Anthropic Claude' };
   return {
     companies: coach.COMPANIES, rounds: coach.ROUNDS, levels: coach.LEVELS,
-    provider: ai && ai.provider === 'proxy' ? 'ClassCue (through your licence)' : names[s.provider] || s.provider, hasKey: !!(ai && ai.ready), speech,
+    provider: ai && ai.provider === 'proxy' ? 'ShortlistPrep (through your licence)' : names[s.provider] || s.provider, hasKey: !!(ai && ai.ready), speech,
     licence: licenceStatus(),
   };
 });
 
-const NEED_LICENCE = { ok: false, message: 'Activate your ClassCue licence first.' };
+const NEED_LICENCE = { ok: false, message: 'Activate your ShortlistPrep licence first.' };
 
 ipcMain.handle('iv:licence-activate', async (event, key) => {
   if (!fromWin(event) || !licence || licenceSkipped()) return null;

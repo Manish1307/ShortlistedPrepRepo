@@ -37,7 +37,7 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
-  const DASHBOARD_URL = 'https://shortlistprep.com/account.html';   // My account on the ClassCue website
+  const DASHBOARD_URL = 'https://shortlistprep.com/account.html';   // My account on the ShortlistPrep website
   const SOURCES = { mic: 'Mic', system: 'System', both: 'Mic + System' };
   const PROVIDERS = { groq: 'Groq', gemini: 'Gemini', claude: 'Claude', demo: 'Demo', proxy: 'Groq' };   // proxy: Groq through the licence server
 
@@ -201,8 +201,8 @@
   // ---- licence ------------------------------------------------------------------------------------
   const isLicensed = () => state.licence.state === 'active';
   const LICENCE_TEXT = {
-    checking: 'Checking your ClassCue licence…',
-    none: 'Live Class needs a ClassCue licence. Enter your licence key to activate this computer.',
+    checking: 'Checking your ShortlistPrep licence…',
+    none: 'Live Class needs a ShortlistPrep licence. Enter your licence key to activate this computer.',
     expired: 'Your licence has expired. Renew it, or enter a new licence key.',
     revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
     removed: 'This computer was removed from the licence. Enter the key again to activate it.',

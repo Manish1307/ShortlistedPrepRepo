@@ -89,7 +89,7 @@ function addRoutes(ctx) {
       }
       let res;
       try {
-        res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (ClassCue logo fetcher)', Accept: accept }, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT) });
+        res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (ShortlistPrep logo fetcher)', Accept: accept }, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT) });
       } catch (_) { return null; }
       if (res.status >= 300 && res.status < 400 && res.headers.get('location')) { url = new URL(res.headers.get('location'), url).href; continue; }
       return res;

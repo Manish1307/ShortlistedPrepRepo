@@ -6,7 +6,7 @@ Almost every interview starts with "Tell me about yourself."
 
 It is also the question where candidates unknowingly stretch the truth: a few extra years, a certificate they are "about to finish", a result that was really the team's.
 
-So we built something new at ClassCue: an Introduction Coach that checks your answer against your own resume.
+So we built something new at ShortlistPrep: an Introduction Coach that checks your answer against your own resume.
 
 Here is how it works 👇
 
@@ -25,7 +25,7 @@ If you have an interview coming up, try practising your introduction before the 
 
 What is the one thing you always forget to say when you introduce yourself? 👇
 
-#InterviewPreparation #JobSearch #CareerGrowth #ResumeTips #AI #Hiring #CareerAdvice #ClassCue
+#InterviewPreparation #JobSearch #CareerGrowth #ResumeTips #AI #Hiring #CareerAdvice #ShortlistPrep
 
 ---
 
@@ -33,13 +33,13 @@ What is the one thing you always forget to say when you introduce yourself? 👇
 
 "Tell me about yourself" is the first question in almost every interview, and the one where candidates stretch the truth without noticing.
 
-ClassCue's new Introduction Coach checks your answer against your own resume, marks every claim as in your resume, partly, or not in your resume, shows what to change, and gives you personalised bullet points to cover. Nothing is invented: every suggestion comes from your resume.
+ShortlistPrep's new Introduction Coach checks your answer against your own resume, marks every claim as in your resume, partly, or not in your resume, shows what to change, and gives you personalised bullet points to cover. Nothing is invented: every suggestion comes from your resume.
 
 See the full journey from resume to offer in the images.
 
 👉 shortlistprep.com
 
-#InterviewPreparation #JobSearch #CareerAdvice #ClassCue
+#InterviewPreparation #JobSearch #CareerAdvice #ShortlistPrep
 
 ---
 
@@ -59,7 +59,7 @@ All are 4:5 portrait (1080 x 1350 design, saved at 2430 x 3039). Upload them tog
 ## Alt text (add it when uploading, for accessibility)
 
 1. A card titled "Checked against your resume" showing three statements marked in your resume, only partly in your resume, and not in your resume.
-2. The ClassCue Mock Interview app asking "Tell me about yourself", with a timer, a typed answer and personalised talking points opened.
+2. The ShortlistPrep Mock Interview app asking "Tell me about yourself", with a timer, a typed answer and personalised talking points opened.
 3. The review screen with a score out of 10, five sub-scores and each claim in the answer checked against the resume.
 4. Suggestions showing what worked, what to change, strong points left out and a more impressive version of the introduction.
 5. Personalised bullet points to cover in the introduction, each linked to a line of the candidate's resume.

@@ -1,4 +1,4 @@
-# Publishing the ClassCue server and website
+# Publishing the ShortlistPrep server and website
 
 Server (licence API + admin dashboard + SQLite) on a **Google Cloud e2-micro** (free tier), website on
 **Cloudflare Pages** (free). Replace `yourdomain.com` everywhere with your real domain.
@@ -63,7 +63,7 @@ Wait until they work (minutes to a few hours). Check from your PC: `nslookup api
 1. Edit `src/licence/settings.js`:
    - `SERVER_URL` → `https://api.yourdomain.com`
    - `BUY_URL` → `https://yourdomain.com/pricing.html`
-2. `npm run dist` → `dist\ClassCue-Setup-1.0.0.exe`. Install it on your PC and start a trial or activate a key
+2. `npm run dist` → `dist\ShortlistPrep-Setup-1.0.0.exe`. Install it on your PC and start a trial or activate a key
    against the live server. It must appear in the live dashboard.
 3. Host the installer **not** on the VM (247 MB downloads would use up the free 1 GB of traffic):
    - GitHub Releases (only if the repository is public), or
@@ -75,7 +75,7 @@ Wait until they work (minutes to a few hours). Check from your PC: `nslookup api
 1. https://dash.cloudflare.com → Workers & Pages → Create → Pages → **Connect to Git** → choose the repository.
 2. Build settings: build command `node website/build.js`, build output directory `website/site`.
 3. Deploy, then Custom domains → add `yourdomain.com` (and `www.yourdomain.com`).
-4. The website carries the ClassCue pages; the ClassCue product pages, real prices and
+4. The website carries the ShortlistPrep pages; the ShortlistPrep product pages, real prices and
    the download link must be added before launch.
 
 ## Everyday tasks (in the VM's SSH window)

@@ -1,4 +1,4 @@
-# ClassCue admin dashboard
+# ShortlistPrep admin dashboard
 
 A small server (no extra packages, needs Node 22+) with a dashboard for you, and the API the desktop app and the website call.
 

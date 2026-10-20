@@ -1,7 +1,7 @@
-# ClassCue admin server (licence API + dashboard), run by systemd on the server.
+# ShortlistPrep admin server (licence API + dashboard), run by systemd on the server.
 # Installed by deploy/setup.sh to /etc/systemd/system/classcue-admin.service
 [Unit]
-Description=ClassCue admin server (licences, API, dashboard)
+Description=ShortlistPrep admin server (licences, API, dashboard)
 After=network-online.target
 Wants=network-online.target
 

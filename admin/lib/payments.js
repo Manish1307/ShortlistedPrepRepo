@@ -25,7 +25,7 @@ const METHOD_NAMES = { upi: 'UPI', card: 'Debit / credit card', netbanking: 'Net
 const DEFAULTS = {
   provider: 'manual', mode: 'test', methods: { upi: true, card: false, netbanking: false, wallet: false, emi: false, bank_transfer: true },
   gstRate: 18, pricesIncludeGst: true, gstin: '', invoicePrefix: 'SP', keyId: '',
-  manual: { upiId: '', payeeName: 'ClassCue Technologies Pvt Ltd', bankName: '', accountName: '', accountNumber: '', ifsc: '', instructions: 'After paying, enter the UPI / bank reference (UTR). We start your plan as soon as we confirm the payment, usually within a few hours.' },
+  manual: { upiId: '', payeeName: 'ShortlistPrep Technologies Pvt Ltd', bankName: '', accountName: '', accountNumber: '', ifsc: '', instructions: 'After paying, enter the UPI / bank reference (UTR). We start your plan as soon as we confirm the payment, usually within a few hours.' },
 };
 
 const get = (db, key) => { const r = db.prepare('SELECT value FROM job_settings WHERE key = ?').get(key); try { return r ? JSON.parse(r.value) : null; } catch (_) { return null; } };
@@ -109,7 +109,7 @@ async function startPayment({ db, vault, cfg, order, customer }) {
     type: 'manual', provider: 'manual', amount, currency: 'INR', number: order.number,
     gatewayNotConnected: cfg.provider !== 'manual',   // a gateway is chosen but not connected yet
     upi: cfg.methods.upi && m.upiId ? { upiId: m.upiId, payeeName: m.payeeName,
-      link: `upi://pay?pa=${encodeURIComponent(m.upiId)}&pn=${encodeURIComponent(m.payeeName || 'ClassCue')}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}` } : null,
+      link: `upi://pay?pa=${encodeURIComponent(m.upiId)}&pn=${encodeURIComponent(m.payeeName || 'ShortlistPrep')}&am=${amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(note)}` } : null,
     bank: cfg.methods.bank_transfer && m.accountNumber ? { bankName: m.bankName, accountName: m.accountName || m.payeeName, accountNumber: m.accountNumber, ifsc: m.ifsc } : null,
     instructions: m.instructions,
   };

@@ -331,7 +331,7 @@
   // ---- licence: the licence screen covers the assistant until there is a valid trial or licence -------------
   let lic = { state: 'none' };
   const GATE = {
-    none: ['Welcome to ClassCue', 'Start a free trial or enter your licence key to use the assistant.'],
+    none: ['Welcome to ShortlistPrep', 'Start a free trial or enter your licence key to use the assistant.'],
     expired: ['Your licence has ended', 'Buy a licence or enter a new key to keep using the assistant. Your settings and notes are kept.'],
     revoked: ['Licence cancelled', 'This licence was cancelled. Enter another key, or contact support.'],
     removed: ['This computer is not activated', 'This computer was removed from the licence. Enter your key again to activate it.'],

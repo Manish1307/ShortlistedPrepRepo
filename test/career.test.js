@@ -65,6 +65,7 @@ async function fakeAi() {
 async function start({ keys = ['gemini'] } = {}) {
   const ai = await fakeAi();
   const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-career-')), aiUpstream: { gemini: ai.base + '/gemini', groq: ai.base + '/groq' } });
+  app.db.prepare("UPDATE pricing_plans SET limits_json = '{}' WHERE code = 'free'").run();   // these tests are not about plan limits
   const base = await listen(app.server);
   if (keys.includes('gemini')) aikeys.addKey(app.db, app.vault, { provider: 'gemini', label: 'Gemini', key: 'AIza' + 'g'.repeat(35) + 'GGGG', makeDefault: true });
   if (keys.includes('groq')) aikeys.addKey(app.db, app.vault, { provider: 'groq', label: 'Groq', key: 'gsk_' + 'q'.repeat(40) + 'QQQQ', makeDefault: true });

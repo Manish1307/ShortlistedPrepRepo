@@ -142,6 +142,9 @@ function addRoutes(ctx) {
       sectors: SECTORS.map(x => ({ id: x.id, label: x.label })),
       account: { lastLogin: c.last_login, passwordSetAt: c.password_set_at },
       licences: lics,
+      entitlements: require('./entitlements').forCustomer(db, c.id),
+      planOrders: all('SELECT id, number, plan_name, amount_paise, status, created_at, paid_at, ends_at FROM plan_orders WHERE customer_id = ? ORDER BY id DESC LIMIT 20', c.id)
+        .map(o => ({ id: o.id, number: o.number, plan: o.plan_name, amount: o.amount_paise / 100, status: o.status, createdAt: o.created_at, paidAt: o.paid_at, endsAt: o.ends_at })),
       orders: all('SELECT id, plan, amount_cents, currency, status, created_at FROM orders WHERE customer_id = ? ORDER BY id DESC', c.id),
       profile: { topics: p.topics, resume: p.resume, resumeName: p.resumeName, updatedAt: p.updatedAt },
       conversations: all(`SELECT v.id, v.started_at, v.duration_sec, v.question_count, v.device_name,

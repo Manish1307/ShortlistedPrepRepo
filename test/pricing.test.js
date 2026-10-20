@@ -160,3 +160,28 @@ test('buying a plan: order with GST, UPI / bank details, the customer reports pa
     assert.ok(s.db.prepare("SELECT COUNT(*) AS n FROM audit WHERE action LIKE 'pricing.%'").get().n >= 4);
   });
 });
+
+test('a plan sets what a candidate can do: Free limits are enforced, a paid plan lifts them, and My account and the dashboard show the same numbers', async () => {
+  await withServer(async s => {
+    const db = s.app.db;
+    const ent = require('../admin/lib/entitlements');
+    db.prepare("INSERT INTO customers (email, name, created_at) VALUES ('p@example.com', 'P', datetime('now'))").run();
+    const id = db.prepare("SELECT id FROM customers WHERE email = 'p@example.com'").get().id;
+    let e = ent.forCustomer(db, id);
+    assert.equal(e.plan.code, 'free');
+    assert.deepEqual(e.limits.find(l => l.key === 'jobSearches').limit, 2);
+    // two searches used: the third is refused with a message that points to Pricing
+    for (let i = 0; i < 2; i++) db.prepare("INSERT INTO career_job_searches (customer_id, params_json, status, created_at) VALUES (?, '{}', 'done', datetime('now'))").run(id);
+    assert.throws(() => ent.check(db, id, 'jobSearches'), err => err.status === 402 && /Upgrade/.test(err.message));
+    // a failed search is not counted
+    db.prepare("UPDATE career_job_searches SET status = 'failed' WHERE id = (SELECT MIN(id) FROM career_job_searches)").run();
+    ent.check(db, id, 'jobSearches');
+    // a paid plan (Shortlist Pass: about 30 searches) replaces the Free limits from the day it starts
+    const plan = db.prepare("SELECT * FROM pricing_plans WHERE code = 'shortlist-30'").get();
+    db.prepare("INSERT INTO customer_plans (customer_id, plan_id, plan_code, plan_name, limits_json, starts_at, ends_at, status, created_at) VALUES (?,?,?,?,?,?,?, 'active', datetime('now'))")
+      .run(id, plan.id, plan.code, plan.name, plan.limits_json, new Date(Date.now() - 1000).toISOString(), new Date(Date.now() + 86400000 * 30).toISOString());
+    e = ent.forCustomer(db, id);
+    assert.deepEqual([e.plan.code, e.plan.free, e.limits.find(l => l.key === 'jobSearches').limit, e.limits.find(l => l.key === 'jobSearches').used], ['shortlist-30', false, 30, 0]);
+    ent.check(db, id, 'jobSearches');
+  });
+});

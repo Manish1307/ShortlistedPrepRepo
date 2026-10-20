@@ -210,6 +210,24 @@
       }) : h('p', { class: 'ac-muted' }, 'Not activated on a computer yet. Open the app and enter this key to start.'));
   }
 
+
+  /** The candidate's plan (Pricing): what it includes, what is used, and the way to change it. */
+  function planBlock() {
+    var e = me.entitlements; if (!e) return null;
+    var p = e.plan;
+    return h('div', {},
+      h('div', { class: 'ac-lic-head' }, h('b', { style: 'font-size:18px' }, p.name), badge(p.free ? 'free' : 'active')),
+      h('p', { class: 'ac-muted', style: 'margin:4px 0 12px' }, p.free ? 'You are on the free plan. Upgrade for more AI job searches, Insight plans and a bigger daily AI allowance.'
+        : 'Valid until ' + date(p.endsAt) + ' (' + plural(Math.max(0, daysLeft(p.endsAt) || 0), 'day') + ' left).'),
+      p.dailyTokens ? h('p', { class: 'ac-muted', style: 'margin:0 0 10px' }, 'AI allowance: ' + p.dailyTokens.toLocaleString('en-IN') + ' tokens a day') : null,
+      e.limits.map(function (l) {
+        return h('div', { class: 'ac-fact', style: 'margin-bottom:8px' }, h('span', {}, l.label),
+          h('b', {}, l.limit == null ? String(l.used) : l.used + ' of ' + l.limit + (l.pct >= 100 ? ' (limit reached)' : '')),
+          l.limit ? h('div', { class: 'ac-bar' }, h('i', { style: 'width:' + l.pct + '%' })) : null);
+      }),
+      h('a', { class: 'btn btn-primary', style: 'margin-top:8px', href: 'pricing.html' }, p.free ? 'See plans and upgrade' : 'Change or renew your plan'));
+  }
+
   function classList(list, limit) {
     if (!list.length) return empty('No classes yet', 'Each Live Class session is saved here when you press End.');
     return h('div', {}, list.slice(0, limit || list.length).map(function (c) {
@@ -408,6 +426,7 @@
           stat('calendar', 'sun', left === null ? (main && main.status === 'active' ? '∞' : '—') : Math.max(0, left), left === null ? (main && main.status === 'active' ? 'Never expires' : 'No active licence') : 'Days left on licence')),
         h('div', { class: 'ac-grid' },
           h('div', { class: 'ac-stack' },
+            card('Your plan', planBlock()),
             card('Your licence', main ? licenceBlock(main) : empty('No licence yet', 'Contact us to get started.'), me.licences.length > 1 ? go('licences') : null),
             card('Recent classes', classList(me.conversations, 3), me.conversations.length > 3 ? go('classes') : null)),
           h('div', { class: 'ac-stack' },

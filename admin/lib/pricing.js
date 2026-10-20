@@ -167,6 +167,26 @@ function addRoutes(ctx) {
     return { order: presentOrder(one('SELECT * FROM plan_orders WHERE id = ?', o.id)) };
   });
 
+  // the team gives a candidate a plan (complimentary, or after a payment taken outside the site), or ends it
+  add('POST', '/admin/api/candidates/:id/plan', { admin: true, perm: 'pricing.write' }, (req, res, { params, body, admin }) => {
+    const c = one('SELECT * FROM customers WHERE id = ?', params.id);
+    if (!c) throw new ApiError(404, 'Candidate not found');
+    if (body.action === 'end') {
+      db.prepare("UPDATE customer_plans SET status = 'ended' WHERE customer_id = ? AND status = 'active'").run(c.id);
+      audit(admin, 'plan.end', c.email, '');
+      logActivity(db, c.id, 'plan.ended', 'Plan ended by the team');
+      return { plan: null };
+    }
+    const row = planRow(Number(body.planId));
+    if (!row || row.archived) throw new ApiError(404, 'Plan not found');
+    const plan = presentPlan(row);
+    if (body.days) plan.durationDays = int(body.days, 'Days', 1, 3650);
+    const dates = activate(db, c.id, plan, null);
+    audit(admin, 'plan.grant', c.email, `${plan.name} until ${dates.endsAt.slice(0, 10)}`);
+    logActivity(db, c.id, 'plan.started', `${plan.name} until ${dates.endsAt.slice(0, 10)} (from the team)`);
+    return { plan: activePlan(db, c.id) };
+  });
+
   // a gateway's server-to-server notice (wired when a gateway is connected; see payments.js)
   add('POST', '/api/payments/webhook/:provider', { public: true }, (req, res, { params, body }) => payments.webhook({ db, vault, cfg: config(), provider: params.provider, body, req }));
 

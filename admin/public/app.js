@@ -968,6 +968,29 @@
           h('dt', {}, 'AI actions'), h('dd', {}, `${c.aiActions || 0} in total`)),
         h('div', { class: 'small muted', style: 'margin-bottom:6px' }, `Career toolkit progress: ${c.done} of 5 steps`), tracker),
 
+      section('Plan and usage', (() => {
+        const e = d.entitlements, wrap = h('div', {});
+        const rows = e.limits.map(l => h('div', { class: 'list-item' }, h('span', {}, l.label),
+          h('span', {}, l.limit == null ? String(l.used) : l.used + ' of ' + l.limit, l.limit != null && l.pct >= 100 ? h('span', { class: 'pill bad', style: 'margin-left:8px' }, 'limit reached') : null)));
+        const now = h('p', {}, h('b', {}, e.plan.name), ' ', e.plan.free ? h('span', { class: 'pill' }, 'no paid plan') : h('span', { class: 'pill good' }, 'until ' + date(e.plan.endsAt)),
+          h('span', { class: 'muted small' }, e.plan.dailyTokens ? '  · ' + e.plan.dailyTokens.toLocaleString('en-IN') + ' AI tokens a day' : ''));
+        const reload = () => candidateDetail(el, id, back);
+        const tools = can('pricing.write') ? h('div', { class: 'actions' },
+          h('button', { class: 'btn sm', onclick: () => guard(async () => {
+            const p = await get('/admin/api/pricing');
+            const f = h('div', {}, field('Plan', { name: 'planId', type: 'select', options: p.plans.filter(x => !x.archived).map(x => ({ value: x.id, label: x.name + ' · ₹' + x.price })) }),
+              field('Days (optional)', { name: 'days', type: 'number', min: 1, max: 3650 }, 'Leave empty for the length of the plan.'));
+            dialog('Give a plan to ' + (c.name || c.email), f, [{ label: 'Give plan', kind: 'primary', run: () => guard(async () => {
+              const v = values(f); await post('/admin/api/candidates/' + id + '/plan', { planId: Number(v.planId), days: v.days ? Number(v.days) : undefined }); toast('Plan given'); reload(); }) }]);
+          }) }, 'Give a plan'),
+          !e.plan.free ? h('button', { class: 'btn sm danger', onclick: () => guard(async () => { await post('/admin/api/candidates/' + id + '/plan', { action: 'end' }); toast('Plan ended'); reload(); }) }, 'End plan') : null) : null;
+        wrap.append(now, ...rows, tools);
+        if (d.planOrders.length) wrap.append(h('h3', { style: 'margin-top:12px' }, 'Plan orders'), table([
+          { label: 'Order', render: o => o.number || '#' + o.id }, { label: 'Plan', render: o => o.plan_name }, { label: 'Amount', render: o => money(o.amount_paise, 'INR') },
+          { label: 'Status', render: o => pill(o.status) }, { label: 'Date', render: o => date(o.created_at) }], d.planOrders));
+        return wrap;
+      })()),
+
       section('Resume',
         !r ? h('p', { class: 'muted' }, 'No resume uploaded yet.') : h('div', {},
           h('p', {}, h('b', {}, r.fileName || 'Pasted resume'), h('span', { class: 'muted' }, ` · ${r.chars.toLocaleString()} characters · uploaded ${dateTime(r.uploadedAt)}`)),

@@ -93,6 +93,8 @@ function addRoutes(ctx) {
       preps: all('SELECT id, search_id, job_title, company, location, url, fit, prep_json, created_at FROM career_job_preps WHERE customer_id = ? ORDER BY id DESC', c.id)
         .map(x => { const pr = parse(x.prep_json) || {}; return { id: x.id, searchId: x.search_id, jobTitle: x.job_title, company: x.company, location: x.location, url: x.url, fit: x.fit,
           skillScore: pr.matrix ? pr.matrix.score : null, gaps: (pr.gaps || []).length, gapPoints: pr.gapPoints || 0, createdAt: x.created_at }; }),
+      entitlements: require('./entitlements').forCustomer(db, c.id),
+      planOrders: all('SELECT id, number, plan_name, amount_paise, status, created_at, ends_at FROM plan_orders WHERE customer_id = ? ORDER BY id DESC LIMIT 20', c.id),
       usage: all('SELECT day, count FROM career_usage WHERE customer_id = ? AND day >= ? ORDER BY day', c.id, since),
       activity: all('SELECT at, action, detail FROM career_activity WHERE customer_id = ? ORDER BY id DESC LIMIT 200', c.id),
     };

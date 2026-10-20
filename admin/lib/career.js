@@ -15,6 +15,7 @@ const { completeJson } = require('./careerai');
 const { buildDocx, resumeParagraphs, letterParagraphs } = require('./docx');
 const { logActivity } = require('./activity');
 const tokens = require('./tokens');
+const entitlements = require('./entitlements');
 
 const MAX_RESUME = 20000;
 const MAX_JD = 12000;
@@ -202,6 +203,7 @@ function addRoutes(ctx) {
       throw new ApiError(400, `You can keep up to ${MAX_VERSIONS} role-based resumes. Delete one to make another.`);
     }
     checkQuota(c.id);
+    entitlements.check(db, c.id, 'roleResumes');
     const ats = parse(r.ats_json);
     const base = ats && ats.resume ? resumeText(ats.resume) : r.source_text;   // start from the improved version when there is one
     const out = await completeJson(aiFor(c.id), { system: ROLE_PROMPT, user: `TARGET ROLE: ${role}\n\nRESUME:\n${base}`, maxTokens: 8000 });

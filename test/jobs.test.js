@@ -169,6 +169,7 @@ async function start() {
   const boards = await fakeBoards(), ai = await fakeGemini();
   const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-jobs-')), aiUpstream: { gemini: ai.base }, jobSourceBase: boards.sourceBase, logoSources: [boards.base + '/icons/{domain}.ico', boards.base + '/icons2/{domain}.ico'], logoHome: boards.base + '/home/{domain}',
     jobCatalogue: [{ name: 'Contoso', url: 'https://boards.greenhouse.io/contoso' }, { name: 'Northwind', url: 'https://careers.smartrecruiters.com/Northwind' }] });
+  app.db.prepare("UPDATE pricing_plans SET limits_json = '{}' WHERE code = 'free'").run();   // these tests are not about plan limits
   const base = await listen(app.server);
   aikeys.addKey(app.db, app.vault, { provider: 'gemini', label: 'Gemini', key: 'AIza' + 'g'.repeat(35) + 'GGGG', makeDefault: true });
   for (const [mail, role] of [['boss@example.com', 'owner'], ['help@example.com', 'support']]) {

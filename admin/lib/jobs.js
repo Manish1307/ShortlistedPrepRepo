@@ -489,6 +489,7 @@ function addRoutes(ctx) {
   add('POST', '/api/career/jobsearch', { public: true }, (req, res, { body }) => {
     const c = me(req);
     require('./career').checkQuota(db, c.id);
+    require('./entitlements').check(db, c.id, 'jobSearches');
     const resume = /^(all|ats|v\d+)$/.test(String(body.resume || '')) ? String(body.resume) : 'all';
     if (!c.sector) throw new ApiError(400, 'Choose your sector first: My account → Profile → Sector.', 'no-sector');
     const p = {
@@ -554,6 +555,7 @@ function addRoutes(ctx) {
       throw new ApiError(422, `We could not read this job's description from ${job.company}'s careers site, and an Insight without it would be guesswork. Open the job, copy its description and paste it here.`, 'no-description');
     }
     require('./career').checkQuota(db, c.id);
+    require('./entitlements').check(db, c.id, 'preps');
     const resumes = resumesFor(c.id, 'all');
     const resume = resumes.find(r => r.label === job.resume) || resumes[0];
     const posting = one('SELECT department, employment_type FROM jobs WHERE id = ?', job.id) || {};

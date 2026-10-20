@@ -37,7 +37,7 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
-  const DASHBOARD_URL = 'https://shortlistprep.com/account.html';   // My account on the ShortlistPrep website
+  const DASHBOARD_URL = 'https://shortlistprep.com/account.html';   // My account on the ClassCue website
   const SOURCES = { mic: 'Mic', system: 'System', both: 'Mic + System' };
   const PROVIDERS = { groq: 'Groq', gemini: 'Gemini', claude: 'Claude', demo: 'Demo', proxy: 'Groq' };   // proxy: Groq through the licence server
 

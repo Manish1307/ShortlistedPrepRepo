@@ -104,7 +104,7 @@ A mix gives the most useful feedback:
   The message has the address, their email and a one-time password; they choose their own password at first sign-in.
 
 ### C3. Message to send with the login
-> Hi {name}, thank you for helping us test ShortlistPrep, our AI co-pilot for the job hunt.
+> Hi {name}, thank you for helping us test ClassCue, our AI co-pilot for the job hunt.
 > Please spend about 30–40 minutes on it this week, as if you were applying for jobs for real:
 > 1. Sign in and upload your latest resume (Career toolkit).
 > 2. Run the ATS check and download the improved resume.
@@ -143,7 +143,7 @@ Copy these questions into a Google Form (or any form tool).
 8. What was the **most valuable** part for you? (text)
 9. What is **missing** that would make you use it every week? (text)
 10. Did you apply to any job you found here? Yes / No / Not yet
-11. How likely are you to recommend ShortlistPrep to a friend? (0–10)
+11. How likely are you to recommend ClassCue to a friend? (0–10)
 12. Would you pay for it? No / ₹99 a month / ₹199 a month / ₹499 a month / more
 13. May we contact you for a short call? Yes / No
 

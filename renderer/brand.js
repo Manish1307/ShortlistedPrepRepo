@@ -1,4 +1,4 @@
-// ShortlistPrep desktop look: one icon set and the progress bar used by Live Class and Mock Interview.
+// ClassCue desktop look: one icon set and the progress bar used by Live Class and Mock Interview.
 //   Brand.icon('mic')                   -> an <svg> element (24 px grid, stroke follows the text colour)
 //   <i data-icon="mic"></i>             -> replaced by that icon when the page loads (Brand.hydrate)
 //   Brand.progress(host, { title, expectedSec, stages, onCancel, compact, startedAt })

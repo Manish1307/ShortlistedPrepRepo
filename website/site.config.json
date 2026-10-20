@@ -1,5 +1,5 @@
 {
-  "name": "ShortlistPrep",
+  "name": "ClassCue",
   "tagline": "AI interview preparation: practise today, get hired tomorrow",
   "supportEmail": "support@shortlistprep.com",
   "version": "0.1.0",
@@ -8,7 +8,7 @@
   "priceAmount": "12",
   "priceCurrency": "$",
   "priceYearly": "99",
-  "company": "ShortlistPrep Technologies Pvt Ltd",
+  "company": "ClassCue Technologies Pvt Ltd",
   "address": "Sector 16B, Noida, Uttar Pradesh 201318, India",
   "lastUpdated": "16 October 2026",
   "demoContent": false,

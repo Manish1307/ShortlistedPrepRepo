@@ -75,7 +75,7 @@ Wait until they work (minutes to a few hours). Check from your PC: `nslookup api
 1. https://dash.cloudflare.com → Workers & Pages → Create → Pages → **Connect to Git** → choose the repository.
 2. Build settings: build command `node website/build.js`, build output directory `website/site`.
 3. Deploy, then Custom domains → add `yourdomain.com` (and `www.yourdomain.com`).
-4. The website currently has the ShortlistedPrep (interview prep) pages; ClassCue product pages, real prices and
+4. The website carries the ClassCue pages; the ClassCue product pages, real prices and
    the download link must be added before launch.
 
 ## Everyday tasks (in the VM's SSH window)

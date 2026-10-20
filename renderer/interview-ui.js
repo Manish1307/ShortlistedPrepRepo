@@ -740,7 +740,7 @@
       card.appendChild(f);
     }
     const note = el('p', 'hint');
-    note.textContent = 'Saved to your ShortlistPrep account (My account → Interview prep).';
+    note.textContent = 'Saved to your ClassCue account (My account → Interview prep).';
     card.appendChild(note);
 
     const row = el('div', 'row');

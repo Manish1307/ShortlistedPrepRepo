@@ -79,7 +79,7 @@
     });
   }
 
-  // ---------- talking to the ShortlistPrep server (visits and enquiries) ----------
+  // ---------- talking to the ClassCue server (visits and enquiries) ----------
   var meta = document.querySelector('meta[name="api-url"]');
   var API = meta ? meta.getAttribute('content').replace(/\/+$/, '') : '';
 

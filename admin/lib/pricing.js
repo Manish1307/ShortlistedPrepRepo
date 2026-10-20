@@ -28,7 +28,7 @@ const int = (v, field, min, max) => {
 const LIMIT_KEYS = ['dailyTokens', 'jobSearches', 'preps', 'roleResumes', 'liveSessions'];   // per plan; dailyTokens is enforced (tokens.js)
 
 const DEFAULT_PLANS = [
-  { code: 'free', name: 'Free', tagline: 'Try ShortlistPrep', price: 0, mrp: 0, days: 30, active: 1, featured: 0, sort: 10, cta: 'Start free',
+  { code: 'free', name: 'Free', tagline: 'Try ClassCue', price: 0, mrp: 0, days: 30, active: 1, featured: 0, sort: 10, cta: 'Start free',
     features: ['1 ATS check and improved resume', '1 role-based resume', '2 AI job searches a month', 'Skill Gap Matrix on every job', '1 job Insight'],
     limits: { dailyTokens: 30000, jobSearches: 2, preps: 1, roleResumes: 1, liveSessions: 0 } },
   { code: 'shortlist-30', name: 'Shortlist Pass', tagline: 'Get more interview calls', price: 299, mrp: 0, days: 30, active: 1, featured: 0, sort: 20, cta: 'Get Shortlist Pass',

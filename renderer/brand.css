@@ -1,11 +1,11 @@
-/* ShortlistPrep brand theme for the desktop windows (Live Class and Mock Interview).
+/* ClassCue brand theme for the desktop windows (Live Class and Mock Interview).
  * Light, mostly white surfaces with soft purple and teal gradients, the brand gradient (teal to purple), one icon style
  * (renderer/brand.js), smooth 150 ms motion. A dark variant is available with data-theme="dark".
  * Shared pieces only: tokens, brand mark, toolbar, buttons, kbd chips, pills, menus, inputs, notices, toast and the progress bar.
  * Each window keeps its own layout rules in its HTML. */
 
 :root {
-  /* light is the default: white surfaces, ShortlistPrep purple and teal, soft gradients */
+  /* light is the default: white surfaces, ClassCue purple and teal, soft gradients */
   --bar: linear-gradient(120deg, #ffffff 0%, #f8f3ff 62%, #eafcfd 100%); --card: linear-gradient(180deg, #ffffff 0%, #fbf8ff 100%); --menu: #ffffff;
   --raise: rgba(125, 42, 232, .06); --raise-2: rgba(125, 42, 232, .12);
   --line: #e6def7; --ink: #1b1436; --muted: #6a6388; --chip: rgba(125, 42, 232, .09);

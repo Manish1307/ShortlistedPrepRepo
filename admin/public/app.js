@@ -140,25 +140,161 @@
     const first = form.querySelector('input'); if (first) first.focus();
   }
 
-  // ---------- shell ----------
-  const NAV = [
-    ['overview', 'Overview'], ['opportunities', 'Opportunities'], ['visitors', 'Website visits'], ['customers', 'Customers'], ['candidates', 'Candidates'], ['licences', 'Licences'], ['profiles', 'Topics and resume'], ['conversations', 'Conversations'], ['jobs', 'Jobs'], ['tokens', 'AI tokens'], ['pricing', 'Pricing'], ['aikeys', 'AI keys'], ['orders', 'Orders'],
-    ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
+  // ---------- shell: top header with grouped menus, a page header, and the page ----------
+  const ICONS = {
+    dashboard: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c.8-3.6 3.4-5.5 7-5.5s6.2 1.9 7 5.5M16 5a3.5 3.5 0 0 1 0 7M18 14.8c2 .6 3.4 2.4 4 5.2"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
+    key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
+    doc: '<path d="M6 3h8l4 4v14H6V3z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+    chat: '<path d="M4 5h16v11H9l-5 4V5z"/>',
+    bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="8" cy="8" r="1.5"/>',
+    box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4V7z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+    chevron: '<path d="M6 9l6 6 6-6"/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    logout: '<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>',
+  };
+  /** A small line icon (the markup is fixed above, never user text). */
+  function icon(name, cls) {
+    const s = document.createElement('span');
+    s.className = 'ico' + (cls ? ' ' + cls : '');
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[name] || '') + '</svg>';
+    return s;
+  }
+
+  // the menu: groups of pages, each with a one-line description (shown in the menu and in the page header)
+  const GROUPS = [
+    { id: 'overview', label: 'Overview', items: [['overview', 'Overview', 'Revenue, licences and website activity at a glance.', 'dashboard']] },
+    { id: 'growth', label: 'Growth', items: [
+      ['opportunities', 'Opportunities', 'Demo requests and enquiries that came from the website.', 'target'],
+      ['visitors', 'Website visits', 'Who visits the website and where they come from.', 'globe']] },
+    { id: 'customers', label: 'Customers', items: [
+      ['customers', 'Customers', 'Customer records, licences and website logins.', 'users'],
+      ['candidates', 'Candidates', 'Career toolkit progress, documents and AI activity.', 'briefcase'],
+      ['licences', 'Licences', 'Issue, extend or cancel licences and see the computers using them.', 'key']] },
+    { id: 'learning', label: 'Activity', items: [
+      ['conversations', 'Conversations', 'Live Class sessions saved by the app.', 'chat'],
+      ['profiles', 'Topics and resume', 'The topics and resume that set the area of the AI answers.', 'doc']] },
+    { id: 'ai', label: 'AI and jobs', items: [
+      ['jobs', 'Jobs', 'AI Job search: the Master Prompt, companies and live openings.', 'briefcase'],
+      ['tokens', 'AI tokens', 'The daily AI allowance, token packs and requests for more.', 'bolt'],
+      ['aikeys', 'AI keys', 'AI service keys and which licence uses which.', 'lock']] },
+    { id: 'sales', label: 'Sales', items: [
+      ['orders', 'Orders', 'Payments, refunds and plan orders.', 'receipt'],
+      ['pricing', 'Pricing', 'Plans, prices, offers and payment settings.', 'tag']] },
+    { id: 'company', label: 'Company', items: [
+      ['messages', 'Support', 'Support messages from customers.', 'mail'],
+      ['releases', 'Releases', 'App versions and download links.', 'box'],
+      ['audit', 'Audit log', 'Everything the admins changed.', 'shield'],
+      ['team', 'Team', 'Admin accounts and their roles.', 'users']] },
   ];
+  const PAGES = {};
+  GROUPS.forEach(g => g.items.forEach(([id, label, desc, ico]) => { PAGES[id] = { id, label, desc, ico, group: g.label }; }));
+  PAGES.account = { id: 'account', label: 'My account', desc: 'Your sign-in details and password.', ico: 'user', group: 'You' };
+  const NAV = Object.keys(PAGES).map(id => [id, PAGES[id].label]);   // kept for anything that lists the pages
+
+  let menuOpen = null;   // the group, 'user' or 'mobile' that is open
+  function closeMenus() {
+    menuOpen = null;
+    document.querySelectorAll('.topbar .open').forEach(n => n.classList.remove('open'));
+    const bar = document.querySelector('.topbar'); if (bar) bar.classList.remove('nav-open');
+    document.querySelectorAll('.topbar [aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  }
+  function toggleMenu(key, node, btn) {
+    const was = menuOpen === key;
+    const bar = document.querySelector('.topbar');
+    const mobileOpen = bar.classList.contains('nav-open') && key !== 'user';   // a group opens inside the open phone menu
+    closeMenus();
+    if (mobileOpen) bar.classList.add('nav-open');
+    if (!was) { menuOpen = key; node.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+  }
+  if (!window.__adminMenus) {   // once: a click elsewhere or Escape closes the menus
+    window.__adminMenus = true;
+    document.addEventListener('click', e => { if (menuOpen && !e.target.closest('.topbar')) closeMenus(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && menuOpen) closeMenus(); });
+  }
+  const go = id => { closeMenus(); view = id; render(); window.scrollTo(0, 0); };
+  const badgeFor = id => (id === 'messages' ? openCount : id === 'opportunities' ? newOppCount : 0);
+
+  function header() {
+    const items = g => g.items.filter(([id]) => id !== 'team' || me.role === 'owner');
+    const groups = GROUPS.map(g => ({ ...g, items: items(g) })).filter(g => g.items.length);
+    const active = PAGES[view] || PAGES.overview;
+    const nav = h('nav', { class: 'topnav', id: 'topnav', 'aria-label': 'Main' }, groups.map(g => {
+      if (g.items.length === 1 && g.id === 'overview') {
+        const [id, label] = g.items[0];
+        return h('div', { class: 'ng' }, h('button', { class: 'ng-btn' + (view === id ? ' active' : ''), 'aria-current': view === id ? 'page' : null, onclick: () => go(id) }, label));
+      }
+      const here = g.items.some(([id]) => id === view);
+      const count = g.items.reduce((n, [id]) => n + badgeFor(id), 0);
+      const wrap = h('div', { class: 'ng' });
+      const btn = h('button', { class: 'ng-btn' + (here ? ' active' : ''), type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', onclick: e => { e.stopPropagation(); toggleMenu(g.id, wrap, btn); } },
+        g.label, count ? h('span', { class: 'badge-count' }, count) : null, icon('chevron', 'caret'));
+      wrap.append(btn, h('div', { class: 'ng-menu', role: 'menu' }, g.items.map(([id, label, desc, ico]) =>
+        h('button', { class: 'ng-item' + (view === id ? ' on' : ''), role: 'menuitem', onclick: () => go(id) },
+          icon(ico), h('span', { class: 'ng-text' }, h('b', {}, label), h('small', {}, desc)), badgeFor(id) ? h('span', { class: 'badge-count' }, badgeFor(id)) : null))));
+      return wrap;
+    }));
+    // you
+    const initials = String(me.email || '?').split('@')[0].split(/[._-]/).map(p => p[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+    const youWrap = h('div', { class: 'ng you' });
+    const youBtn = h('button', { class: 'you-btn', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Your account', onclick: e => { e.stopPropagation(); toggleMenu('user', youWrap, youBtn); } },
+      h('span', { class: 'avatar' }, initials), h('span', { class: 'you-text' }, h('b', {}, String(me.email).split('@')[0]), h('small', {}, me.role)), icon('chevron', 'caret'));
+    youWrap.append(youBtn, h('div', { class: 'ng-menu right', role: 'menu' },
+      h('div', { class: 'you-card' }, h('b', {}, me.email), h('span', { class: 'pill' }, me.role)),
+      h('button', { class: 'ng-item', role: 'menuitem', onclick: () => go('account') }, icon('user'), h('span', { class: 'ng-text' }, h('b', {}, 'My account'), h('small', {}, 'Your sign-in details and password'))),
+      h('button', { class: 'ng-item danger', role: 'menuitem', onclick: async () => { await guard(() => post('/admin/api/logout')); me = null; closeMenus(); render(); } }, icon('logout'), h('span', { class: 'ng-text' }, h('b', {}, 'Sign out')))));
+    const burger = h('button', { class: 'menu-btn', type: 'button', 'aria-label': 'Menu', 'aria-controls': 'topnav', 'aria-expanded': 'false', onclick: e => {
+      e.stopPropagation();
+      const bar = document.querySelector('.topbar'), was = bar.classList.contains('nav-open');
+      closeMenus();
+      if (!was) { menuOpen = 'mobile'; bar.classList.add('nav-open'); burger.setAttribute('aria-expanded', 'true'); }
+    } }, icon('menu'));
+    const bar = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
+      burger,
+      h('a', { class: 'brand', href: '#', onclick: e => { e.preventDefault(); go('overview'); } }, h('span', { class: 'logo' }, 'C'), h('span', { class: 'brand-text' }, 'ClassCue', h('small', {}, 'Admin'))),
+      nav, h('div', { class: 'top-right' }, youWrap)));
+    return bar;
+  }
+
+  /** The page header: where you are, the page title and what the page is for, with quick links to what needs attention. */
+  function banner() {
+    const p = PAGES[view] || PAGES.overview;
+    const chip = (label, n, id) => h('button', { class: 'chip' + (n ? ' hot' : ''), onclick: () => go(id) }, h('b', {}, String(n)), label);
+    return h('section', { class: 'banner' }, h('div', { class: 'banner-in' },
+      h('div', { class: 'banner-text' },
+        h('div', { class: 'crumbs' }, h('span', {}, 'Admin'), h('i', {}, '›'), h('span', {}, p.group), p.group !== p.label ? [h('i', {}, '›'), h('b', {}, p.label)] : null),
+        h('h1', { id: 'page-title' }, p.label),
+        h('p', {}, p.desc)),
+      h('div', { class: 'banner-chips' }, chip(' open support', openCount, 'messages'), chip(' new enquiries', newOppCount, 'opportunities'),
+        h('span', { class: 'today' }, new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })))));
+  }
 
   async function render() {
     if (!me) return renderLogin();
     const content = h('main', { class: 'main', id: 'content' });
-    const nav = NAV.filter(([id]) => id !== 'team' || me.role === 'owner').map(([id, label]) =>
-      h('button', { class: 'nav-item', 'aria-current': id === view ? 'page' : null, onclick: () => { view = id; render(); } },
-        label, id === 'messages' && openCount ? h('span', { class: 'badge-count' }, openCount) : null, id === 'opportunities' && newOppCount ? h('span', { class: 'badge-count' }, newOppCount) : null));
-    root.replaceChildren(h('div', { class: 'shell' },
-      h('nav', { class: 'side', 'aria-label': 'Main' }, h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'C'), 'ClassCue admin'), nav,
-        h('div', { class: 'spacer' }), h('div', { class: 'who' }, `${me.email} (${me.role})`),
-        h('button', { class: 'nav-item', onclick: async () => { await guard(() => post('/admin/api/logout')); me = null; render(); } }, 'Sign out')),
-      content));
+    root.replaceChildren(h('div', { class: 'shell' }, header(), banner(), content));
+    document.title = (PAGES[view] || PAGES.overview).label + ' · ClassCue admin';
+    const seen = openCount + ':' + newOppCount;
     await guard(() => VIEWS[view](content));
+    if (seen !== openCount + ':' + newOppCount && me) { const shellEl = root.firstChild; shellEl.replaceChild(header(), shellEl.children[0]); shellEl.replaceChild(banner(), shellEl.children[1]); }
+    // the page header already shows the title: a page's own heading is hidden when it says the same, leaving its tools
+    const title = (PAGES[view] || PAGES.overview).label;
+    const first = content.querySelector('.head > h1');
+    if (first && first.textContent.trim() === title) { first.classList.add('dup'); first.parentElement.classList.add('solo'); }
   }
+
+
 
   async function refreshOpenCount() {
     try { openCount = (await get('/admin/api/messages?status=open')).messages.length; newOppCount = (await get('/admin/api/opportunities?status=new')).counts.new; } catch (_) { /* ignore */ }
@@ -577,7 +713,7 @@
       pages.length ? h('div', {}, h('h2', {}, 'Pages this visitor viewed'), pages.map(p => h('div', { class: 'list-item' }, h('span', {}, p.path), h('span', { class: 'muted small' }, dateTime(p.at))))) : null,
       h('h2', {}, 'History'),
       notes.length ? notes.map(n => h('div', { class: 'list-item' }, h('span', {}, n.body), h('span', { class: 'muted small' }, n.author + ' · ' + dateTime(n.created_at)))) : h('p', { class: 'muted' }, 'No notes yet.'),
-      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(o.email) + '?subject=' + encodeURIComponent('Your ShortlistPrep ' + (o.kind === 'demo' ? 'demo' : 'request')) }, 'Reply by email')));
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(o.email) + '?subject=' + encodeURIComponent('Your ClassCue ' + (o.kind === 'demo' ? 'demo' : 'request')) }, 'Reply by email')));
     const buttons = [];
     if (write) buttons.push({ label: 'Save', kind: 'primary', run: () => guard(async () => {
       const v = values(body);
@@ -1067,7 +1203,7 @@
         field('Prices on the website', { name: 'pricesIncludeGst', type: 'select', value: c.pricesIncludeGst ? 'yes' : 'no', options: [{ value: 'yes', label: 'Include GST (recommended for consumers)' }, { value: 'no', label: 'GST added at checkout' }] })),
       h('div', { class: 'row2' }, field('GSTIN (optional)', { name: 'gstin', value: c.gstin, maxlength: 15, placeholder: '09ABCDE1234F1Z5' }), field('Order number prefix', { name: 'invoicePrefix', value: c.invoicePrefix, maxlength: 8 })),
       h('h3', { style: 'margin:12px 0 4px' }, 'UPI and bank transfer (used until a gateway is connected)'),
-      h('div', { class: 'row2' }, field('UPI ID', { name: 'upiId', value: c.manual.upiId, maxlength: 60, placeholder: 'shortlistprep@icici' }), field('Payee name', { name: 'payeeName', value: c.manual.payeeName, maxlength: 80 })),
+      h('div', { class: 'row2' }, field('UPI ID', { name: 'upiId', value: c.manual.upiId, maxlength: 60, placeholder: 'classcue@icici' }), field('Payee name', { name: 'payeeName', value: c.manual.payeeName, maxlength: 80 })),
       h('div', { class: 'row2' }, field('Bank name', { name: 'bankName', value: c.manual.bankName, maxlength: 80 }), field('Account name', { name: 'accountName', value: c.manual.accountName, maxlength: 80 })),
       h('div', { class: 'row2' }, field('Account number', { name: 'accountNumber', value: c.manual.accountNumber, maxlength: 30 }), field('IFSC', { name: 'ifsc', value: c.manual.ifsc, maxlength: 11 })),
       field('Instructions shown to the customer', { name: 'instructions', type: 'textarea', value: c.manual.instructions, maxlength: 500 }),

@@ -146,6 +146,12 @@ CREATE TABLE IF NOT EXISTS interview_sets (
   questions_json TEXT NOT NULL, created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_interview_sets ON interview_sets(customer_id);
+CREATE TABLE IF NOT EXISTS interview_intros (
+  id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE, licence_id INTEGER,
+  resume_key TEXT NOT NULL DEFAULT '', resume_label TEXT NOT NULL DEFAULT '', role TEXT NOT NULL DEFAULT '', company TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'app', guide_json TEXT, answer TEXT NOT NULL DEFAULT '', seconds INTEGER NOT NULL DEFAULT 0, review_json TEXT, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_interview_intros ON interview_intros(customer_id);
 CREATE TABLE IF NOT EXISTS career_activity (
   id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   at TEXT NOT NULL, action TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''

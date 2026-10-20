@@ -24,6 +24,28 @@ const makeSet = () => ({
   scenario: Array.from({ length: 5 }, (_, i) => ({ question: `Callus contamination is rising in the lab: what do you do (${i})?`, topic: 'Tissue culture', resumeRef: '', answer: 'I would isolate the affected batches, check the sterilisation steps and media, and repeat with a control to find the cause.', points: ['Isolate', 'Check media'] })),
 });
 
+const makeGuide = () => ({
+  points: [
+    { label: 'Present', bullet: 'I am a research scientist at GreenSeed Labs, working on doubled haploid lines in maize.', resumeRef: 'Research Scientist at GreenSeed Labs' },
+    { label: 'Past', bullet: 'I reduced the breeding cycle by two seasons.', resumeRef: 'reduced the breeding cycle by two seasons' },
+    { label: 'Past', bullet: 'I ran plant tissue culture protocols for callus induction and regeneration.', resumeRef: 'plant tissue culture protocols for callus induction and regeneration' },
+    { label: 'Strength', bullet: 'I trained and led four lab technicians.', resumeRef: 'Trained four lab technicians' },
+    { label: 'Strength', bullet: 'I am trained in plant biotechnology.', resumeRef: 'M.Sc. Plant Biotechnology' },
+    { label: 'Why this role', bullet: 'I want to apply fast breeding methods at a larger seed programme.', resumeRef: 'a line that is not in the resume' }],
+  script: 'I am a research scientist at GreenSeed Labs where I develop doubled haploid lines in maize, which cut our breeding cycle by two seasons. '.repeat(3),
+  closing: 'I would like to bring that speed to your seed programme.', tips: ['Start with your current role', 'Keep it under 90 seconds'] });
+const makeReview = () => ({
+  score: 6, verdict: 'A good start, but it skips your strongest result and one claim is not in your resume.',
+  scores: { structure: 5, relevance: 7, impact: 6, authenticity: 4, delivery: 7 },
+  claims: [
+    { claim: 'I work at GreenSeed Labs as a research scientist', status: 'supported', evidence: 'Research Scientist at GreenSeed Labs', note: '' },
+    { claim: 'I cut the breeding cycle by two seasons', status: 'supported', evidence: 'words that are not in the resume at all', note: '' },
+    { claim: 'I have a PhD in genetics', status: 'not_in_resume', evidence: '', note: 'Your resume shows an M.Sc.' }],
+  strengths: ['Clear current role'], trim: ['The long story about school'], improvements: ['Lead with the breeding-cycle result', 'Remove the PhD claim'],
+  missing: [{ point: 'You trained four lab technicians', why: 'Shows leadership', resumeRef: 'Trained four lab technicians' }],
+  impressive: 'I am a research scientist at GreenSeed Labs where I develop doubled haploid lines in maize and cut the breeding cycle by two seasons. '.repeat(3),
+  points: makeGuide().points, followUps: ['How did you cut the cycle?', 'How did you lead the technicians?', 'Why this role?'] });
+
 async function start() {
   const seen = [];
   let bad = false;
@@ -31,9 +53,12 @@ async function start() {
     let raw = '';
     req.on('data', c => { raw += c; });
     req.on('end', () => {
-      seen.push(JSON.parse(raw || '{}'));
+      const body = JSON.parse(raw || '{}');
+      seen.push(body);
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(bad ? { personalised: [{ question: 'x' }] } : makeSet()) }] } }], usageMetadata: { totalTokenCount: 6000 } }));
+      const system = (body.systemInstruction && body.systemInstruction.parts[0].text) || '';
+      const reply = /INTRODUCTION GUIDE/.test(system) ? makeGuide() : /answer to "Tell me about yourself"/.test(system) ? makeReview() : bad ? { personalised: [{ question: 'x' }] } : makeSet();
+      res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }], usageMetadata: { totalTokenCount: 6000 } }));
     });
   });
   const aiBase = await listen(ai);
@@ -195,4 +220,83 @@ test('the interviewer is given the resume-based model answer when scoring', asyn
   await coach.evaluateAnswer(ai, { company: 'Any', role: 'Scientist', round: 'hr', level: 'mid', question: 'q?', answer: 'my answer' });
   assert.match(seen[0], /own resume.*\nI used doubled haploid induction\./);
   assert.doesNotMatch(seen[1], /own resume/);
+});
+
+test('the introduction coach: evidence must really be in the resume; numbers, length and filler words are measured here', () => {
+  const coach = require('../admin/lib/introcoach');
+  assert.equal(coach.quoteIn(RESUME, 'Trained four lab technicians'), 'Trained four lab technicians');
+  assert.equal(coach.quoteIn(RESUME, 'Led a team of fifty engineers'), '');
+  const flags = coach.numberFlags('I have 12 years of experience, grew yields 40% and trained four technicians since 2018. We made 2 lines.', RESUME);
+  assert.deepEqual(flags.map(f => f.text), ['12 years', '40%', '2']);                       // 2018 is a year, not flagged
+  const m = coach.metricsOf('Um so basically I am a scientist, you know, and uh I work in a lab. '.repeat(3), 0);
+  assert.ok(m.fillers >= 9);
+  assert.equal(coach.metricsOf('word '.repeat(300), 0).length, 'long');
+  assert.equal(coach.metricsOf('word '.repeat(150), 75).length, 'good');
+  assert.equal(coach.cleanGuide({ points: [], script: 'short' }, RESUME), null);
+  const review = coach.cleanReview(makeReview(), RESUME, 'I have a PhD in genetics and 12 years of experience', 0);
+  assert.equal(review.claims[1].status, 'partly');                              // "supported" without real evidence is not trusted
+  assert.deepEqual([review.verified.supported, review.verified.partly, review.verified.notInResume], [1, 1, 1]);
+  assert.equal(review.points[5].resumeRef, '');                                  // a quote that is not in the resume is dropped
+  assert.equal(review.scores.authenticity, 4);
+});
+
+test('Tell me about yourself: a guide from the resume, a review of the answer, kept in My account and the dashboard', async () => {
+  await withServer(async s => {
+    const tok = await s.token();
+    // the guide is made once and kept: the second request does not call the AI again
+    const g1 = await s.appCall('POST', '/api/app/interview/intro/guide', tok, { resumeKey: 'main', role: 'Seed Breeder', company: 'Corteva' });
+    assert.equal(g1.status, 200);
+    assert.equal(g1.json.intro.kind, 'guide');
+    assert.ok(g1.json.intro.guide.points.length >= 6);
+    assert.equal(g1.json.intro.guide.points[5].resumeRef, '');                    // the "why this role" bullet has no resume line
+    const calls = s.seen.length;
+    const g2 = await s.appCall('POST', '/api/app/interview/intro/guide', tok, { resumeKey: 'main', role: 'Seed Breeder', company: 'Corteva' });
+    assert.equal(g2.json.intro.id, g1.json.intro.id);
+    assert.equal(s.seen.length, calls);
+    const prompt = s.seen[s.seen.length - 1].contents[0].parts[0].text;
+    assert.match(prompt, /TARGET ROLE: Seed Breeder/);
+    assert.match(prompt, /COMPANY: Corteva/);
+    assert.match(prompt, /Doubled haploid|doubled haploid/);
+
+    // an answer that is too short is refused before any AI is used
+    const before = s.seen.length;
+    const tooShort = await s.appCall('POST', '/api/app/interview/intro/review', tok, { resumeKey: 'main', answer: 'I am a scientist.' });
+    assert.deepEqual([tooShort.status, tooShort.json.code, s.seen.length], [400, 'short', before]);
+
+    const answer = 'I am a research scientist at GreenSeed Labs. I work on doubled haploid lines and I have a PhD in genetics. I reduced the breeding cycle by two seasons and I have 12 years of experience in plant biotechnology and tissue culture work.';
+    const r = await s.appCall('POST', '/api/app/interview/intro/review', tok, { resumeKey: 'main', role: 'Seed Breeder', company: 'Corteva', answer, seconds: 55 });
+    assert.equal(r.status, 200);
+    const intro = r.json.intro;
+    assert.equal(intro.kind, 'attempt');
+    assert.equal(intro.answer, answer);
+    assert.equal(intro.review.score, 6);
+    assert.deepEqual(intro.review.claims.map(c => c.status), ['supported', 'partly', 'not_in_resume']);
+    assert.ok(intro.review.numberFlags.some(f => /12/.test(f.text)));              // "12 years" is not in the resume
+    assert.equal(intro.review.metrics.seconds, 55);
+    assert.ok(intro.review.impressive.length > 100);
+    assert.ok(intro.review.points.length >= 4);
+    assert.ok(intro.guide && intro.guide.points.length >= 6);                      // the kept guide travels with the attempt
+
+    // the same sets are in My account and in the dashboard
+    const priya = await s.site('priya@example.com');
+    const mine = (await priya.get('/api/account/interview')).json;
+    assert.deepEqual(mine.intros.map(x => x.kind), ['attempt', 'guide']);
+    const boss = await s.admin();
+    assert.equal((await boss.get('/admin/api/customers/' + s.priya + '/interview')).json.intros.length, 2);
+    // the website can make a guide too; another customer cannot see or delete these
+    const web = await priya.post('/api/account/interview/intro/guide', { resumeKey: 'main', role: 'Scientist' });
+    assert.equal(web.status, 200);
+    assert.equal(web.json.intro.source, 'web');
+    const ravi = await s.site('ravi@example.com');
+    assert.equal((await ravi.get('/api/account/interview')).json.intros.length, 0);
+    await ravi.post('/api/account/interview/intro/' + intro.id + '/delete');
+    assert.equal((await priya.get('/api/account/interview')).json.intros.length, 3);
+    await priya.post('/api/account/interview/intro/' + intro.id + '/delete');
+    assert.equal((await priya.get('/api/account/interview')).json.intros.length, 2);
+    // no resume: asked to upload one
+    const devB = crypto.randomBytes(16).toString('hex');
+    await s.activate(s.lic2, devB);
+    const none = await s.appCall('POST', '/api/app/interview/intro/guide', await s.token(s.lic2, devB), {});
+    assert.deepEqual([none.status, none.json.code], [400, 'no-resume']);
+  });
 });

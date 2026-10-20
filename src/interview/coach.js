@@ -73,8 +73,8 @@ function describe({ company, role, round, level }) {
   return [
     `Company: ${company && company !== 'Any' ? company : 'any large technology company'}`,
     `Role: ${clean(role, 120) || 'Software engineer'}`,
-    `Round: ${ROUNDS[round] || ROUNDS.technical}`,
-    `Experience level: ${LEVELS[level] || LEVELS.junior}`,
+    `Round: ${round === 'resume' ? 'Questions from the candidate\'s own resume: their projects, skills and work situations' : ROUNDS[round] || ROUNDS.technical}`,
+    `Experience level: ${level === 'resume' ? 'as shown by the candidate\'s resume' : LEVELS[level] || LEVELS.junior}`,
   ].join('\n');
 }
 
@@ -105,7 +105,7 @@ async function generateQuestions(ai, { company, role, round, level, count = 5, f
 /**
  * @returns {Promise<{score: number, verdict: string, strengths: string[], missing: string[], betterAnswer: string, followUp: string}>}
  */
-async function evaluateAnswer(ai, { company, role, round, level, question, points = [], answer, signal } = {}) {
+async function evaluateAnswer(ai, { company, role, round, level, question, points = [], answer, reference = '', signal } = {}) {
   const said = clean(answer, 6000);
   if (!said) {
     return { score: 0, verdict: 'No answer was given.', strengths: [], missing: ['Say something even when unsure: explain what you know and how you would find out the rest.'], betterAnswer: '', followUp: '' };
@@ -115,6 +115,7 @@ async function evaluateAnswer(ai, { company, role, round, level, question, point
     '',
     `Question: ${clean(question, 1500)}`,
     points.length ? `Points a strong answer covers:\n${points.map(p => `- ${p}`).join('\n')}` : '',
+    reference ? `The question comes from the candidate's own resume. A model answer, using only what the resume shows:\n${clean(reference, 1500)}` : '',
     '',
     `Candidate's answer:\n${said}`,
   ].filter(x => x !== null).join('\n');

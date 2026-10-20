@@ -165,3 +165,34 @@ test('the same sets are in My account and in the dashboard; one AI action is cou
     assert.equal((await priya.get('/api/account/interview')).json.sets.length, 1);
   });
 });
+
+test('the app client lists resumes, makes personalised questions, renews an expired token and explains a missing licence', async () => {
+  const { InterviewPrepClient } = require('../src/interview/prep');
+  await withServer(async s => {
+    const base = `http://127.0.0.1:${s.app.server.address().port}`;
+    let renewed = 0;
+    const good = await s.token();
+    const client = new InterviewPrepClient({ serverUrl: base, getToken: async renew => { if (renew) renewed++; return renew ? good : 'expired-token'; } });
+    const list = await client.resumes();                                       // the first call is refused (401), the token is renewed once
+    assert.equal(renewed, 1);
+    assert.equal(list.resumes[0].key, 'main');
+    const set = await client.makeSet({ resumeKey: 'main', role: 'Scientist' });
+    assert.equal(set.questions.length, 15);
+    assert.equal((await client.getSet(set.id)).id, set.id);
+    await assert.rejects(() => client.getSet(999999), /not found/i);
+    const none = new InterviewPrepClient({ serverUrl: base, getToken: async () => null });
+    await assert.rejects(() => none.resumes(), err => err.code === 'licence' && /Activate your licence/.test(err.message));
+    const offline = new InterviewPrepClient({ serverUrl: 'http://127.0.0.1:1', getToken: async () => good });
+    await assert.rejects(() => offline.resumes(), err => err.code === 'network');
+  });
+});
+
+test('the interviewer is given the resume-based model answer when scoring', async () => {
+  const coach = require('../src/interview/coach');
+  const seen = [];
+  const ai = { complete: async ({ user }) => { seen.push(user); return JSON.stringify({ score: 7, verdict: 'Good', strengths: [], missing: [], betterAnswer: '', followUp: '' }); } };
+  await coach.evaluateAnswer(ai, { company: 'Any', role: 'Scientist', round: 'hr', level: 'mid', question: 'q?', answer: 'my answer', reference: 'I used doubled haploid induction.' });
+  await coach.evaluateAnswer(ai, { company: 'Any', role: 'Scientist', round: 'hr', level: 'mid', question: 'q?', answer: 'my answer' });
+  assert.match(seen[0], /own resume.*\nI used doubled haploid induction\./);
+  assert.doesNotMatch(seen[1], /own resume/);
+});

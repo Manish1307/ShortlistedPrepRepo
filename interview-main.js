@@ -2,7 +2,9 @@
 // AI Mock Interviewer: a separate, normal window (NOT hidden from screen sharing) for practising interviews.
 // The AI asks questions for a chosen company, role and round; the candidate answers by voice (offline speech
 // engine) or by typing; the AI scores each answer with feedback and builds a report.
-// Uses the same saved settings and AI keys as the teacher assistant.   npm run interview
+// Needs a ClassCue licence (activated here, checked with the licence server). AI comes through the licence server (no key
+// on this computer), and the candidate can pick one of their resumes to get personalised and scenario questions made only
+// from it: they are saved on the server, so they also show in My account and in the dashboard.   npm run interview
 
 const { app, BrowserWindow, ipcMain, session } = require('electron');
 const fs = require('fs');
@@ -14,13 +16,17 @@ const { Answerer } = require('./src/ai/answerer');
 const { GeminiAnswerer } = require('./src/ai/gemini');
 const { GroqAnswerer } = require('./src/ai/groq');
 const { AnswerRouter } = require('./src/ai/router');
+const { ProxyAnswerer } = require('./src/ai/proxy');
+const { LicenceClient, computerId } = require('./src/licence/client');
+const licenceSettings = require('./src/licence/settings');
+const { InterviewPrepClient } = require('./src/interview/prep');
 const { Pipeline } = require('./src/pipeline');
 const { WhisperServer } = require('./src/stt/whisperServer');
 const coach = require('./src/interview/coach');
 
 // started as "electron interview-main.js": use the same name, settings and keys as the teacher assistant
 app.setName('teacher-notes-app');
-app.setPath('userData', path.join(app.getPath('appData'), 'teacher-notes-app'));
+app.setPath('userData', process.env.TNA_USER_DATA || path.join(app.getPath('appData'), 'teacher-notes-app'));   // TNA_USER_DATA: a separate folder for tests
 
 const WHISPER_DIR = process.env.TNA_WHISPER_DIR || path.join(__dirname, 'whisper');
 const AI_TIMEOUT_MS = 60000;
@@ -30,6 +36,10 @@ let ai = null;
 let whisper = null;
 let pipeline = null;
 let speech = { state: 'starting', message: '' };
+let licence = null;
+let serverKeys = {};      // keys sent by an older licence server
+let proxyGrant = null;    // { token, expiresAt, services }: AI through the licence server
+let prep = null;          // personalised questions from the candidate's resume (licence server)
 
 function send(channel, payload) { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); }
 const fromWin = event => !!(win && !win.isDestroyed() && event.sender === win.webContents);
@@ -52,7 +62,63 @@ function buildAI() {
     gemini: new GeminiAnswerer({ apiKey: config.getApiKey('gemini'), model: s.geminiModel, effort: 'low' }),
     groq: new GroqAnswerer({ apiKey: config.getApiKey('groq'), model: s.groqModel, effort: 'low' }),
     claude: new Answerer({ apiKey: config.getApiKey('claude'), model: s.model, effort: 'low' }),
+    proxy: new ProxyAnswerer({ serverUrl: licenceSettings.SERVER_URL, getToken: proxyToken, model: s.groqModel, effort: 'low' }),
   });
+  applyKeys();
+}
+
+// ---- licence and AI from the licence server -------------------------------------------------------------
+
+const licenceSkipped = () => !app.isPackaged && process.env.TNA_LICENCE === 'off';
+
+function setupLicence() {
+  const dir = app.getPath('userData');
+  licence = new LicenceClient({
+    serverUrl: licenceSettings.SERVER_URL,
+    publicKeyPem: fs.readFileSync(licenceSettings.PUBLIC_KEY_FILE, 'utf8'),
+    dir, deviceId: computerId(dir), deviceName: os.hostname(), appVersion: app.getVersion(), graceDays: licenceSettings.GRACE_DAYS,
+  });
+}
+
+function licenceStatus() {
+  if (licenceSkipped()) return { state: 'active', kind: 'development', plan: 'development', dev: true };
+  return licence ? licence.status() : { state: 'none' };
+}
+const licensed = () => licenceStatus().state === 'active';
+
+/** AI through the licence server when it serves this licence, else a key it sent (older server), else the key saved here. */
+function applyKeys() {
+  if (!ai) return;
+  const s = config.load();
+  const proxied = (proxyGrant && proxyGrant.services) || {};
+  ai.providers.proxy.setServices(proxied);
+  for (const provider of ['groq', 'gemini']) {
+    const fromServer = serverKeys[provider] && serverKeys[provider].apiKey;
+    ai.providers[provider].setApiKey(fromServer || config.getApiKey(provider));
+  }
+  ai.setProvider(proxied.groq ? 'proxy' : serverKeys.groq ? 'groq' : s.provider);
+}
+
+/** The AI proxy's access token; renewed from the licence server when it is about to expire or was refused. */
+let renewing = null;
+async function proxyToken(renew = false) {
+  const fresh = proxyGrant && proxyGrant.expiresAt - Date.now() > 60 * 1000;
+  if (fresh && !renew) return proxyGrant.token;
+  if (!renewing) renewing = syncLicence().finally(() => { renewing = null; });
+  await renewing;
+  return proxyGrant ? proxyGrant.token : null;
+}
+
+/** Re-check the licence and get this licence's AI access. Tells the window what changed. */
+async function syncLicence() {
+  if (licenceSkipped()) { serverKeys = {}; proxyGrant = null; applyKeys(); send('licence', licenceStatus()); return; }
+  if (!licence) return;
+  const { ai: keys, proxy } = await licence.appConfig({ proxy: true });
+  serverKeys = licensed() ? keys : {};
+  const keep = proxyGrant && proxyGrant.expiresAt > Date.now() && !Object.keys(keys).length ? proxyGrant : null;   // offline for a moment: a valid token keeps working
+  proxyGrant = licensed() ? proxy || keep : null;
+  applyKeys();
+  send('licence', licenceStatus());
 }
 
 /** The offline speech engine, for spoken answers. Without it the candidate types instead. */
@@ -99,12 +165,38 @@ ipcMain.handle('iv:info', event => {
   const names = { gemini: 'Google Gemini', groq: 'Groq', claude: 'Anthropic Claude' };
   return {
     companies: coach.COMPANIES, rounds: coach.ROUNDS, levels: coach.LEVELS,
-    provider: names[s.provider] || s.provider, hasKey: !!(ai && ai.ready), speech,
+    provider: ai && ai.provider === 'proxy' ? 'ClassCue (through your licence)' : names[s.provider] || s.provider, hasKey: !!(ai && ai.ready), speech,
+    licence: licenceStatus(),
   };
 });
 
+const NEED_LICENCE = { ok: false, message: 'Activate your ClassCue licence first.' };
+
+ipcMain.handle('iv:licence-activate', async (event, key) => {
+  if (!fromWin(event) || !licence || licenceSkipped()) return null;
+  const res = await licence.activate(String(key || ''));
+  if (res.ok) await syncLicence();
+  return { ok: res.ok, message: res.message || '', licence: licenceStatus() };
+});
+ipcMain.handle('iv:licence-check', async event => {
+  if (!fromWin(event)) return null;
+  await syncLicence();
+  return licenceStatus();
+});
+
+// personalised questions from the candidate's resume (the licence server makes and keeps them)
+const viaServer = fn => async (event, p) => {
+  if (!fromWin(event)) return null;
+  if (!licensed()) return NEED_LICENCE;
+  try { return { ok: true, ...(await fn(p || {})) }; } catch (err) { return { ok: false, message: err.message || String(err) }; }
+};
+ipcMain.handle('iv:resumes', viaServer(() => prep.resumes()));
+ipcMain.handle('iv:make-set', viaServer(async p => ({ set: await prep.makeSet({ resumeKey: String(p.resumeKey || ''), role: String(p.role || '') }) })));
+ipcMain.handle('iv:get-set', viaServer(async p => ({ set: await prep.getSet(String(p.id || '')) })));
+
 ipcMain.handle('iv:questions', (event, p) => {
   if (!fromWin(event) || !p) return null;
+  if (!licensed()) return NEED_LICENCE;
   return withTimeout(async signal => ({ questions: await coach.generateQuestions(ai, {
     company: String(p.company || ''), role: String(p.role || ''), round: String(p.round || ''), level: String(p.level || ''),
     count: Number(p.count) || 5, focus: String(p.focus || ''), avoid: Array.isArray(p.avoid) ? p.avoid.map(String) : [], signal,
@@ -113,9 +205,10 @@ ipcMain.handle('iv:questions', (event, p) => {
 
 ipcMain.handle('iv:evaluate', (event, p) => {
   if (!fromWin(event) || !p) return null;
+  if (!licensed()) return NEED_LICENCE;
   return withTimeout(async signal => ({ feedback: await coach.evaluateAnswer(ai, {
     company: String(p.company || ''), role: String(p.role || ''), round: String(p.round || ''), level: String(p.level || ''),
-    question: String(p.question || ''), points: Array.isArray(p.points) ? p.points.map(String) : [], answer: String(p.answer || ''), signal,
+    question: String(p.question || ''), points: Array.isArray(p.points) ? p.points.map(String) : [], answer: String(p.answer || ''), reference: String(p.reference || ''), signal,
   }) }));
 });
 
@@ -187,14 +280,65 @@ async function runSmoke() {
   app.quit();
 }
 
+// ---- "--shots": the licence and personalised-questions flow against a test server, a screenshot of each step, then quit ----
+// Needs CLASSCUE_LICENCE_SERVER, CLASSCUE_PUBLIC_KEY_FILE, TNA_USER_DATA, TNA_IV_KEY (a licence key) and TNA_IV_SHOTS (a folder).
+//   electron interview-main.js --shots
+async function runShots() {
+  const dir = process.env.TNA_IV_SHOTS || app.getPath('temp');
+  const wc = win.webContents;
+  const js = code => wc.executeJavaScript(code);
+  const wait = async (cond, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await js(cond)) return true; await new Promise(r => setTimeout(r, 250)); } return false; };
+  // saved as 1200 px wide JPEGs: small enough for the website
+  const shot = async name => { await new Promise(r => setTimeout(r, 500)); const img = (await wc.capturePage()).resize({ width: 1200, quality: 'best' }); fs.writeFileSync(path.join(dir, name + '.jpg'), img.toJPEG(88)); };
+  const report = {};
+  await new Promise(r => setTimeout(r, 1500));
+  win.setSize(1180, 860);
+  // 1. before activation: the licence screen
+  report.gateShown = await js("!document.getElementById('gate').classList.contains('hidden')");
+  await shot('1-licence');
+  // 2. activate with the key, then choose "My resume"
+  await js("document.getElementById('gateKey').value = " + JSON.stringify(process.env.TNA_IV_KEY || '') + "; document.getElementById('gateActivate').click(); true");
+  report.activated = await wait("document.getElementById('gate').classList.contains('hidden')", 20000);
+  await js("document.querySelector('#modes [data-mode=resume]').click(); true");
+  report.resumesLoaded = await wait("document.getElementById('resume').options.length > 0 && !/Loading/.test(document.getElementById('resume').options[0].textContent)", 20000);
+  await js("document.getElementById('resumeRole').value = 'Seed breeder'; true");
+  await shot('2-resume');
+  // 3. personalised questions made from that resume
+  await js("document.getElementById('btnStart').click(); true");
+  report.setShown = await wait("!document.getElementById('viewSet').classList.contains('hidden')", 90000);
+  report.questions = await js("document.querySelectorAll('#setList .qitem').length");
+  await shot('3-questions');
+  // 4. explore answers
+  await js("[...document.querySelectorAll('#setList button.reveal')].slice(0, 2).forEach(b => b.click()); document.querySelector('#setList .qitem').scrollIntoView(); true");
+  await shot('4-answers');
+  // 5. practise: answer a question and get feedback
+  await js("document.getElementById('btnPractise').click(); true");
+  report.practising = await wait("!document.getElementById('viewInterview').classList.contains('hidden') && document.getElementById('question').textContent.length > 5", 20000);
+  await js("document.getElementById('speak') && (document.getElementById('speak').checked = false); document.getElementById('answer').value = 'I used doubled haploid induction in maize so that fully homozygous lines were ready in one generation instead of six or seven. I validated ploidy with flow cytometry, kept records of each batch, and that cut the breeding cycle by two seasons.'; document.getElementById('btnShow').click(); true");
+  await shot('5-practise');
+  await js("document.getElementById('btnShow').click(); window.scrollTo(0, 0); document.getElementById('btnSubmit').click(); true");
+  report.feedback = await wait("!!document.querySelector('#feedback .fbHead')", 60000);
+  await shot('6-feedback');
+  console.log('IV-SHOTS ' + JSON.stringify(report));
+  app.quit();
+}
+
 app.whenReady().then(() => {
   // only this window may use the microphone
   session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
     callback(!!(win && wc === win.webContents && permission === 'media'));
   });
+  setupLicence();
   buildAI();
+  prep = new InterviewPrepClient({ serverUrl: licenceSettings.SERVER_URL, getToken: proxyToken });
   createWindow();
-  win.webContents.once('did-finish-load', () => { startSpeech(); if (process.argv.includes('--smoke')) runSmoke(); });
+  win.webContents.once('did-finish-load', async () => {
+    startSpeech();
+    await syncLicence();
+    if (process.argv.includes('--smoke')) runSmoke();
+    if (process.argv.includes('--shots')) runShots();
+  });
+  setInterval(() => { syncLicence(); }, 30 * 60 * 1000).unref();
 });
 
 app.on('window-all-closed', () => app.quit());

@@ -254,8 +254,62 @@
       p.updatedAt ? h('p', { class: 'ac-muted', style: 'margin-top:12px;font-size:13px' }, 'Last updated ' + dateTime(p.updatedAt)) : null);
   }
 
+  // ---------- Interview prep: personalised questions made from the candidate's resume (also in the desktop app) ----------
+  var IV_GROUPS = [['personal', 'Questions from your resume', 'About things your resume says: your projects, tools and results.'], ['scenario', 'Scenario-based questions', 'Situations your roles would meet. Say what you would do, step by step.']];
+  function ivQuestion(q, n) {
+    var ans = h('div', { class: 'pp-ans', hidden: true }, h('p', {}, q.answer),
+      q.points && q.points.length ? h('ul', { class: 'iv-points' }, q.points.map(function (p) { return h('li', {}, p); })) : null);
+    var btn = h('button', { class: 'pp-qa-btn', type: 'button', 'aria-expanded': 'false' }, h('span', { 'aria-hidden': 'true' }, '👁'), ' Show answer');
+    btn.addEventListener('click', function () {
+      var open = ans.hidden;
+      ans.hidden = !open;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.replaceChildren(h('span', { 'aria-hidden': 'true' }, open ? '🙈' : '👁'), open ? ' Hide answer' : ' Show answer');
+    });
+    return h('li', { class: 'pp-q' }, h('div', { class: 'pp-q-text' }, h('span', { class: 'pp-q-n' }, String(n)), h('span', {}, q.question)),
+      q.resumeRef ? h('p', { class: 'iv-ref' }, 'From your resume: "' + q.resumeRef + '"') : null, btn, ans);
+  }
+  function ivSet(set, onDelete) {
+    var n = 0;
+    var del = h('button', { class: 'btn btn-sm', type: 'button' }, 'Delete');
+    del.addEventListener('click', function (e) { e.preventDefault(); if (window.confirm('Delete this question set?')) onDelete(); });
+    return h('details', { class: 'ac-class' },
+      h('summary', {},
+        h('span', { class: 'ac-class-main' }, h('b', {}, set.resumeLabel + (set.role ? ' · ' + set.role : '')),
+          h('span', {}, dateTime(set.createdAt) + ' · ' + plural(set.questions.length, 'question') + (set.source === 'app' ? ' · made in the Virtual Interview app' : ''))),
+        h('span', { class: 'ac-chev' }, icon('chev', 18))),
+      h('div', { class: 'ac-class-body' }, IV_GROUPS.map(function (g) {
+        var list = set.questions.filter(function (q) { return q.kind === g[0]; });
+        return list.length ? h('div', { class: 'pp-qgroup' }, h('h5', {}, g[1] + ' (' + list.length + ')', h('span', { class: 'ac-muted' }, ' · ' + g[2])),
+          h('ol', { class: 'pp-qlist' }, list.map(function (q) { return ivQuestion(q, ++n); }))) : null;
+      }), h('div', { class: 'iv-actions' }, del)));
+  }
+  function interviewPanel() {
+    var body = h('div', {}, h('p', { class: 'ac-muted' }, 'Loading…'));
+    var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
+    function draw(d) {
+      var sel = h('select', { 'aria-label': 'Resume' }, d.resumes.map(function (r) { return h('option', { value: r.key }, r.label); }));
+      var role = h('input', { type: 'text', maxlength: '120', placeholder: 'Target role (optional), e.g. Seed Breeder', 'aria-label': 'Target role' });
+      var go = h('button', { class: 'btn btn-primary', type: 'button', disabled: !d.resumes.length }, '✦ Make my questions (uses 1 AI action)');
+      go.addEventListener('click', function () {
+        go.disabled = true; out.className = 'form-result'; out.textContent = 'Reading your resume and writing your questions… (about 30 seconds)';
+        call('POST', '/api/account/interview', { resumeKey: sel.value, role: role.value.trim() }).then(function () { return load(); })
+          .catch(function (e) { go.disabled = false; out.className = 'form-result bad'; out.textContent = e.message; });
+      });
+      var del = function (id) { call('POST', '/api/account/interview/' + id + '/delete').then(load).catch(function (e) { out.className = 'form-result bad'; out.textContent = e.message; }); };
+      body.replaceChildren(
+        h('p', { class: 'ac-muted', style: 'margin-bottom:14px' }, 'Practice questions made only from your own resume, with a model answer for each. The same questions appear in the Virtual Interview app on your computer, and your support team can see them.'),
+        d.resumes.length ? h('div', { class: 'iv-form' }, sel, role, go) : empty('No resume yet', 'Upload your resume in the Career toolkit (step 1) and your questions will be made from it.'),
+        out,
+        d.sets.length ? h('div', { class: 'iv-sets' }, d.sets.map(function (s) { return ivSet(s, function () { del(s.id); }); })) : (d.resumes.length ? h('p', { class: 'ac-muted', style: 'margin-top:14px' }, 'No question sets yet.') : null));
+    }
+    function load() { return call('GET', '/api/account/interview').then(draw).catch(function (e) { body.replaceChildren(h('p', { class: 'form-result bad' }, e.message)); }); }
+    load();
+    return card('Interview prep', body);
+  }
+
   // ---------- page ----------
-  var TABS = [['overview', 'Overview'], ['licences', 'Licences & machines'], ['classes', 'Live Class history'], ['topics', 'Topics & resume'], ['orders', 'Orders'], ['security', 'Security']];
+  var TABS = [['overview', 'Overview'], ['licences', 'Licences & machines'], ['classes', 'Live Class history'], ['interview', 'Interview prep'], ['topics', 'Topics & resume'], ['orders', 'Orders'], ['security', 'Security']];
   var panels = {};
   function show(id) {
     if (!panels[id]) id = 'overview';
@@ -308,6 +362,7 @@
               h('a', { class: 'btn btn-primary', href: 'career.html' }, 'Open the career toolkit')))))),
       licences: h('div', { class: 'ac-panel' }, card('Licences and machines', me.licences.length ? me.licences.map(licenceBlock) : empty('No licence yet', 'Contact us to get started.'))),
       classes: h('div', { class: 'ac-panel' }, card('Live Class history', classList(me.conversations))),
+      interview: h('div', { class: 'ac-panel' }, interviewPanel()),
       topics: h('div', { class: 'ac-panel' }, card('Topics and resume', h('div', {},
         h('p', { class: 'ac-muted', style: 'margin-bottom:14px' }, 'The AI uses your topics and resume to decide the area of its answers and to fit examples to your experience.'), topicsBody(p, false)))),
       orders: h('div', { class: 'ac-panel' }, card('Orders', h('div', { class: 'ac-scroll' }, h('table', { class: 'ac-table' },
@@ -321,7 +376,7 @@
     };
     if (!me.orders.length) delete panels.orders;
     content.replaceChildren.apply(content, Object.keys(panels).map(function (k) { return panels[k]; }));
-    show(location.hash.slice(1));
+    show(location.hash.slice(1) || new URLSearchParams(location.search).get('tab') || '');   // account.html#interview or account.html?tab=interview
   }
 
   function firstPassword() {

@@ -11,7 +11,7 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
-  function show(view) { ['viewSetup', 'viewInterview', 'viewReport'].forEach(v => $(v).classList.toggle('hidden', v !== view)); window.scrollTo(0, 0); }
+  function show(view) { ['viewSetup', 'viewSet', 'viewInterview', 'viewReport'].forEach(v => $(v).classList.toggle('hidden', v !== view)); window.scrollTo(0, 0); }
   function banner(text, kind) { const b = $('banner'); b.textContent = text || ''; b.className = 'banner' + (kind === 'info' ? ' info' : '') + (text ? '' : ' hidden'); }
   function chip(id, kind, text) { const c = $(id); c.className = 'chip ' + kind; c.lastChild.textContent = text; }
   const scoreClass = s => (s >= 7 ? 'good' : s >= 5 ? 'mid' : 'bad');
@@ -26,6 +26,9 @@
   let asked = [];          // every question asked in this app session (so "Practise again" gets new ones)
   let startedAt = null;
   let busy = false;
+  let mode = 'generic';    // 'generic': a company, role and round | 'resume': questions made from the candidate's own resume
+  let resumeSet = null;    // the personalised question set on screen
+  const isLicensed = () => !!(info && info.licence && info.licence.state === 'active');
 
   // ---- setup ---------------------------------------------------------------------------------------
 
@@ -49,7 +52,7 @@
   }
 
   function paintChips() {
-    if (info) chip('aiChip', info.hasKey ? 'ok' : 'bad', info.hasKey ? `AI: ${info.provider}` : 'AI: no key');
+    if (info) chip('aiChip', isLicensed() && info.hasKey ? 'ok' : 'bad', !isLicensed() ? 'Licence needed' : info.hasKey ? `AI: ${info.provider}` : 'AI: not ready');
     const s = { ready: ['ok', 'Voice answers on'], starting: ['warn', 'Voice: loading…'], missing: ['warn', 'Voice: type answers'], error: ['bad', 'Voice: unavailable'] }[speech.state] || ['warn', 'Voice'];
     chip('speechChip', s[0], s[1]);
     $('btnMic').disabled = speech.state !== 'ready' || busy;
@@ -58,9 +61,180 @@
 
   // ---- interview -------------------------------------------------------------------------------------
 
+  const LICENCE_TEXT = {
+    checking: 'Checking your ClassCue licence…',
+    none: 'Mock Interview needs a ClassCue licence. Enter your licence key to activate this computer.',
+    expired: 'Your licence has expired. Renew it, or enter a new licence key.',
+    revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
+    removed: 'This computer was removed from the licence. Enter the key again to activate it.',
+    'check-needed': 'The licence could not be checked for a while. Connect to the internet and press "Check again".',
+  };
+  function applyLicence(l) {
+    if (l) info.licence = l;
+    const lic = info.licence || { state: 'checking' };
+    const gate = $('gate');
+    gate.classList.toggle('hidden', isLicensed());
+    if (!isLicensed()) {
+      $('gateMsg').textContent = lic.message || LICENCE_TEXT[lic.state] || 'Mock Interview needs an active licence.';
+      $('gateKey').parentElement.classList.toggle('hidden', lic.state === 'checking');
+      $('gateActivate').classList.toggle('hidden', lic.state === 'check-needed');
+    }
+    paintChips();
+    if (isLicensed() && mode === 'resume') loadResumes();
+  }
+  async function activateLicence() {
+    const key = $('gateKey').value.trim().toUpperCase();
+    $('gateErr').textContent = '';
+    if (!/^CC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) { $('gateErr').textContent = 'A licence key looks like CC-XXXX-XXXX-XXXX.'; return; }
+    $('gateActivate').disabled = true;
+    try {
+      const res = await api.activateLicence(key);
+      if (!res) return;
+      if (!res.ok) $('gateErr').textContent = res.message || 'The key was not accepted.';
+      else { $('gateKey').value = ''; info = await api.info(); }
+      applyLicence(res.licence);
+    } finally { $('gateActivate').disabled = false; }
+  }
+  async function checkLicence() {
+    $('gateErr').textContent = '';
+    const l = await api.checkLicence();
+    info = await api.info();
+    applyLicence(l);
+    if (!isLicensed()) $('gateErr').textContent = 'Still not active.';
+  }
+
+  // ---- questions made from the candidate's resume -------------------------------------------------------
+
+  function setMode(next) {
+    mode = next;
+    [...$('modes').children].forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+    $('genericForm').classList.toggle('hidden', mode !== 'generic');
+    $('resumeForm').classList.toggle('hidden', mode !== 'resume');
+    $('genericNote').classList.toggle('hidden', mode !== 'generic');
+    $('btnStart').textContent = mode === 'resume' ? 'Get my personalised questions →' : 'Start interview →';
+    banner('');
+    if (mode === 'resume' && isLicensed()) loadResumes();
+  }
+
+  let resumesLoaded = false;
+  async function loadResumes() {
+    if (resumesLoaded) return;
+    const sel = $('resume');
+    sel.textContent = '';
+    sel.appendChild(el('option', '', 'Loading your resumes…'));
+    const res = await api.resumes();
+    if (!res || !res.ok) { sel.textContent = ''; sel.appendChild(el('option', '', 'Could not load your resumes')); banner(res ? res.message : 'Could not load your resumes.'); return; }
+    resumesLoaded = true;
+    sel.textContent = '';
+    if (!res.resumes.length) {
+      sel.appendChild(el('option', '', 'No resume yet'));
+      banner('You have no resume yet. Upload it in the Career toolkit on the website (step 1), then come back here.');
+    } else res.resumes.forEach(r => { const o = el('option', '', r.label); o.value = r.key; sel.appendChild(o); });
+    const prev = $('prevSets');
+    prev.textContent = '';
+    prev.classList.toggle('hidden', !res.sets.length);
+    if (res.sets.length) {
+      prev.appendChild(el('h3', '', 'Your earlier question sets'));
+      res.sets.forEach(x => {
+        const b = el('button');
+        b.type = 'button';
+        b.appendChild(document.createTextNode(`${x.resumeLabel}${x.role ? ' · ' + x.role : ''}`));
+        b.appendChild(el('small', '', `${new Date(x.createdAt).toLocaleString()} · ${x.count} questions`));
+        b.addEventListener('click', async () => {
+          const r = await api.getSet(x.id);
+          if (!r || !r.ok) { banner(r ? r.message : 'Could not open this set.'); return; }
+          banner(''); showSet(r.set);
+        });
+        prev.appendChild(b);
+      });
+    }
+  }
+
+  async function makeResumeSet() {
+    if (!$('resume').value) { banner('Choose a resume first.'); return; }
+    banner('Reading your resume and writing your questions… (about 30 seconds)', 'info');
+    $('btnStart').disabled = true;
+    $('btnStart').textContent = 'Reading your resume…';
+    const res = await api.makeSet({ resumeKey: $('resume').value, role: $('resumeRole').value.trim() });
+    $('btnStart').disabled = false;
+    $('btnStart').textContent = 'Get my personalised questions →';
+    if (!res || !res.ok) { banner(res ? res.message : 'Could not make the questions.'); return; }
+    banner('');
+    resumesLoaded = false;   // the new set is in the list next time
+    showSet(res.set);
+  }
+
+  const SET_GROUPS = [['personal', 'Questions from your resume', 'About things your resume says: your projects, tools and results.'], ['scenario', 'Scenario-based questions', 'Situations your roles would meet. Say what you would do, step by step.']];
+
+  /** An answer behind a "Show answer" button. inline: under the interview question instead of in a list. */
+  function answerBlock(q, inline) {
+    const box = el('div', 'answerBox' + (inline ? ' inline' : '') + ' hidden');
+    box.appendChild(el('div', '', q.answer));
+    if (q.points && q.points.length) { const ul = el('ul'); q.points.forEach(p => ul.appendChild(el('li', '', p))); box.appendChild(ul); }
+    return box;
+  }
+  function toggleButton(box, inline) {
+    const b = el('button', 'btn ghost reveal' + (inline ? ' inline' : ''), '👁 Show answer');
+    b.type = 'button';
+    b.setAttribute('aria-expanded', 'false');
+    b.addEventListener('click', () => {
+      const open = box.classList.contains('hidden');
+      box.classList.toggle('hidden', !open);
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      b.textContent = open ? '🙈 Hide answer' : '👁 Show answer';
+    });
+    return b;
+  }
+
+  function showSet(set) {
+    resumeSet = set;
+    $('setTitle').textContent = 'Your personalised questions';
+    $('setSub').textContent = `${set.questions.length} questions made only from "${set.resumeLabel}"${set.role ? ' for ' + set.role : ''}. Saved to your ClassCue account. Read them, open the answers, or practise them with the interviewer.`;
+    const list = $('setList');
+    list.textContent = '';
+    let n = 0;
+    SET_GROUPS.forEach(([kind, title, hint]) => {
+      const qs = set.questions.filter(q => q.kind === kind);
+      if (!qs.length) return;
+      const group = el('div', 'qgroup');
+      group.appendChild(el('h3', '', `${title} (${qs.length})`));
+      group.appendChild(el('div', 'hint', hint));
+      const wrap = el('div', 'qlist');
+      qs.forEach(q => {
+        const item = el('div', 'qitem');
+        const t = el('div', 'qt');
+        t.appendChild(el('span', 'qn', String(++n)));
+        t.appendChild(el('span', '', q.question));
+        item.appendChild(t);
+        if (q.resumeRef) item.appendChild(el('div', 'ref', `From your resume: "${q.resumeRef}"`));
+        const box = answerBlock(q, false);
+        item.appendChild(toggleButton(box, false));
+        item.appendChild(box);
+        wrap.appendChild(item);
+      });
+      group.appendChild(wrap);
+      list.appendChild(group);
+    });
+    show('viewSet');
+  }
+
+  function practiseSet() {
+    if (!resumeSet) return;
+    readSetup();
+    setup.speak = $('speakR').checked;
+    Object.assign(setup, { company: 'Any', role: resumeSet.role || 'the role on my resume', round: 'resume', level: 'resume' });
+    items = []; startedAt = new Date().toISOString();
+    queue = resumeSet.questions.map(q => ({ question: q.question, topic: q.topic, points: q.points || [], reference: q.answer, resumeRef: q.resumeRef || '', kind: q.kind }));
+    $('whoLine').textContent = `Questions from your resume · ${resumeSet.role || resumeSet.resumeLabel}`;
+    show('viewInterview');
+    nextQuestion();
+  }
+
   async function startInterview() {
     readSetup();
-    if (!info.hasKey) { banner('No AI key is saved. Open the teacher assistant (npm start), Settings, and add a key.'); return; }
+    if (!isLicensed()) { banner(LICENCE_TEXT[(info.licence || {}).state] || 'Activate your ClassCue licence first.'); return; }
+    if (mode === 'resume') return makeResumeSet();
+    if (!info.hasKey) { banner('AI is not available for this licence yet. Check the licence, then try again.'); return; }
     banner('Preparing your questions…', 'info');
     $('btnStart').disabled = true;
     $('btnStart').textContent = 'Preparing your questions…';
@@ -97,7 +271,21 @@
     const tags = $('qtags');
     tags.textContent = '';
     tags.appendChild(el('span', 'tag', current.topic || 'General'));
+    if (current.kind) tags.appendChild(el('span', 'tag fu', current.kind === 'scenario' ? 'Scenario' : 'From your resume'));
     if (current.followUpOf) tags.appendChild(el('span', 'tag fu', 'Follow-up'));
+    $('qref').textContent = current.resumeRef ? `From your resume: "${current.resumeRef}"` : '';
+    $('qref').classList.toggle('hidden', !current.resumeRef);
+    const hasModel = !!current.reference;
+    $('btnShow').classList.toggle('hidden', !hasModel);
+    $('btnShow').textContent = '👁 Show model answer';
+    $('btnShow').setAttribute('aria-expanded', 'false');
+    const model = $('modelAnswer');
+    model.textContent = '';
+    model.classList.add('hidden');
+    if (hasModel) {
+      model.appendChild(el('div', '', current.reference));
+      if (current.points && current.points.length) { const ul = el('ul'); current.points.forEach(p => ul.appendChild(el('li', '', p))); model.appendChild(ul); }
+    }
     $('answer').value = '';
     $('answer').readOnly = false;
     $('btnSubmit').disabled = false; $('btnSkip').disabled = false;
@@ -124,7 +312,7 @@
     fb.appendChild(loading);
     fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    const res = await api.evaluate({ ...setup, question: current.question, points: current.points || [], answer });
+    const res = await api.evaluate({ ...setup, question: current.question, points: current.points || [], reference: current.reference || '', answer });
     if (!res || !res.ok) {
       fb.textContent = '';
       const card = el('div', 'card');
@@ -242,6 +430,7 @@
         cols.appendChild(list('↗ To improve', i.missing, 'fix'));
         body.appendChild(cols);
         if (i.betterAnswer) { const b = el('div', 'box better'); b.appendChild(el('h3', '', '💡 A stronger answer')); richText(b, i.betterAnswer); body.appendChild(b); }
+        if (i.reference) { const b = el('div', 'box better'); b.appendChild(el('h3', '', '📄 Model answer from your resume')); b.appendChild(el('div', 'text', i.reference)); body.appendChild(b); }
       }
       d.appendChild(body);
       rows.appendChild(d);
@@ -326,7 +515,27 @@
     segmented($('rounds'), Object.fromEntries(Object.entries(info.rounds).map(([k, v]) => [k, v.split(':')[0]])), 'round');
     segmented($('levels'), Object.fromEntries(Object.entries(info.levels).map(([k, v]) => [k, v.split(' / ')[0].replace(' of experience', '')])), 'level');
     paintChips();
-    if (!info.hasKey) banner('No AI key is saved yet. Open the teacher assistant (npm start), Settings, and add a Groq, Gemini or Claude key.');
+    applyLicence();
+    api.onLicence(async l => { info = await api.info(); applyLicence(l); });
+    $('gateActivate').addEventListener('click', activateLicence);
+    $('gateCheck').addEventListener('click', checkLicence);
+    $('gateKey').addEventListener('keydown', e => { if (e.key === 'Enter') activateLicence(); });
+    [...$('modes').children].forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    $('btnPractise').addEventListener('click', practiseSet);
+    $('btnSetBack').addEventListener('click', () => { banner(''); show('viewSetup'); loadResumes(); });
+    $('btnShowAll').addEventListener('click', () => {
+      const buttons = [...$('setList').querySelectorAll('button.reveal')];
+      const anyClosed = buttons.some(b => b.getAttribute('aria-expanded') === 'false');
+      buttons.forEach(b => { if ((b.getAttribute('aria-expanded') === 'false') === anyClosed) b.click(); });
+      $('btnShowAll').textContent = anyClosed ? '🙈 Hide all answers' : '👁 Show all answers';
+    });
+    $('btnShow').addEventListener('click', () => {
+      const box = $('modelAnswer');
+      const open = box.classList.contains('hidden');
+      box.classList.toggle('hidden', !open);
+      $('btnShow').setAttribute('aria-expanded', open ? 'true' : 'false');
+      $('btnShow').textContent = open ? '🙈 Hide model answer' : '👁 Show model answer';
+    });
 
     api.onSpeech(s => { speech = s; paintChips(); });
     api.onSpeechEvent(onSpeechEvent);

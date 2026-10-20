@@ -254,12 +254,25 @@
       { label: 'Done', run: () => {} }]);
   }
 
+  /** The customer's personalised interview questions (made in the Virtual Interview app or on the website), with their model answers. */
+  async function interviewSection(customerId) {
+    const { sets } = await get(`/admin/api/customers/${customerId}/interview`);
+    const kinds = { personal: 'From the resume', scenario: 'Scenario' };
+    return h('div', {}, h('h3', { style: 'margin-top:14px' }, `Interview prep (${sets.length})`),
+      sets.length ? sets.map(set => h('details', { class: 'list-item', style: 'display:block' },
+        h('summary', {}, h('b', {}, set.resumeLabel + (set.role ? ' · ' + set.role : '')), ` · ${dateTime(set.createdAt)} · ${set.questions.length} questions · ${set.source === 'app' ? 'Virtual Interview app' : 'website'}`),
+        h('ol', { class: 'small' }, set.questions.map(q => h('li', {}, h('span', { class: 'muted' }, kinds[q.kind] + ': '), q.question,
+          q.resumeRef ? h('div', { class: 'muted' }, 'Resume: "' + q.resumeRef + '"') : null, h('div', { class: 'muted' }, 'Answer: ' + q.answer)))))) 
+        : h('p', { class: 'muted small' }, 'No personalised question sets yet. They are made in the Virtual Interview app or in My account → Interview prep.'));
+  }
+
   async function customerDetail(id, done) {
     const d = await get(`/admin/api/customers/${id}`);
     const c = d.customer;
     sectorList = d.sectors || sectorList;
     let closeDetail = () => {};
     const login = await accountSection(c, () => { closeDetail(); customerDetail(id, done); });
+    const interview = await interviewSection(c.id);
     const body = h('div', {},
       h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Name'), h('dd', {}, c.name || '—'), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'),
         h('dt', {}, 'Country'), h('dd', {}, c.country || '—'), h('dt', {}, 'Sector'), h('dd', {}, sectorLabel(c.sector) || 'Not chosen yet'), h('dt', {}, 'Joined'), h('dd', {}, dateTime(c.created_at)), h('dt', {}, 'Notes'), h('dd', {}, c.notes || '—')),
@@ -267,7 +280,7 @@
       d.licences.length ? d.licences.map(l => h('div', { class: 'list-item' }, h('span', { class: 'mono' }, l.key), h('span', {}, `${l.plan} · `, pill(l.effective_status), ` · ${l.expires_at ? 'to ' + date(l.expires_at) : 'lifetime'}`))) : h('p', { class: 'muted' }, 'None.'),
       h('h3', { style: 'margin-top:14px' }, 'Orders'),
       d.orders.length ? d.orders.map(o => h('div', { class: 'list-item' }, h('span', {}, `#${o.id} · ${o.plan} · ${date(o.created_at)}`), h('span', {}, money(o.amount_cents, o.currency), ' ', pill(o.status)))) : h('p', { class: 'muted' }, 'None.'),
-      login);
+      interview, login);
     const buttons = [];
     if (can('licence.major')) buttons.push({ label: 'Issue licence', run: (close) => { close(); licenceForm(c.id, done); return true; }, closes: false });
     if (can('customers.write')) buttons.push({ label: 'Edit', run: (close) => { close(); customerForm(c, done); return true; }, closes: false });

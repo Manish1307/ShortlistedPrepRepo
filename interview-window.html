@@ -118,7 +118,32 @@
     .qrow .mini { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 800; }
     .qrow .body { padding: 0 16px 16px; border-top: 2px dashed var(--soft); }
     .qrow .said { white-space: pre-wrap; color: var(--muted); }
-    @media (max-width: 960px) { .setup, .stage, .report, .cols { grid-template-columns: 1fr; } }
+    /* licence gate, modes, personalised questions */
+    .gate { background: #fff1c7; margin-bottom: 20px; }
+    .gate p { margin: 0 0 12px; font-weight: 600; }
+    .gate input[type=text] { min-width: 250px; text-transform: uppercase; letter-spacing: .04em; }
+    .gate .err { color: var(--bad); font-weight: 700; font-size: 13px; }
+    .modes { display: flex; gap: 10px; margin: 0 0 18px; }
+    .modes button { flex: 1; border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--paper); font-weight: 700; cursor: pointer; text-align: left; box-shadow: 3px 3px 0 var(--line); }
+    .modes button small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .modes button.on { background: var(--yellow); }
+    .prev { margin-top: 18px; }
+    .prev h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 8px; }
+    .prev button { display: block; width: 100%; text-align: left; border: 2px solid var(--line); border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; background: var(--paper); cursor: pointer; font-weight: 600; }
+    .prev button small { font-weight: 500; color: var(--muted); display: block; }
+    .qlist { display: grid; gap: 12px; margin-top: 8px; }
+    .qgroup h3 { font-size: 15px; margin: 18px 0 4px; } .qgroup .hint { margin-bottom: 8px; }
+    .qitem { border: 2px solid var(--line); border-radius: 14px; background: var(--paper); padding: 12px 14px; }
+    .qitem .qt { display: flex; gap: 10px; font-weight: 700; }
+    .qitem .qn { flex: none; width: 28px; height: 28px; border-radius: 8px; background: #e9e4ff; border: 2px solid var(--line); display: grid; place-items: center; font-size: 13px; }
+    .qitem .ref { margin: 6px 0 0 38px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+    .reveal { margin: 10px 0 0 38px; }
+    .reveal.inline { margin-left: 0; }
+    .answerBox { margin: 10px 0 0 38px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; background: #f4f1ff; white-space: pre-wrap; }
+    .answerBox.inline { margin-left: 0; }
+    .answerBox ul { margin: 8px 0 0; padding-left: 18px; }
+    .bar2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+    @media (max-width: 960px) { .setup, .stage, .report, .cols { grid-template-columns: 1fr; } .modes { flex-direction: column; } }
   </style>
 </head>
 <body>
@@ -138,8 +163,38 @@
       <div class="setup">
         <div class="card">
           <h1>Set up your practice interview</h1>
-          <p class="lead">Pick the company, role and round. The AI interviewer asks the questions; you answer out loud or by typing, and get a score with feedback after each answer.</p>
-          <div class="form">
+          <p class="lead">Practise for a company, or get questions made only from your own resume. The AI interviewer asks the questions; you answer out loud or by typing, and get a score with feedback after each answer.</p>
+          <div id="gate" class="card gate hidden">
+            <p id="gateMsg"></p>
+            <div class="row">
+              <input id="gateKey" type="text" placeholder="CC-XXXX-XXXX-XXXX" maxlength="17" autocomplete="off" spellcheck="false" aria-label="Licence key" />
+              <button id="gateActivate" class="btn primary" type="button">Activate</button>
+              <button id="gateCheck" class="btn" type="button">Check again</button>
+            </div>
+            <span id="gateErr" class="err"></span>
+          </div>
+          <div id="modes" class="modes">
+            <button type="button" data-mode="generic" class="on">Company practice<small>Pick a company, role and round</small></button>
+            <button type="button" data-mode="resume">My resume<small>Personalised and scenario questions from your resume</small></button>
+          </div>
+          <div id="resumeForm" class="hidden">
+            <div class="form">
+              <div class="field full">
+                <label for="resume">Resume to use</label>
+                <select id="resume"></select>
+              </div>
+              <div class="field full">
+                <label for="resumeRole">Target role (optional)</label>
+                <input id="resumeRole" type="text" maxlength="120" placeholder="e.g. Seed breeder, Data analyst, Staff nurse" />
+              </div>
+              <div class="field full">
+                <label class="check"><input id="speakR" type="checkbox" checked /> Read the questions aloud when I practise</label>
+              </div>
+            </div>
+            <div id="prevSets" class="prev hidden"></div>
+            <p class="note">The questions come only from the resume you pick. They are saved to your ClassCue account, so you can find them again in My account and your support team can see them.</p>
+          </div>
+          <div class="form" id="genericForm">
             <div class="field">
               <label for="company">Company</label>
               <select id="company"></select>
@@ -172,7 +227,7 @@
           <div class="row" style="margin-top:20px">
             <button id="btnStart" class="btn primary big">Start interview →</button>
           </div>
-          <p class="note">Practice questions are written by AI in the usual style of each company's interviews. They are not real or leaked questions from the company.</p>
+          <p id="genericNote" class="note">Practice questions are written by AI in the usual style of each company's interviews. They are not real or leaked questions from the company.</p>
         </div>
         <div class="card side">
           <h2>How it works</h2>
@@ -184,6 +239,20 @@
           </ol>
           <p class="note">Tip: answer out loud even when practising alone. Speaking a clear, structured answer is the skill interviews test.</p>
         </div>
+      </div>
+    </section>
+
+    <!-- 1b. personalised questions: read them with their answers, or practise them -->
+    <section id="viewSet" class="hidden">
+      <div class="card">
+        <h1 id="setTitle">Your personalised questions</h1>
+        <p id="setSub" class="lead"></p>
+        <div class="bar2">
+          <button id="btnPractise" class="btn primary big">Practise these questions →</button>
+          <button id="btnSetBack" class="btn ghost">← Back</button>
+          <button id="btnShowAll" class="btn ghost">👁 Show all answers</button>
+        </div>
+        <div id="setList" class="qlist"></div>
       </div>
     </section>
 
@@ -202,7 +271,9 @@
           <div id="qnum" class="qnum">Question 1</div>
           <p id="question" class="question"></p>
           <div id="qtags" class="tags"></div>
-          <div class="row"><button id="btnRepeat" class="btn ghost">🔊 Repeat question</button></div>
+          <p id="qref" class="hint hidden"></p>
+          <div class="row"><button id="btnRepeat" class="btn ghost">🔊 Repeat question</button><button id="btnShow" class="btn ghost hidden" aria-expanded="false">👁 Show model answer</button></div>
+          <div id="modelAnswer" class="answerBox inline hidden"></div>
         </div>
         <div class="card">
           <div class="answerHead">

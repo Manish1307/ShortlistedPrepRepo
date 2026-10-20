@@ -448,3 +448,12 @@
 .pp-ans { margin: 10px 0 0 36px; padding: 10px 12px; border-radius: 10px; background: #f6f2ff; font-size: 14px; }
 .pp-ans[hidden] { display: none; } .pp-ans p { margin: 0; } .pp-ans p + p { margin-top: 6px; }
 @media (max-width: 560px) { .pp-opts, .pp-qa-btn, .pp-ans { margin-left: 0; } }
+
+/* ---------- Interview prep (My account) ---------- */
+.iv-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.iv-form select, .iv-form input { width: 100%; font: inherit; font-size: 14px; padding: 9px 10px; border: 1px solid var(--bd); border-radius: 10px; background: #fff; }
+.iv-sets { margin-top: 16px; display: grid; gap: 10px; }
+.iv-ref { margin: 6px 0 0 36px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+.iv-points { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--body); }
+.iv-actions { margin-top: 14px; }
+@media (max-width: 720px) { .iv-form { grid-template-columns: 1fr; } .iv-ref { margin-left: 0; } }

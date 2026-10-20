@@ -10,5 +10,5 @@ module.exports = {
   BUY_URL: process.env.CLASSCUE_BUY_URL || 'http://localhost:4173/pricing.html',
   GRACE_DAYS: 7,   // how long the app keeps working without reaching the licence server
   TRIAL_DAYS: 7,   // shown in the app; the server decides the real length (TRIAL_DAYS on the server)
-  PUBLIC_KEY_FILE: path.join(__dirname, 'public-key.pem'),   // must match the server's admin/data/signing-key.pem
+  PUBLIC_KEY_FILE: process.env.CLASSCUE_PUBLIC_KEY_FILE || path.join(__dirname, 'public-key.pem'),   // must match the server's admin/data/signing-key.pem
 };

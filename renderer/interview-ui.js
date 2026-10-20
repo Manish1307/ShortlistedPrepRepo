@@ -4,6 +4,9 @@
   'use strict';
   const api = window.interviewAPI;
   const $ = id => document.getElementById(id);
+  const B = window.Brand;
+  /** A heading with an icon in front of its text. */
+  const heading = (name, text) => { const h = document.createElement('h3'); h.append(B.icon(name), document.createTextNode(text)); return h; };
 
   function el(tag, className, text) {
     const e = document.createElement(tag);
@@ -87,18 +90,23 @@
     $('gateErr').textContent = '';
     if (!/^CC-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) { $('gateErr').textContent = 'A licence key looks like CC-XXXX-XXXX-XXXX.'; return; }
     $('gateActivate').disabled = true;
+    const slot = el('div'); slot.id = 'gatePg'; $('gate').appendChild(slot);
+    B.progress(slot, { title: 'Checking your licence', expectedSec: 6, compact: true });
     try {
       const res = await api.activateLicence(key);
       if (!res) return;
       if (!res.ok) $('gateErr').textContent = res.message || 'The key was not accepted.';
       else { $('gateKey').value = ''; info = await api.info(); }
       applyLicence(res.licence);
-    } finally { $('gateActivate').disabled = false; }
+    } finally { $('gateActivate').disabled = false; slot.remove(); }
   }
   async function checkLicence() {
     $('gateErr').textContent = '';
+    const slot = el('div'); slot.id = 'gatePg'; $('gate').appendChild(slot);
+    B.progress(slot, { title: 'Checking your licence', expectedSec: 6, compact: true });
     const l = await api.checkLicence();
     info = await api.info();
+    slot.remove();
     applyLicence(l);
     if (!isLicensed()) $('gateErr').textContent = 'Still not active.';
   }
@@ -122,7 +130,9 @@
     const sel = $('resume');
     sel.textContent = '';
     sel.appendChild(el('option', '', 'Loading your resumes…'));
+    const pgR = B.progress($('pgHost'), { title: 'Loading your resumes', expectedSec: 4, compact: true });
     const res = await api.resumes();
+    pgR.stop();
     if (!res || !res.ok) { sel.textContent = ''; sel.appendChild(el('option', '', 'Could not load your resumes')); banner(res ? res.message : 'Could not load your resumes.'); return; }
     resumesLoaded = true;
     sel.textContent = '';
@@ -152,14 +162,13 @@
 
   async function makeResumeSet() {
     if (!$('resume').value) { banner('Choose a resume first.'); return; }
-    banner('Reading your resume and writing your questions… (about 30 seconds)', 'info');
+    banner('');
     $('btnStart').disabled = true;
-    $('btnStart').textContent = 'Reading your resume…';
+    const pg = B.progress($('pgHost'), { title: 'Making your personalised questions', expectedSec: 35, stages: ['Reading your resume', 'Writing your questions', 'Checking the answers'] });
     const res = await api.makeSet({ resumeKey: $('resume').value, role: $('resumeRole').value.trim() });
     $('btnStart').disabled = false;
-    $('btnStart').textContent = 'Get my personalised questions →';
-    if (!res || !res.ok) { banner(res ? res.message : 'Could not make the questions.'); return; }
-    banner('');
+    if (!res || !res.ok) { pg.stop(); banner(res ? res.message : 'Could not make the questions.'); return; }
+    pg.done('Your questions are ready');
     resumesLoaded = false;   // the new set is in the list next time
     showSet(res.set);
   }
@@ -174,14 +183,15 @@
     return box;
   }
   function toggleButton(box, inline) {
-    const b = el('button', 'btn ghost reveal' + (inline ? ' inline' : ''), '👁 Show answer');
+    const b = el('button', 'btn ghost sm reveal' + (inline ? ' inline' : ''));
+    B.setButton(b, 'eye', 'Show answer');
     b.type = 'button';
     b.setAttribute('aria-expanded', 'false');
     b.addEventListener('click', () => {
       const open = box.classList.contains('hidden');
       box.classList.toggle('hidden', !open);
       b.setAttribute('aria-expanded', open ? 'true' : 'false');
-      b.textContent = open ? '🙈 Hide answer' : '👁 Show answer';
+      B.setButton(b, open ? 'eye-off' : 'eye', open ? 'Hide answer' : 'Show answer');
     });
     return b;
   }
@@ -235,14 +245,13 @@
     if (!isLicensed()) { banner(LICENCE_TEXT[(info.licence || {}).state] || 'Activate your ClassCue licence first.'); return; }
     if (mode === 'resume') return makeResumeSet();
     if (!info.hasKey) { banner('AI is not available for this licence yet. Check the licence, then try again.'); return; }
-    banner('Preparing your questions…', 'info');
+    banner('');
     $('btnStart').disabled = true;
-    $('btnStart').textContent = 'Preparing your questions…';
+    const pg = B.progress($('pgHost'), { title: 'Preparing your questions', expectedSec: 12, stages: ['Choosing topics', 'Writing questions', 'Checking them'] });
     const res = await api.questions({ ...setup, avoid: asked });
     $('btnStart').disabled = false;
-    $('btnStart').textContent = 'Start interview →';
-    if (!res || !res.ok) { banner(res ? res.message : 'Could not prepare the questions.'); show('viewSetup'); return; }
-    banner('');
+    if (!res || !res.ok) { pg.stop(); banner(res ? res.message : 'Could not prepare the questions.'); show('viewSetup'); return; }
+    pg.done('Your questions are ready');
     items = []; queue = res.questions.slice(); startedAt = new Date().toISOString();
     $('whoLine').textContent = `${setup.company === 'Any' ? 'Practice' : setup.company} · ${setup.role || 'Software engineer'} · ${info.rounds[setup.round].split(':')[0]}`;
     show('viewInterview');
@@ -277,7 +286,7 @@
     $('qref').classList.toggle('hidden', !current.resumeRef);
     const hasModel = !!current.reference;
     $('btnShow').classList.toggle('hidden', !hasModel);
-    $('btnShow').textContent = '👁 Show model answer';
+    B.setButton($('btnShow'), 'eye', 'Show model answer');
     $('btnShow').setAttribute('aria-expanded', 'false');
     const model = $('modelAnswer');
     model.textContent = '';
@@ -306,13 +315,13 @@
     $('btnSubmit').disabled = true; $('btnSkip').disabled = true; paintChips();
     const fb = $('feedback');
     fb.textContent = '';
-    const loading = el('div', 'card loading');
-    loading.appendChild(el('div', 'spinner'));
-    loading.appendChild(el('span', '', 'The interviewer is reviewing your answer…'));
+    const loading = el('div', 'card');
     fb.appendChild(loading);
+    const pg = B.progress(loading, { title: 'The interviewer is reviewing your answer', expectedSec: 10, stages: ['Reading your answer', 'Scoring it', 'Writing feedback'] });
     fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const res = await api.evaluate({ ...setup, question: current.question, points: current.points || [], reference: current.reference || '', answer });
+    pg.stop();
     if (!res || !res.ok) {
       fb.textContent = '';
       const card = el('div', 'card');
@@ -354,9 +363,9 @@
     });
   }
 
-  function list(title, entries, kind) {
+  function list(title, entries, kind, iconName) {
     const box = el('div', 'box ' + kind);
-    box.appendChild(el('h3', '', title));
+    box.appendChild(heading(iconName || 'list', title));
     if (!entries.length) box.appendChild(el('div', 'hint', kind === 'good' ? 'Nothing to highlight this time.' : 'Nothing important missing.'));
     else { const ul = el('ul'); entries.forEach(t => ul.appendChild(el('li', '', t))); box.appendChild(ul); }
     return box;
@@ -377,12 +386,12 @@
     head.appendChild(words);
     card.appendChild(head);
     const cols = el('div', 'cols');
-    cols.appendChild(list('✓ What was good', item.strengths, 'good'));
-    cols.appendChild(list('↗ To improve', item.missing, 'fix'));
+    cols.appendChild(list('What was good', item.strengths, 'good', 'check'));
+    cols.appendChild(list('To improve', item.missing, 'fix', 'chart'));
     card.appendChild(cols);
     if (item.betterAnswer) {
       const better = el('div', 'box better');
-      better.appendChild(el('h3', '', '💡 A stronger answer'));
+      better.appendChild(heading('bulb', 'A stronger answer'));
       richText(better, item.betterAnswer);
       card.appendChild(better);
     }
@@ -426,11 +435,11 @@
         body.appendChild(el('h3', '', 'You said'));
         body.appendChild(el('p', 'said', i.answer || '(nothing)'));
         const cols = el('div', 'cols');
-        cols.appendChild(list('✓ Good', i.strengths, 'good'));
-        cols.appendChild(list('↗ To improve', i.missing, 'fix'));
+        cols.appendChild(list('Good', i.strengths, 'good', 'check'));
+        cols.appendChild(list('To improve', i.missing, 'fix', 'chart'));
         body.appendChild(cols);
-        if (i.betterAnswer) { const b = el('div', 'box better'); b.appendChild(el('h3', '', '💡 A stronger answer')); richText(b, i.betterAnswer); body.appendChild(b); }
-        if (i.reference) { const b = el('div', 'box better'); b.appendChild(el('h3', '', '📄 Model answer from your resume')); b.appendChild(el('div', 'text', i.reference)); body.appendChild(b); }
+        if (i.betterAnswer) { const b = el('div', 'box better'); b.appendChild(heading('bulb', 'A stronger answer')); richText(b, i.betterAnswer); body.appendChild(b); }
+        if (i.reference) { const b = el('div', 'box better'); b.appendChild(heading('doc', 'Model answer from your resume')); b.appendChild(el('div', 'text', i.reference)); body.appendChild(b); }
       }
       d.appendChild(body);
       rows.appendChild(d);
@@ -454,7 +463,7 @@
       listening = true;
       api.setListening(true);
       $('btnMic').classList.add('on');
-      $('btnMic').textContent = '■ Stop recording';
+      B.setButton($('btnMic'), 'x', 'Stop recording');
       $('micHint').textContent = 'Speak your answer. The text appears in the box; you can edit it before submitting.';
     } catch (err) {
       banner('Could not use the microphone: ' + (err && err.message ? err.message : err));
@@ -468,7 +477,7 @@
       api.setListening(false);
       if (capture) { const c = capture; capture = null; await c.stop(); }
       $('btnMic').classList.remove('on');
-      $('btnMic').textContent = '🎙 Answer by voice';
+      B.setButton($('btnMic'), 'mic', 'Answer by voice');
       $('meter').style.width = '0%';
       $('micHint').textContent = '';
     }
@@ -527,14 +536,14 @@
       const buttons = [...$('setList').querySelectorAll('button.reveal')];
       const anyClosed = buttons.some(b => b.getAttribute('aria-expanded') === 'false');
       buttons.forEach(b => { if ((b.getAttribute('aria-expanded') === 'false') === anyClosed) b.click(); });
-      $('btnShowAll').textContent = anyClosed ? '🙈 Hide all answers' : '👁 Show all answers';
+      B.setButton($('btnShowAll'), anyClosed ? 'eye-off' : 'eye', anyClosed ? 'Hide all answers' : 'Show all answers');
     });
     $('btnShow').addEventListener('click', () => {
       const box = $('modelAnswer');
       const open = box.classList.contains('hidden');
       box.classList.toggle('hidden', !open);
       $('btnShow').setAttribute('aria-expanded', open ? 'true' : 'false');
-      $('btnShow').textContent = open ? '🙈 Hide model answer' : '👁 Show model answer';
+      B.setButton($('btnShow'), open ? 'eye-off' : 'eye', open ? 'Hide model answer' : 'Show model answer');
     });
 
     api.onSpeech(s => { speech = s; paintChips(); });

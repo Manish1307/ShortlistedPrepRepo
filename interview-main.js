@@ -289,7 +289,7 @@ async function runShots() {
   const js = code => wc.executeJavaScript(code);
   const wait = async (cond, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await js(cond)) return true; await new Promise(r => setTimeout(r, 250)); } return false; };
   // saved as 1200 px wide JPEGs: small enough for the website
-  const shot = async name => { await new Promise(r => setTimeout(r, 500)); const img = (await wc.capturePage()).resize({ width: 1200, quality: 'best' }); fs.writeFileSync(path.join(dir, name + '.jpg'), img.toJPEG(88)); };
+  const shot = async name => { if (/^[123]-/.test(name)) await js('window.scrollTo(0, 0)'); await new Promise(r => setTimeout(r, 500)); const img = (await wc.capturePage()).resize({ width: 1200, quality: 'best' }); fs.writeFileSync(path.join(dir, name + '.jpg'), img.toJPEG(88)); };
   const report = {};
   await new Promise(r => setTimeout(r, 1500));
   win.setSize(1180, 860);
@@ -305,6 +305,7 @@ async function runShots() {
   await shot('2-resume');
   // 3. personalised questions made from that resume
   await js("document.getElementById('btnStart').click(); true");
+  if (process.env.TNA_IV_PROGRESS_SHOT) { await new Promise(r => setTimeout(r, Number(process.env.TNA_IV_PROGRESS_SHOT))); await shot('2b-progress'); }   // the progress bar while the server is slow
   report.setShown = await wait("!document.getElementById('viewSet').classList.contains('hidden')", 90000);
   report.questions = await js("document.querySelectorAll('#setList .qitem').length");
   await shot('3-questions');

@@ -24,6 +24,10 @@
   const isQuestion = text => /\?\s*$/.test(text) && text.trim().split(/\s+/).length > 2;
   const newUid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12));
 
+  const B = window.Brand;
+  /** A small rounded icon badge (kind 'q' for questions, 'a' for answers). */
+  const badge = (name, kind) => { const s = el('span', 'ico ' + kind); s.appendChild(B.icon(name)); return s; };
+
   let toastTimer = null;
   function toast(text) {
     const t = $('toast');
@@ -42,9 +46,9 @@
   const DEFAULTS = { zoom: 100, opacity: 100, font: 15 };
   const state = {
     startedAt: Date.now(), ended: false, collapsed: false,
-    listening: false, starting: false, source: 'both', theme: 'dark', zoom: DEFAULTS.zoom, opacity: DEFAULTS.opacity, font: DEFAULTS.font,
+    listening: false, starting: false, source: 'both', theme: 'light', zoom: DEFAULTS.zoom, opacity: DEFAULTS.opacity, font: DEFAULTS.font,
     language: 'en', autoAnswer: false, editing: false,
-    engine: { state: 'starting', message: '' }, info: null, notice: null,
+    engine: { state: 'starting', message: '' }, info: null, notice: null, reading: 0,
     licence: { state: live ? 'checking' : 'active', dev: !live },
     heard: [],         // { text, isQuestion }: the latest phrases, shown in the strip
     log: [],           // { at, text }: everything heard this class, saved when it ends
@@ -62,7 +66,8 @@
     const box = $('phrases');
     box.textContent = '';
     if (!state.heard.length && !state.partial && !(state.listening && (state.speaking || state.transcribing))) {
-      box.appendChild(el('span', '', stripStatus()));
+      if (state.engine.state === 'starting') B.progress(box, { title: 'Loading the speech engine', expectedSec: 10, compact: true, startedAt: state.startedAt, stages: ['Starting', 'Loading the model', 'Warming up'] });
+      else box.appendChild(el('span', '', stripStatus()));
       return;
     }
     for (const h of state.heard.slice(-12)) {
@@ -87,11 +92,16 @@
   // the answer text, shown the way the assistant shows it: one statement per line, list items as bullets
   function renderAnswer(body, item) {
     const al = el('div', 'aline');
-    al.append(el('span', 'ico star', '★'), el('b', '', 'Answer: '));
+    al.append(badge('spark', 'a'), el('b', '', 'Answer: '));
     body.appendChild(al);
     if (item.status === 'error') { al.appendChild(el('span', 'err', item.error || 'Could not answer this question.')); return; }
     const lines = window.ReadFormat ? window.ReadFormat.toLines(item.text) : String(item.text || '').split(/\n+/).filter(Boolean);
-    if (!lines.length) { al.appendChild(el('span', 'pending', 'Thinking…')); return; }
+    if (!lines.length) {
+      // the same bar stays at the same point when the card is redrawn: it counts from when the question was asked
+      B.progress(body, { title: item.source === 'screen' ? 'Reading the screen and writing your answer' : 'Preparing your answer', expectedSec: item.source === 'screen' ? 14 : 8, compact: true, startedAt: item.at.getTime(),
+        stages: item.source === 'screen' ? ['Reading', 'Thinking', 'Writing'] : [] });
+      return;
+    }
     let first = true, list = null, code = null;
     for (const line of lines) {
       if (window.ReadFormat && window.ReadFormat.isCodeFence(line)) {
@@ -110,7 +120,7 @@
       if (first) { al.appendChild(document.createTextNode(line)); first = false; }
       else body.appendChild(el('p', 'line', line));
     }
-    if (item.status === 'thinking') body.appendChild(el('span', 'pending', ' …'));
+    if (item.status === 'thinking') body.appendChild(el('span', 'pending', ' …'));   // the text is still arriving
   }
 
   function renderCard() {
@@ -128,6 +138,7 @@
     n.hidden = !state.notice;
     if (state.notice) { n.textContent = state.notice.text; n.className = 'notice ' + state.notice.kind; }
 
+    if (state.reading) B.progress(body, { title: 'Reading the question on screen', expectedSec: 10, compact: true, startedAt: state.reading, stages: ['Capturing', 'Reading', 'Understanding'] });
     if (!item) {
       body.appendChild(el('div', 'empty', 'No questions yet. Questions heard in class are answered here (Auto Answer), or press Answer (Ctrl+Enter) when a question is finished. Chat (Ctrl+Shift+Space) to type one.'));
       return;
@@ -152,7 +163,7 @@
       setTimeout(() => ta.focus(), 0);
     } else {
       const ql = el('div', 'qline');
-      ql.append(el('span', 'ico', '💬'), el('b', '', 'Question: '), document.createTextNode(item.question));
+      ql.append(badge('chat', 'q'), el('b', '', 'Question: '), document.createTextNode(item.question));
       body.appendChild(ql);
     }
     renderAnswer(body, item);
@@ -210,7 +221,10 @@
     const l2 = state.licence;
     const gate = $('gate');
     gate.hidden = isLicensed();
+    const oldBar = $('gatePg');
+    if (oldBar && l2.state !== 'checking') oldBar.remove();
     if (!gate.hidden) {
+      if (l2.state === 'checking' && !$('gatePg')) { const slot = el('div'); slot.id = 'gatePg'; gate.insertBefore(slot, gate.children[1]); B.progress(slot, { title: 'Checking your licence', expectedSec: 6, compact: true }); }
       $('gateMsg').textContent = l2.message || LICENCE_TEXT[l2.state] || 'Live Class needs an active licence.';
       $('gateKey').parentElement.hidden = l2.state === 'checking';
       $('gateActivate').hidden = l2.state === 'check-needed';
@@ -315,6 +329,7 @@
         break;
       }
       case 'answer-start': {
+        state.reading = 0;
         state.items.push({ id: m.id, question: m.question, text: '', status: 'thinking', at: new Date(), vote: 0, source: m.source });
         if (!state.editing) { state.index = state.items.length - 1; }
         if (state.collapsed) { state.collapsed = false; applyView(); }
@@ -326,8 +341,8 @@
       case 'answer-error': { const it = find(m.id); if (it) { it.status = 'error'; it.error = m.message; if (it === current()) renderCard(); } break; }
       case 'answer-skip': case 'answer-cancelled': removeItem(m.id); break;
       case 'screen':
-        if (m.state === 'reading') toast('Reading the question on screen…');
-        else if (m.state === 'error' || m.state === 'none') notice('warn', m.message);
+        if (m.state === 'reading') { state.reading = Date.now(); renderCard(); }
+        else if (m.state === 'error' || m.state === 'none') { state.reading = 0; notice('warn', m.message); }
         break;
       case 'error': notice('error', m.message); break;
       case 'warning': toast(m.message); break;
@@ -358,7 +373,8 @@
 
   function screenshot() {
     if (state.ended || needLicence()) return;
-    toast('Capturing the screen…');
+    state.reading = Date.now();   // the bar shows until the answer starts
+    renderCard();
     api.captureScreen();
   }
 

@@ -134,10 +134,15 @@
 
 /* the longer menu needs the hamburger earlier than the old design did */
 .menu > a, .menu summary, .lang, .menu .btn { white-space: nowrap; }
-@media (max-width: 1100px) {
-  .menu { gap: 16px; }
+.nav-inner { gap: 20px; }
+.brand { flex: none; white-space: nowrap; }
+.menu { flex-wrap: nowrap; min-width: 0; }
+@media (max-width: 1320px) {
+  .menu { gap: 14px; }
+  .menu a:not(.btn), .dropdown summary { font-size: 15px; }
 }
-@media (max-width: 1020px) {
+/* the signed-in menu is the widest, so the hamburger starts before the name and the links can touch */
+@media (max-width: 1180px) {
   .nav-toggle { display: inline-block; }
   .menu { display: none; position: absolute; top: 72px; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; background: #fff; border-bottom: 1px solid var(--bd); padding: 8px 22px 18px; box-shadow: var(--shadow); }
   .menu.open { display: flex; }

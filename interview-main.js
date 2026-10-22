@@ -24,7 +24,7 @@ const { Pipeline } = require('./src/pipeline');
 const { WhisperServer } = require('./src/stt/whisperServer');
 const coach = require('./src/interview/coach');
 
-// started as "electron interview-main.js": use the same name, settings and keys as the teacher assistant
+// started as "electron interview-main.js": use the same name, settings and keys as ShortlistPrep.AI
 // the screenshot runs keep painting even when another window covers this one
 if (process.argv.some(a => a.startsWith('--shots'))) { app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion'); app.commandLine.appendSwitch('disable-renderer-backgrounding'); app.commandLine.appendSwitch('disable-backgrounding-occluded-windows'); }
 app.setName('ShortlistPrep');
@@ -147,10 +147,10 @@ async function startSpeech() {
 }
 
 function friendly(err) {
-  if (err && err.code === 'no-key') return 'No AI key is saved for the selected AI service. Open the teacher assistant (npm start), Settings, and add one.';
+  if (err && err.code === 'no-key') return 'No AI key is available for the selected AI service. Please contact ShortlistPrep support to add one to your licence.';
   if (err && err.name === 'AbortError') return 'The AI took too long to reply. Try again.';
   if (err && err.status === 429) return 'The AI\'s free limit is used up for the moment (429). Wait a minute and try again.';
-  if (err && (err.status === 401 || err.status === 403)) return 'The AI key was rejected. Check it in the teacher assistant\'s Settings.';
+  if (err && (err.status === 401 || err.status === 403)) return 'The AI key was rejected. Please contact ShortlistPrep support.';
   if (err && err.status >= 500) return 'The AI service is busy (' + err.status + '). Try again.';
   return (err && err.message) || String(err);
 }

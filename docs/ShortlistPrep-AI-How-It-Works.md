@@ -1,7 +1,7 @@
 # ShortlistPrep.AI: how it works
 
 ShortlistPrep.AI is a floating overlay for teaching. It listens to the class, writes down what is said, spots questions
-and answers them with the same AI service, model, subject and prompts as the Private Assistant.
+and answers them with the same AI service, model, subject and prompts as Mock Interview.
 
 ```bash
 npm run shortlistprep-ai
@@ -81,7 +81,7 @@ API keys stay in the main process and never reach the page.
 
 ## 2. Capturing sound: Web Audio API
 
-**Code:** [renderer/capture.js](../renderer/capture.js), shared with the Private Assistant.
+**Code:** [renderer/capture.js](../renderer/capture.js), shared with Mock Interview.
 
 **Where the sound comes from.**
 - **Microphone:** `navigator.mediaDevices.getUserMedia`.
@@ -121,7 +121,7 @@ The "speaking…" indicator in the strip comes straight from this detector's sta
 - `base.en` is the English-only base model.
 - `q5_1` means 5-bit quantized, so the file is about 57 MB.
 
-The Private Assistant keeps the model chosen in its Settings (`small.en`). If `base.en` is missing, ShortlistPrep.AI falls back to that model.
+Mock Interview keeps the model chosen in its settings (`small.en`). If `base.en` is missing, ShortlistPrep.AI falls back to that model.
 
 **Engine settings for ShortlistPrep.AI** (`LIVE_WHISPER_ARGS`):
 
@@ -163,7 +163,7 @@ The Private Assistant keeps the model chosen in its Settings (`small.en`). If `b
 
 **Streaming.** The answer arrives as server-sent events, which are parsed piece by piece. Each piece reaches the page as an `answer-delta` event, so the answer appears word by word.
 
-**The prompt.** `SYSTEM_PROMPT` in [src/ai/answerer.js](../src/ai/answerer.js) is shared by every provider and by the Private Assistant. The user message carries:
+**The prompt.** `SYSTEM_PROMPT` in [src/ai/answerer.js](../src/ai/answerer.js) is shared by every provider and by the Mock Interview. The user message carries:
 - the class subject;
 - recent class speech, as context;
 - the last 4 questions and answers from the past 45 minutes, so follow-up questions make sense.
@@ -208,12 +208,12 @@ The same file runs in Node and in the browser (a UMD module).
 ## 8. Settings and keys
 
 **Settings.**
-- They are shared with the Private Assistant: `%APPDATA%\ShortlistPrep\settings.json`. They cover subject, provider, model, thinking time, audio source and Auto Answer.
-- Change them in the Private Assistant (`npm start`) under Settings.
+- They are shared with Mock Interview: `%APPDATA%\ShortlistPrep\settings.json`. They cover subject, provider, model, thinking time, audio source and Auto Answer.
+- AI keys come with your licence from the ShortlistPrep server; contact ShortlistPrep support to change them.
 - Auto Answer changed inside ShortlistPrep.AI lasts for that session only.
 
 **Licence.**
-- ShortlistPrep.AI needs an active ShortlistPrep licence: the same one as the Private Assistant (`licence.json` in the same folder).
+- ShortlistPrep.AI needs an active ShortlistPrep licence: the same one as Mock Interview (`licence.json` in the same folder).
 - At start-up and every 30 minutes it calls the licence server's `POST /api/app/config`. The licence part of the answer is signed (Ed25519) and checked against `src/licence/public-key.pem`, as in the assistant.
 - Without an active licence, a panel in the card asks for the licence key, and listening, Answer, Chat and Screenshot are locked. The ⋮ menu shows the plan and the days left.
 - While developing, `SP_LICENCE=off` skips the check.
@@ -237,7 +237,7 @@ Measured on the development PC. A Windows voice says a 9 s sentence ending in a 
 
 | Setup | Question ready |
 |---|---|
-| Private Assistant settings (`small.en`, 0.8 s pause, 1 s quiet) | 4.8 s after speech ends |
+| Mock Interview settings (`small.en`, 0.8 s pause, 1 s quiet) | 4.8 s after speech ends |
 | ShortlistPrep.AI tuning, `small.en` | 3.4 s |
 | **ShortlistPrep.AI tuning, `base.en` (current)** | **1.6 s** |
 

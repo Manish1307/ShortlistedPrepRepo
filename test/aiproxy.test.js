@@ -208,7 +208,7 @@ test('the licence client asks for the proxy and falls back to keys on a server w
   assert.deepEqual(cfg.ai, {});
   assert.deepEqual(cfg.proxy.services, { groq: true, gemini: true });
   assert.ok(cfg.proxy.expiresAt > Date.now());
-  // without asking (the teacher assistant), keys as before
+  // without asking (Mock Interview), keys as before
   assert.equal((await app.appConfig()).ai.groq.apiKey, GROQ);
   assert.equal((await app.appConfig()).proxy, null);
   // an older server ignores "proxy" and sends keys: the app uses them

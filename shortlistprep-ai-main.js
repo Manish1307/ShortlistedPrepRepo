@@ -1,7 +1,7 @@
 'use strict';
 // ShortlistPrep.AI overlay: a floating toolbar, live transcript strip and question/answer card for use while teaching.
 // It hears questions with the same offline speech engine and answers them with the same AI service, model, subject
-// and prompts as the teacher assistant (saved Settings are shared; change them in the assistant's Settings).
+// and prompts as Mock Interview (saved settings are shared between the ShortlistPrep apps).
 // It needs an active ShortlistPrep licence (the same one as the assistant), checked with the licence server. The AI runs
 // through that server's AI proxy: Groq for answers and Gemini for screenshots, with the keys chosen per licence in the
 // admin dashboard (AI keys), and the keys never reach this computer (only a short-lived access token does).
@@ -28,7 +28,7 @@ const { LicenceClient, computerId } = require('./src/licence/client');
 const licenceSettings = require('./src/licence/settings');
 const { ConversationOutbox } = require('./src/conversations/outbox');
 
-// Tuned for a live class (the teacher assistant keeps its own, more patient settings), measured on this PC:
+// Tuned for a live class (Mock Interview keeps its own, more patient settings), measured on this PC:
 // - a phrase ends after a 0.6 s pause (0.8 s in the assistant) and long speech is cut into pieces of at most 8 s;
 // - the speech engine looks at ~10 s of audio instead of ~15 s and decodes in one pass: about 2 s per phrase instead
 //   of 3+ s, with the same words (a smaller window started losing punctuation, so question marks, on 8 s phrases);
@@ -37,13 +37,13 @@ const LIVE_VAD = { hangMs: 600, softMaxMs: 5000, softGapMs: 120, maxUtteranceMs:
 const LIVE_WHISPER_ARGS = ['-ac', '512', '-bo', '1', '-nf'];
 const LIVE_QUIET_MS = 500;
 // The smaller base.en model: ~0.7 s per phrase instead of ~2.6 s with small.en, about 3 points less word accuracy
-// (98.5% -> 95.5% on Power Platform test questions). The teacher assistant keeps the model from its Settings.
+// (98.5% -> 95.5% on Power Platform test questions). Mock Interview keeps the model from its Settings.
 // If base.en is not downloaded (npm run setup:whisper -- --model base.en-q5_1 --model-only), that model is used instead.
 const LIVE_MODEL = 'ggml-base.en-q5_1.bin';
 // How often the licence and the AI keys are fetched again while ShortlistPrep.AI runs.
 const CONFIG_REFRESH_MS = 30 * 60 * 1000;
 
-// started as "electron shortlistprep-ai-main.js": use the same name, settings and keys as the teacher assistant
+// started as "electron shortlistprep-ai-main.js": use the same name, settings and keys as Mock Interview
 app.setName('ShortlistPrep');
 app.setPath('userData', process.env.SP_USER_DATA || path.join(app.getPath('appData'), 'ShortlistPrep'));   // SP_USER_DATA: a separate folder for tests
 
@@ -172,7 +172,7 @@ async function syncLicence() {
   send('info', info());
 }
 
-// ---- speech + AI engine: built exactly like the teacher assistant's, from the same saved settings ----------
+// ---- speech + AI engine: built exactly like Mock Interview's, from the same saved settings ----------
 
 async function startEngine() {
   const s = config.load();

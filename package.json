@@ -1,6 +1,6 @@
 {
   "name": "shortlistprep-app",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "ShortlistPrep desktop apps: ShortlistPrep.AI (live interview assistant) and Mock Interview",
   "main": "shortlistprep-ai-main.js",
   "scripts": {

@@ -1,6 +1,6 @@
 // ShortlistPrep.AI overlay: toolbar, live transcript strip, question/answer card and a settings menu.
 // In the app (npm run shortlistprep-ai) it listens with the offline speech engine and answers with the same AI, model,
-// subject and prompts as the teacher assistant. Opened in a plain browser it runs a demo with sample data instead.
+// subject and prompts as the rest of ShortlistPrep. Opened in a plain browser it runs a demo with sample data instead.
 // Everything shown is inserted as TEXT (never as HTML): nothing the AI writes can inject markup into the page.
 (function () {
   'use strict';
@@ -335,7 +335,7 @@
   function applyEngine(e) {
     state.engine = e || state.engine;
     if (state.engine.state === 'setup-needed' || state.engine.state === 'error') notice('error', state.engine.message);
-    else if (state.info && !state.info.hasKey && isLicensed()) notice('warn', `No ${PROVIDERS[state.info.provider] || state.info.provider} key for answers. Ask your administrator to give your licence one (admin dashboard, AI keys).`);
+    else if (state.info && !state.info.hasKey && isLicensed()) notice('warn', `No ${PROVIDERS[state.info.provider] || state.info.provider} key for answers. Please contact ShortlistPrep support to add one to your licence.`);
     else if (state.notice && state.notice.kind === 'warn' && state.info && state.info.hasKey) notice();
     renderPhrases();
   }

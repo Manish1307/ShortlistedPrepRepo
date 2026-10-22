@@ -13,10 +13,10 @@ const TOOLS = [
     description: 'Practise with an AI interviewer. Questions are made from your resume, and every answer gets feedback.' },
 ];
 // The current public release on GitHub. The dashboard (or DOWNLOAD_URL_*) can override it for a newer one.
-const RELEASE = 'https://github.com/Manish1307/ShortlistedPrepRepo/releases/download/v1.1.1/';
+const RELEASE = 'https://github.com/Manish1307/ShortlistedPrepRepo/releases/download/v1.1.2/';
 const DEFAULTS = {
-  'shortlistprep-ai': { version: '1.1.1', url: RELEASE + 'ShortlistPrep-AI-Setup-1.1.1.exe', sizeMb: 130 },
-  'mock-interview': { version: '1.1.1', url: RELEASE + 'ShortlistPrep-Interview-Setup-1.1.1.exe', sizeMb: 247 },
+  'shortlistprep-ai': { version: '1.1.2', url: RELEASE + 'ShortlistPrep-AI-Setup-1.1.2.exe', sizeMb: 130 },
+  'mock-interview': { version: '1.1.2', url: RELEASE + 'ShortlistPrep-Interview-Setup-1.1.2.exe', sizeMb: 247 },
 };
 const toolOf = id => TOOLS.find(t => t.id === id);
 // a link can also come from the environment, e.g. DOWNLOAD_URL_SHORTLISTPREP_AI / DOWNLOAD_URL_MOCK_INTERVIEW

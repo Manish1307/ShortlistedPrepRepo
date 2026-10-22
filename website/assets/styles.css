@@ -41,7 +41,7 @@ h1 { font-size: clamp(38px, 5.6vw, 68px); font-weight: 800; } h2 { font-size: cl
 .nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
 .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 21px; color: var(--ink); letter-spacing: -.02em; } .brand:hover { text-decoration: none; }
-.logo { width: 36px; height: 36px; border-radius: 11px; background: var(--grad); display: grid; place-items: center; color: #fff; font-weight: 800; box-shadow: 0 4px 12px -4px rgba(125,42,232,.6); }
+.logo { width: 36px; height: 36px; border-radius: 11px; object-fit: cover; display: block; box-shadow: 0 4px 12px -4px rgba(125,42,232,.6); }
 .menu { display: flex; align-items: center; gap: 24px; }
 .menu a:not(.btn) { color: var(--body); font-weight: 600; font-size: 16px; padding: 6px 2px; border-bottom: 3px solid transparent; } .menu a:not(.btn):hover { color: var(--purple); text-decoration: none; } .menu a.current { color: var(--purple); border-bottom-color: var(--purple); } .menu a.btn-primary.current { color: #fff; border-bottom-color: transparent; }
 .nav-toggle { display: none; background: #fff; border: 1px solid var(--bd); border-radius: 10px; font-size: 20px; padding: 3px 11px; cursor: pointer; }

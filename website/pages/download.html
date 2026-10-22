@@ -1,23 +1,35 @@
-<!-- title: Get the app | description: ShortlistPrep works in your browser, with a Windows app planned. Join early access to be first in. -->
+<!-- title: Download the apps | description: Download the ShortlistPrep Interview Assistant and Mock Interview apps for Windows. Free account and free licence. -->
+<link rel="stylesheet" href="assets/account.css?v=12">
 <section class="page-head">
   <div class="wrap narrow center">
-    <span class="eyebrow">Get the app</span>
-    <h1>Practise on your computer, soon</h1>
-    <p class="lead">{{name}} is launching soon. Join early access and we will email you the day it opens.</p>
-    <div class="btn-row" style="justify-content:center;margin-top:24px">
-      <a class="btn btn-primary btn-lg" href="signup.html">Get early access</a>
-      {{downloadButton}}
-    </div>
+    <span class="eyebrow">Download</span>
+    <h1>Get the {{name}} apps for Windows</h1>
+    <p class="lead">Free to download with a free account. Click Download and we will set up your account in a minute, then your download starts.</p>
   </div>
 </section>
 
 <section>
   <div class="wrap">
-    <div class="grid grid-3">
-      <div class="card"><div class="icon">🌐</div><h3>In your browser</h3><p>Start practising from any modern browser with a microphone. Nothing to install.</p><span class="pill good">Planned first</span></div>
-      <div class="card"><div class="icon">🖥️</div><h3>Windows app</h3><p>A desktop app with faster speech recognition that runs on your computer. Windows 10 and 11.</p><span class="pill">Coming soon</span></div>
-      <div class="card"><div class="icon">🍎</div><h3>Mac</h3><p>Planned after Windows.</p><span class="pill">Later</span></div>
+    <p class="note" id="dl-note" role="status" aria-live="polite" hidden></p>
+    <div class="grid grid-2" id="dl-tools">
+      <div class="card" data-tool="assistant">
+        <div class="icon">🎧</div>
+        <h3>Interview Assistant</h3>
+        <p>Live help during a real interview: it listens, transcribes and suggests answers from your own resume. Your notes stay hidden from screen sharing.</p>
+        <p class="muted small" data-meta>Windows 10 and 11</p>
+        <button class="btn btn-primary" type="button" data-download="assistant">Download for Windows</button>
+        <p class="form-result" role="status" aria-live="polite"></p>
+      </div>
+      <div class="card" data-tool="mock-interview">
+        <div class="icon">🎤</div>
+        <h3>Mock Interview</h3>
+        <p>Practise with an AI interviewer. Questions are made from your resume, and every answer gets clear, kind feedback.</p>
+        <p class="muted small" data-meta>Windows 10 and 11</p>
+        <button class="btn btn-primary" type="button" data-download="mock-interview">Download for Windows</button>
+        <p class="form-result" role="status" aria-live="polite"></p>
+      </div>
     </div>
+    <p class="muted small center" style="margin-top:18px">Already have an account? <a href="login.html?next=download.html">Sign in</a>. Mac is planned after Windows.</p>
   </div>
 </section>
 
@@ -25,10 +37,12 @@
   <div class="wrap narrow">
     <h2 class="center">What you will need</h2>
     <ul class="check-list" style="margin-top:20px">
+      <li>Windows 10 or 11</li>
       <li>A microphone (a headset works best)</li>
-      <li>A quiet place and a stable internet connection</li>
-      <li>About ten minutes for your first mock interview</li>
+      <li>Your free account to sign in inside the app</li>
     </ul>
-    <p class="muted small" style="margin-top:20px">Version {{version}} (preview).</p>
+    <p class="muted small" style="margin-top:20px">Windows may show a "protected your PC" notice for a new app. Choose More info, then Run anyway.</p>
   </div>
 </section>
+<script src="assets/account.js?v=7"></script>
+<script src="assets/download.js?v=1"></script>

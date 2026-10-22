@@ -73,6 +73,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 940, height: 680, minWidth: 560, minHeight: 120,
     title: 'Live Class',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     frame: false,
     transparent: true,
     alwaysOnTop: true,

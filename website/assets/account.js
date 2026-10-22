@@ -96,10 +96,53 @@
   function badge(s) { var b = STATUS[s] || [cap(s), 'plain']; return h('span', { class: 'ac-badge ' + b[1] }, b[0]); }
   function goSignIn() { forget(); location.replace('login.html'); }
 
+  // ---------- downloads (download.html and the My tools tab) ----------
+  /** Only a page of this site, so "?next=" can never send someone to another address. */
+  function safeNext(s) { return /^[a-z0-9-]+\.html(\?[\w=&.%-]*)?(#[\w-]*)?$/i.test(s || '') ? s : ''; }
+  function nextPage() { return safeNext(new URLSearchParams(location.search).get('next')); }
+  /** Starts a download: no account yet means sign-up first, then back to the Download page, which starts it. */
+  function startDownload(tool) {
+    if (!saved()) { location.href = 'signup.html?next=' + encodeURIComponent('download.html?get=' + tool); return Promise.resolve(); }
+    return call('POST', '/api/downloads/' + encodeURIComponent(tool) + '/start', {}).then(function (r) { location.href = r.url; return r; }).catch(function (err) {
+      if (err.status === 401) { forget(); location.href = 'signup.html?next=' + encodeURIComponent('download.html?get=' + tool); return; }
+      throw err;
+    });
+  }
+  window.SPAccount = { saved: saved, call: call, startDownload: startDownload, h: h };
+
+  // ===================== signup.html =====================
+  var signupForm = document.getElementById('account-signup');
+  if (signupForm) {
+    var signupNext = nextPage();
+    if (saved()) { location.replace(signupNext || 'account.html'); return; }
+    if (signupNext) { var signin = document.getElementById('signup-signin'); if (signin) signin.href = 'login.html?next=' + encodeURIComponent(signupNext); }
+    signupForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var out = signupForm.querySelector('.form-result');
+      var button = signupForm.querySelector('button[type=submit]');
+      var f = signupForm;
+      if (!f.name.value.trim() || !f.email.value.trim()) { out.className = 'form-result bad'; out.textContent = 'Enter your name and email.'; return; }
+      if (f.password.value.length < 10) { out.className = 'form-result bad'; out.textContent = 'Use at least 10 characters for your password.'; return; }
+      if (!f.terms.checked) { out.className = 'form-result bad'; out.textContent = 'Please accept the Terms of use and the Privacy policy.'; return; }
+      if (!API) { out.className = 'form-result bad'; out.textContent = 'Sign-up is not connected yet.'; return; }
+      out.className = 'form-result'; out.textContent = 'Creating your account…';
+      button.disabled = true;
+      call('POST', '/api/account/signup', { name: f.name.value.trim(), email: f.email.value.trim(), password: f.password.value, terms: true, website: f.website.value })
+        .then(function (r) {
+          save({ token: r.token, expiresAt: r.expiresAt }, true);
+          location.replace(signupNext || 'account.html');
+        }).catch(function (err) {
+          out.className = 'form-result bad'; out.textContent = err.message;
+          button.disabled = false;
+        });
+    });
+    return;
+  }
+
   // ===================== login.html =====================
   var loginForm = document.getElementById('account-login');
   if (loginForm) {
-    if (saved()) { location.replace('account.html'); return; }
+    if (saved()) { location.replace(nextPage() || 'account.html'); return; }
     loginForm.addEventListener('submit', function (e) {
       e.preventDefault();
       var out = loginForm.querySelector('.form-result');
@@ -111,7 +154,7 @@
       button.disabled = true;
       call('POST', '/api/account/login', { email: email, password: password }).then(function (r) {
         save({ token: r.token, expiresAt: r.expiresAt }, loginForm.remember.checked);
-        location.replace('account.html');
+        location.replace(nextPage() || 'account.html');
       }).catch(function (err) {
         out.className = 'form-result bad'; out.textContent = err.message;
         button.disabled = false;
@@ -122,7 +165,7 @@
 
   // ===================== account.html =====================
   var content = document.getElementById('ac-content');
-  if (!content) return;
+  if (!content) return;   // another page (download.html) only uses window.SPAccount
   if (!saved()) { goSignIn(); return; }
   var errorBox = document.getElementById('ac-error');
   var tabsBar = document.getElementById('ac-tabs');
@@ -383,7 +426,26 @@
   }
 
   // ---------- page ----------
-  var TABS = [['overview', 'Overview'], ['licences', 'Licences & machines'], ['classes', 'Live Class history'], ['interview', 'Interview prep'], ['topics', 'Topics & resume'], ['orders', 'Orders'], ['security', 'Security']];
+  /** My tools: the same tracked download as the Download page. */
+  function toolsPanel() {
+    var body = h('div', {}, h('p', { class: 'ac-muted' }, 'Loading…'));
+    call('GET', '/api/downloads').then(function (r) {
+      body.replaceChildren.apply(body, [h('p', { class: 'ac-muted', style: 'margin-bottom:16px' }, 'Your free licence works in both. Sign in inside the app with this account.')].concat(r.tools.map(function (t) {
+        var msg = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
+        var btn = h('button', { class: 'btn btn-primary btn-sm', type: 'button', disabled: !t.available, onclick: function () {
+          msg.className = 'form-result'; msg.textContent = 'Starting your download…'; btn.disabled = true;
+          startDownload(t.id).then(function () { msg.textContent = 'Your download should start now. If it does not, click Download again.'; btn.disabled = false; })
+            .catch(function (err) { msg.className = 'form-result bad'; msg.textContent = err.message; btn.disabled = false; });
+        } }, t.available ? 'Download for Windows' : 'Coming soon');
+        return h('div', { class: 'ac-licence', style: 'margin-bottom:18px' },
+          h('b', {}, t.name), t.version ? h('span', { class: 'ac-muted' }, ' · version ' + t.version + (t.sizeMb ? ' · ' + Math.round(t.sizeMb) + ' MB' : '')) : '',
+          h('p', { class: 'ac-muted', style: 'margin:6px 0 12px' }, t.description), btn, msg);
+      })));
+    }).catch(function (err) { body.replaceChildren(h('p', { class: 'form-result bad' }, err.message)); });
+    return h('div', { class: 'ac-panel' }, card('My tools', body, h('a', { class: 'ac-link', href: 'download.html' }, 'Download page')));
+  }
+
+  var TABS = [['overview', 'Overview'], ['tools', 'My tools'], ['licences', 'Licences & machines'], ['classes', 'Live Class history'], ['interview', 'Interview prep'], ['topics', 'Topics & resume'], ['orders', 'Orders'], ['security', 'Security']];
   var panels = {};
   function show(id) {
     if (!panels[id]) id = 'overview';
@@ -435,6 +497,7 @@
             card('Get more interview calls', h('div', {},
               h('p', { class: 'ac-muted', style: 'margin-bottom:14px' }, 'Make your resume ATS-ready, create a resume for each role, and get a cover letter for every job you apply to.'),
               h('a', { class: 'btn btn-primary', href: 'career.html' }, 'Open the career toolkit')))))),
+      tools: toolsPanel(),
       licences: h('div', { class: 'ac-panel' }, card('Licences and machines', me.licences.length ? me.licences.map(licenceBlock) : empty('No licence yet', 'Contact us to get started.'))),
       classes: h('div', { class: 'ac-panel' }, card('Live Class history', classList(me.conversations))),
       interview: h('div', { class: 'ac-panel' }, interviewPanel()),

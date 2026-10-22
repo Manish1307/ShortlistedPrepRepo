@@ -9,6 +9,7 @@ const aiproxy = require('./aiproxy');
 const conversations = require('./conversations');
 const profiles = require('./profiles');
 const accounts = require('./accounts');
+const downloads = require('./downloads');
 const career = require('./career');
 const jobs = require('./jobs');
 const { SECTORS } = require('./jobcatalogue');
@@ -83,6 +84,7 @@ function buildRoutes(ctx) {
   accounts.addRoutes({ ...ctx, add, audit, one, all });        // customer logins for the website's My account page
   career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)
   jobs.addRoutes({ ...ctx, add, audit, one, all });            // AI Job search: live openings from career sites, scored by the AI
+  downloads.addRoutes({ ...ctx, add, audit, one, all });       // Download page: counted downloads for signed-in customers
   interviewprep.addRoutes({ ...ctx, add, one, all });          // Virtual Interview: personalised questions from the candidate's resume
   logos.addRoutes({ ...ctx, add });                            // company logos next to the jobs
   candidates.addRoutes({ ...ctx, add, audit, one, all });      // Candidates: progress, documents and activity in the Career toolkit

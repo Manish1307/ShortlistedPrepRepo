@@ -36,6 +36,7 @@ function createMainWindow() {
     width: 1100,
     height: 700,
     title: 'Teaching Content (this is what you share)',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

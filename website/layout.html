@@ -24,7 +24,8 @@
   <meta name="theme-color" content="#7d2ae8">
 {{jsonLd}}
   <meta name="api-url" content="{{apiUrl}}">
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
@@ -49,7 +50,7 @@
   {{demoBar}}
   <header class="nav">
     <div class="wrap nav-inner">
-      <a class="brand" href="index.html"><span class="logo" aria-hidden="true">S</span>{{name}}</a>
+      <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="" width="36" height="36">{{name}}</a>
       <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
       <nav id="menu" class="menu">
         <a href="index.html" data-page="index">Home</a>
@@ -82,7 +83,7 @@
   <footer class="footer">
     <div class="wrap footer-grid">
       <div>
-        <a class="brand" href="index.html"><span class="logo" aria-hidden="true">S</span>{{name}}</a>
+        <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="" width="36" height="36">{{name}}</a>
         <p class="muted small">{{tagline}}.</p>
         <p class="social small"><a href="#" aria-label="X (Twitter), not connected yet">X</a> · <a href="#" aria-label="LinkedIn, not connected yet">LinkedIn</a> · <a href="#" aria-label="YouTube, not connected yet">YouTube</a></p>
       </div>

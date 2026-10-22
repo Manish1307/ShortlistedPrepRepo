@@ -226,6 +226,15 @@ CREATE INDEX IF NOT EXISTS idx_opp_notes ON opportunity_notes(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_licences_customer ON licences(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_devices_licence ON devices(licence_id);
+CREATE TABLE IF NOT EXISTS download_files (
+  tool TEXT PRIMARY KEY, version TEXT NOT NULL, url TEXT NOT NULL, size_mb REAL NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL, updated_by TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS downloads (
+  id INTEGER PRIMARY KEY, at TEXT NOT NULL, day TEXT NOT NULL, tool TEXT NOT NULL, version TEXT NOT NULL DEFAULT '',
+  customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_downloads_tool ON downloads(tool, day);
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
 `;
 

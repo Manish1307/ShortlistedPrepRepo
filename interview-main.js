@@ -50,6 +50,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1180, height: 800, minWidth: 900, minHeight: 640,
     title: 'Mock Interview',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     backgroundColor: '#f6f7fb',
     autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'interview-preload.js'), contextIsolation: true },

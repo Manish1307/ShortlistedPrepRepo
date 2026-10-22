@@ -36,6 +36,7 @@
     },
     "files": [
       "package.json",
+      "build/icon.png",
       "main.js",
       "preload.js",
       "select-preload.js",
@@ -78,7 +79,7 @@
           ]
         }
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "artifactName": "ShortlistPrep-Setup-${version}.${ext}"
     },
     "nsis": {

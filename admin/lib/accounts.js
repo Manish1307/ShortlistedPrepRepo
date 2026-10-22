@@ -9,7 +9,8 @@ const auth = require('./auth');
 const licences = require('./licence');
 const profiles = require('./profiles');
 const { ApiError } = require('./http');
-const { now } = require('./db');
+const { now, transaction } = require('./db');
+const { text, email } = require('./http');
 const { logActivity } = require('./activity');
 const { SECTORS } = require('./jobcatalogue');
 
@@ -56,6 +57,15 @@ function addRoutes(ctx) {
 
   const customerOf = (req, opts) => signedInCustomer(db, req, opts);
 
+  /** A new sign-in token for the website (kept in the browser); the server keeps only its hash. */
+  const startSession = customerId => {
+    const token = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
+    db.prepare('INSERT INTO customer_sessions (token_hash, customer_id, created_at, expires_at) VALUES (?,?,?,?)').run(sha256(token), customerId, now(), expiresAt);
+    db.prepare('UPDATE customer_accounts SET last_login = ? WHERE customer_id = ?').run(now(), customerId);
+    return { token, expiresAt };
+  };
+
   // ===================== dashboard: create / reset / turn off a customer's login =====================
 
   add('GET', '/admin/api/customers/:id/account', { admin: true }, (req, res, { params }) => {
@@ -100,12 +110,38 @@ function addRoutes(ctx) {
     const ok = auth.verifyPassword(String(body.password || ''), row ? row.pass_hash : DUMMY_HASH) && row && !row.disabled;
     if (!ok) { loginLimiter.hit(key); ipLimiter.hit(ip); throw new ApiError(401, 'Wrong email or password'); }
     loginLimiter.reset(key);
-    const token = crypto.randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
-    db.prepare('INSERT INTO customer_sessions (token_hash, customer_id, created_at, expires_at) VALUES (?,?,?,?)').run(sha256(token), row.id, now(), expiresAt);
-    db.prepare('UPDATE customer_accounts SET last_login = ? WHERE customer_id = ?').run(now(), row.id);
+    const { token, expiresAt } = startSession(row.id);
     logActivity(db, row.id, 'login', 'Signed in on the website');
     return { body: { ok: true, token, expiresAt, mustChange: !!row.must_change, customer: { email: row.email, name: row.name } } };
+  });
+
+  // Self-service sign-up: a free account and a free licence, signed in straight away. An email that already has a
+  // customer record (a trial from the app, a login we made) is refused, so nobody can claim someone else's licences.
+  const signupLimiter = new auth.Limiter({ max: 10, windowMs: 60 * 60 * 1000 });
+  add('POST', '/api/account/signup', { public: true }, (req, res, { body, ip }) => {
+    if (signupLimiter.blocked(ip)) throw new ApiError(429, 'Too many sign-ups from here. Please try again later.');
+    if (body.website) return { body: { ok: true } };   // the hidden field only bots fill in
+    const name = text(body.name, 100, { required: true, field: 'Name' });
+    const mail = email(body.email);
+    if (!body.terms) throw new ApiError(400, 'Please accept the Terms of use and the Privacy policy.');
+    const password = String(body.password || '');
+    const weak = auth.checkPasswordStrength(password);
+    if (weak) throw new ApiError(400, weak);
+    signupLimiter.hit(ip);
+    if (one('SELECT id FROM customers WHERE email = ?', mail)) {
+      throw new ApiError(409, 'This email already has an account. Please sign in, or contact us if you cannot.', 'exists');
+    }
+    const t = now();
+    const customerId = transaction(db, () => {
+      const id = db.prepare('INSERT INTO customers (email, name, created_at) VALUES (?,?,?)').run(mail, name, t).lastInsertRowid;
+      db.prepare('INSERT INTO customer_accounts (customer_id, pass_hash, must_change, disabled, created_at, created_by, password_set_at) VALUES (?,?,0,0,?,?,?)')
+        .run(id, auth.hashPassword(password), t, 'signup', t);
+      licences.createLicence(db, { customerId: id, plan: 'trial', days: null, maxDevices: 2, note: 'Free licence from website sign-up' });   // never expires
+      return id;
+    });
+    logActivity(db, customerId, 'signup', 'Created a free account on the website');
+    const session = startSession(customerId);
+    return { status: 201, body: { ok: true, ...session, customer: { email: mail, name } } };
   });
 
   add('POST', '/api/account/logout', { public: true }, req => {

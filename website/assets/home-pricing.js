@@ -16,6 +16,11 @@
       if (p.price && p.durationDays) price.appendChild(el('small', '', ' / ' + p.durationDays + ' days'));
       card.appendChild(price);
       if (p.tagline) card.appendChild(el('p', 'muted small', p.tagline));
+      if (p.features && p.features.length) {
+        var ul = el('ul', 'hp-feat');
+        p.features.slice(0, 4).forEach(function (f) { ul.appendChild(el('li', '', f)); });
+        card.appendChild(ul);
+      }
       return card;
     }));
   }).catch(function () { /* keep the static cards */ });

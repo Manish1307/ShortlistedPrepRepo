@@ -1,0 +1,66 @@
+{
+  "appId": "com.shortlistprep.interview",
+  "productName": "ShortlistPrep Mock Interview",
+  "copyright": "Copyright © 2026 ShortlistPrep",
+  "directories": {
+    "output": "dist/interview",
+    "buildResources": "build"
+  },
+  "extraMetadata": {
+    "main": "interview-main.js"
+  },
+  "files": [
+    "package.json",
+    "build/icon.png",
+    "interview-main.js",
+    "interview-preload.js",
+    "interview-window.html",
+    "renderer/interview-ui.js",
+    "renderer/brand.css",
+    "renderer/brand.js",
+    "renderer/capture.js",
+    "src/**/*",
+    "!src/eval/**"
+  ],
+  "extraResources": [
+    {
+      "from": "whisper/bin",
+      "to": "whisper/bin",
+      "filter": [
+        "whisper-server.exe",
+        "whisper.dll",
+        "ggml*.dll",
+        "SDL2.dll",
+        "VERSION.txt"
+      ]
+    },
+    {
+      "from": "whisper/models",
+      "to": "whisper/models",
+      "filter": [
+        "ggml-small.en-q5_1.bin"
+      ]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "artifactName": "ShortlistPrep-Interview-Setup-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "ShortlistPrep Mock Interview",
+    "deleteAppDataOnUninstall": false
+  }
+}

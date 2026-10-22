@@ -7,13 +7,13 @@ const { now } = require('./db');
 const { ApiError, text } = require('./http');
 
 const TOOLS = [
-  { id: 'assistant', name: 'Interview Assistant', platform: 'Windows 10 and 11',
-    description: 'Live help during a real interview: listens, transcribes and suggests answers from your own resume. Your notes stay hidden from screen sharing.' },
+  { id: 'shortlistprep-ai', name: 'ShortlistPrep.AI', platform: 'Windows 10 and 11',
+    description: 'Live help during a real interview: it listens, transcribes and suggests answers based on your own resume.' },
   { id: 'mock-interview', name: 'Mock Interview', platform: 'Windows 10 and 11',
     description: 'Practise with an AI interviewer. Questions are made from your resume, and every answer gets feedback.' },
 ];
 const toolOf = id => TOOLS.find(t => t.id === id);
-// a link can also come from the environment, e.g. DOWNLOAD_URL_ASSISTANT / DOWNLOAD_URL_MOCK_INTERVIEW
+// a link can also come from the environment, e.g. DOWNLOAD_URL_SHORTLISTPREP_AI / DOWNLOAD_URL_MOCK_INTERVIEW
 const envUrl = id => process.env['DOWNLOAD_URL_' + id.toUpperCase().replace(/-/g, '_')] || '';
 
 function addRoutes(ctx) {

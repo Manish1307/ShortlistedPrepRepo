@@ -30,7 +30,8 @@ if (process.argv.some(a => a.startsWith('--shots'))) { app.commandLine.appendSwi
 app.setName('ShortlistPrep');
 app.setPath('userData', process.env.SP_USER_DATA || path.join(app.getPath('appData'), 'ShortlistPrep'));   // SP_USER_DATA: a separate folder for tests
 
-const WHISPER_DIR = process.env.SP_WHISPER_DIR || path.join(__dirname, 'whisper');
+// Installed: the speech engine sits next to the app (resources/whisper), because programs cannot run from inside app.asar.
+const WHISPER_DIR = process.env.SP_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
 const AI_TIMEOUT_MS = 60000;
 
 let win = null;

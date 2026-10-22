@@ -70,17 +70,17 @@ test('the download list is public and never shows the link', async () => {
   await withServer(async s => {
     const before = await s.call('GET', '/api/downloads');
     assert.equal(before.status, 200);
-    assert.deepEqual(before.json.tools.map(t => t.id), ['assistant', 'mock-interview']);
+    assert.deepEqual(before.json.tools.map(t => t.id), ['shortlistprep-ai', 'mock-interview']);
     assert.ok(before.json.tools.every(t => t.available === false));
     const a = await s.admin();
-    const set = await a('POST', '/admin/api/downloads/assistant', { version: '1.0.0', url: 'https://github.com/o/r/releases/download/v1.0.0/ShortlistPrep-Setup-1.0.0.exe', sizeMb: 180 });
+    const set = await a('POST', '/admin/api/downloads/shortlistprep-ai', { version: '1.0.0', url: 'https://github.com/o/r/releases/download/v1.0.0/ShortlistPrep-Setup-1.0.0.exe', sizeMb: 180 });
     assert.equal(set.status, 200);
     const after = await s.call('GET', '/api/downloads');
-    const t = after.json.tools.find(x => x.id === 'assistant');
+    const t = after.json.tools.find(x => x.id === 'shortlistprep-ai');
     assert.equal(t.available, true);
     assert.equal(t.version, '1.0.0');
     assert.ok(!JSON.stringify(after.json).includes('github.com'));
-    assert.equal((await a('POST', '/admin/api/downloads/assistant', { version: '1.0.0', url: 'http://insecure.example/x.exe' })).status, 400);
+    assert.equal((await a('POST', '/admin/api/downloads/shortlistprep-ai', { version: '1.0.0', url: 'http://insecure.example/x.exe' })).status, 400);
     assert.equal((await a('POST', '/admin/api/downloads/nope', { version: '1.0.0', url: 'https://x.example/y' })).status, 404);
   });
 });
@@ -88,21 +88,21 @@ test('the download list is public and never shows the link', async () => {
 test('starting a download needs an account, is counted, and returns the link', async () => {
   await withServer(async s => {
     const a = await s.admin();
-    await a('POST', '/admin/api/downloads/assistant', { version: '1.0.0', url: 'https://github.com/o/r/releases/download/v1.0.0/a.exe', sizeMb: 180 });
-    const anon = await s.call('POST', '/api/downloads/assistant/start', {});
+    await a('POST', '/admin/api/downloads/shortlistprep-ai', { version: '1.0.0', url: 'https://github.com/o/r/releases/download/v1.0.0/a.exe', sizeMb: 180 });
+    const anon = await s.call('POST', '/api/downloads/shortlistprep-ai/start', {});
     assert.equal(anon.status, 401);
     assert.equal(anon.json.code, 'signin');
 
     const { json: { token } } = await s.call('POST', '/api/account/signup', form());
-    const ok = await s.call('POST', '/api/downloads/assistant/start', {}, token);
+    const ok = await s.call('POST', '/api/downloads/shortlistprep-ai/start', {}, token);
     assert.equal(ok.status, 200);
     assert.equal(ok.json.url, 'https://github.com/o/r/releases/download/v1.0.0/a.exe');
-    await s.call('POST', '/api/downloads/assistant/start', {}, token);
+    await s.call('POST', '/api/downloads/shortlistprep-ai/start', {}, token);
 
     assert.equal((await s.call('POST', '/api/downloads/mock-interview/start', {}, token)).json.code, 'not_ready');   // no file set yet
     assert.equal((await s.call('POST', '/api/downloads/nope/start', {}, token)).status, 404);
 
-    const stats = (await a('GET', '/admin/api/downloads')).json.tools.find(t => t.id === 'assistant');
+    const stats = (await a('GET', '/admin/api/downloads')).json.tools.find(t => t.id === 'shortlistprep-ai');
     assert.equal(stats.total, 2);      // not counted: the unauthenticated and not-ready attempts
     assert.equal(stats.people, 1);
     assert.equal(stats.last30, 2);

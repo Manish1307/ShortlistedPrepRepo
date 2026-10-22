@@ -47,7 +47,8 @@ const CONFIG_REFRESH_MS = 30 * 60 * 1000;
 app.setName('ShortlistPrep');
 app.setPath('userData', path.join(app.getPath('appData'), 'ShortlistPrep'));
 
-const WHISPER_DIR = process.env.SP_WHISPER_DIR || path.join(__dirname, 'whisper');
+// Installed: the speech engine sits next to the app (resources/whisper), because programs cannot run from inside app.asar.
+const WHISPER_DIR = process.env.SP_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
 const BIN_DIR = path.join(WHISPER_DIR, 'bin');
 const MODELS_DIR = path.join(WHISPER_DIR, 'models');
 

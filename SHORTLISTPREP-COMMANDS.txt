@@ -1,11 +1,11 @@
 =====================================================================
  SHORTLISTPREP - COMMAND LIST AND QUICK GUIDE
- (the desktop tool, the website, and the admin dashboard)
+ Two desktop apps (ShortlistPrep.AI and Mock Interview), the website
+ and the admin server.
 =====================================================================
 
 PROJECT FOLDER
-  C:\Personal\Projects\shortlistprep-app
-  (renamed from teacher-notes-app; see section 9 for the one-time rename steps)
+  C:\Personal\Projects\shortlistprep-app\Shortlistprep-app
 
 Open a terminal in that folder before running any command below.
 
@@ -15,228 +15,117 @@ Open a terminal in that folder before running any command below.
 ---------------------------------------------------------------------
 
   npm install
-      Installs the packages the project needs.
-
   npm run setup:whisper
       Downloads the offline speech engine and model (about 190 MB).
-
   npm run admin:create -- you@example.com owner "Your Name"
-      Creates YOUR admin login for the dashboard.
-      Use your own email. It prints a password ONE time: copy it now.
-      After you sign in, go to "My account" and change the password.
+      Creates YOUR admin login. It prints a password ONE time: copy it now.
 
 
 ---------------------------------------------------------------------
- 2. RUN EVERYTHING
+ 2. RUN
 ---------------------------------------------------------------------
 
-  Terminal 1:
+  Terminal 1 (website + admin server):
       npm run web
-          Builds the website and starts:
-            Website          http://localhost:4173
-            Admin dashboard  http://localhost:4180
-          Stop both with Ctrl+C.
+          Website          http://localhost:4173
+          Admin dashboard  http://localhost:4180
 
-  Terminal 2:
-      npm start
-          Starts the desktop tool (the private assistant windows).
+  Terminal 2 (pick one):
+      npm run shortlistprep-ai     ShortlistPrep.AI: the live interview assistant
+      npm run interview            Mock Interview: practise with an AI interviewer
 
+  Developing without a licence: set SP_LICENCE=off before the command
+  (works only when the app is not installed). PowerShell:
+      $env:SP_LICENCE="off"; npm run shortlistprep-ai
 
-  AI MOCK INTERVIEWER (practice for job interviews, separate window):
-      npm run interview
-          Pick company (50 listed), role, round and experience. The AI asks
-          questions; answer by voice or typing; get a score out of 10, what was
-          good, what to improve and a stronger answer; report at the end
-          (Save report -> Documents\Mock Interviews). Uses the same AI key as the
-          assistant (set in its Settings). This window is NOT hidden from
-          screen sharing: it is for practice only.
-
-  SHORTLISTPREP.AI (the floating live overlay, formerly "Live Class"):
-      npm run shortlistprep-ai
-          A floating toolbar with a live transcript and an answer card. Uses the
-          same licence, speech engine and AI settings as the assistant. It is a
-          normal window: it is NOT hidden from screen sharing or recording.
-
-  LICENCE (free trial or licence key):
-      The assistant asks for a licence the first time it opens. The admin
-      server must be running (npm run admin or npm run web), because the app
-      checks licences with it (address in srcicencesettings.js).
-      Developing without a licence: set SP_LICENCE=off before npm start
-      (works only when not installed).
-
----------------------------------------------------------------------
- 3. RUN ONE PART AT A TIME
----------------------------------------------------------------------
-
-  Desktop tool ................ npm start
-  Website (rebuild first) ..... npm run site:build
-                                npm run site:serve      http://localhost:4173
-  Admin dashboard ............. npm run admin           http://localhost:4180
+  Both apps check the licence with the admin server (address in
+  src\licence\settings.js), so keep npm run web running.
 
 
 ---------------------------------------------------------------------
- 4. CHECKS AND TOOLS
+ 3. BUILD THE TWO INSTALLERS (what end users download)
 ---------------------------------------------------------------------
 
-  npm test
-      Runs all automated tests.
+  npm run dist:ai
+      -> dist\ai\ShortlistPrep-AI-Setup-<version>.exe
 
-  npm run smoke
-      Quick startup check of the desktop tool (opens it, checks, closes).
+  npm run dist:interview
+      -> dist\interview\ShortlistPrep-Interview-Setup-<version>.exe
 
-  npm run test:stt
-      Speech accuracy test using built-in Windows voices.
+  npm run dist
+      Builds both, one after the other.
 
-  npm run test:stt -- --wav my.wav --ref "the exact words spoken" --topic "your subject"
-      Speech accuracy test on YOUR OWN recording (more realistic).
-
-  npm run admin:create -- you@example.com --reset
-      Gives an existing admin account a new password.
-
-
----------------------------------------------------------------------
- 5. USING THE DESKTOP TOOL
----------------------------------------------------------------------
-
-  First time:
-    1. Click the gear icon in the assistant window.
-    2. AI service: Groq (free plan, FASTEST), Google Gemini (free tier) or Anthropic Claude.
-    3. Paste your API key and press Save.
-         Groq key (free plan, fastest): https://console.groq.com/keys
-         Gemini key (free tier): https://aistudio.google.com/apikey
-         Claude key (paid):      https://console.anthropic.com
-       Note: a Claude Pro chat subscription does NOT include an API key.
-    4. Subject: type today's topic, e.g. "Power Platform: Power Pages, Dataverse".
-    5. Audio: "Meeting + my microphone".
-    6. Question end: tick "Auto-detect when a question ends" (the app decides
-       after you pause), OR untick it for manual mode: the app keeps listening
-       and answers only when you press "Question finished".
-    7. Thinking time: Quick is fastest. Thorough also searches the web (Gemini).
-
-  Keyboard shortcuts:
-    Ctrl+Shift+N   show / hide the assistant window
-    Ctrl+Shift+L   start / stop listening
-    Ctrl+Shift+A   "Question finished": answer everything heard so far
-                   (works in manual mode, and in auto mode to skip the wait)
-    Ctrl+Shift+T   put the window back to 100% visible (if you made it too faint)
-    Ctrl+Shift+Q   capture a question from the screen (draw a box around it)
-    Ctrl+Alt+Shift+Q  capture the whole screen the mouse is on
-
-  Capturing a question from the screen (a student sent it as a picture,
-  in Notepad, in the meeting chat...):
-    1. Open the question on your screen.
-    2. Press Ctrl+Shift+Q (or click "Capture" in the assistant window).
-       The screen freezes and dims. Only you see this: the students keep
-       seeing your normal screen.
-    3. Drag a box around the question. Enter = take the whole screen.
-       Esc or right-click = cancel.
-    4. The AI reads the question from the picture; it appears in the list with
-       a camera mark, and the solution (with code, when needed) is written
-       on the right.
-    Notes:
-    - Settings > "Screen capture AI" chooses which AI reads the picture, with
-      its own key box. Example: AI service = Groq (fast answers) and
-      Screen capture AI = Anthropic Claude (reads code and pictures best).
-      The answer still comes from the AI service. Free Groq keys usually
-      cannot read pictures.
-    - It works even before the speech engine is set up.
-    - The picture is sent to your chosen AI only; it is never saved on disk.
-    - It reads the screen the mouse is on: with two monitors, move the mouse
-      to the screen with the question before pressing the shortcut.
-    - Up to 3 questions per capture are answered; capture others separately.
-
-  Typing a question (the box under the buttons):
-    Type a question or just a few keywords (e.g. "SQL joins") and press Enter
-    or Ask. The AI works out what you most likely want to know and answers it
-    (marked with a keyboard sign in the list).
-
-  Correcting a question the AI got wrong:
-    The question above each answer is always an editable box. Click it, fix
-    the wording and press Enter: the AI answers the new wording, and the old
-    question leaves the list (the new one is marked with a pencil).
-    Shift+Enter = new line, Esc = undo your changes.
-
-  Asking about part of an answer ("Ask selected"):
-    1. In the answer on the right, select a word, a line or a few lines with
-       the mouse.
-    2. The "Ask selected" button turns on. Click it.
-    3. The selected text is answered as a new question (marked with a ?
-       in the list). If it is a statement, it is explained in more depth with
-       an example. The answer it came from is used as background.
-
-  If the assistant is stuck (no answers, not listening):
-    1. Click "Restart" (top of the assistant tab). It stops the sound capture and
-       the speech engine, starts them again and carries on listening. Your
-       settings, saved keys, question list and follow-up memory are kept.
-    2. If the window does not react: press Ctrl+Alt+Shift+R.
-    3. Still wrong? Settings > "Reset all settings" (click twice). Every setting
-       goes back to its default and the window returns to its starting place.
-       Saved AI keys are kept.
-    4. The activity log (%APPDATA%\teacher-notes-app\debug.log) shows what the
-       microphone and speech engine were doing.
-
-  The mouse pointer:
-    - Always hidden from screen sharing over the assistant window. You still
-      see a pointer: the app draws its own inside the window, which is left
-      out of the share. Drag the title bar to move the window and the corner
-      mark (bottom right) to resize it. Nothing to switch on.
-
-  Export and transparency:
-    - "Export" menu (top of the assistant tab): saves every question, answer
-      and response time, plus everything that was heard, as a text file
-      (Notepad), a spreadsheet CSV (Excel) or JSON. The file goes straight to
-      Documents\ShortlistPrep (no "Save as" window, which could show in a screen share).
-    - "Clear" starts a fresh list: click it twice. Export first if you want to keep it.
-    - No tooltips and no pop-up boxes are used in the assistant window, because
-      Windows draws those as separate windows that a screen share could capture.
-    - The percentage box in the title bar makes the window see-through:
-      100%, 90% ... 10%. It does not change whether the window is hidden
-      from screen sharing.
-
-  Tips:
-    - Use headphones, or the microphone also picks up the meeting audio.
-    - Before a real class, share your screen in a test call and check the
-      assistant window is not visible to others.
-    - If you see "Rate limit (429)": wait a minute, ask fewer questions at once,
-      or use a paid key.
+  Needs the speech engine first (npm run setup:whisper). Each installer
+  carries its own speech model: ShortlistPrep.AI the small base.en model,
+  Mock Interview the small.en model. Configs: installer\ai.json and
+  installer\interview.json (the icon is build\icon.ico).
 
 
 ---------------------------------------------------------------------
- 6. WHERE THINGS ARE
+ 4. PUBLISH THE INSTALLERS ON GITHUB
 ---------------------------------------------------------------------
 
-  Desktop tool ........ main.js, preload.js, notes-window.html, renderer\, src\
-  Website ............. website\
-        website\site.config.json   name, support email, download link, demoContent
-        website\data\sample.json   TEST DATA: reviews, numbers, plans, FAQ, blog posts
-                                   (all made up: replace before launch; set
-                                   "demoContent": false to remove the demo bar)
-        website\pages\             the pages (edit the text here); blog posts come from sample.json
-        website\site\              the built website (upload this to a host)
-  Admin dashboard ..... admin\
-        admin\README.md            full details and the app's licence API
-        admin\data\                your database + signing key (BACK THIS UP)
-  Activity log (tool) . %APPDATA%\teacher-notes-app\debug.log
-  Tool settings ....... %APPDATA%\teacher-notes-app\settings.json
+  git tag v1.1.0
+  git push origin v1.1.0
+  gh release create v1.1.0 "dist\ai\ShortlistPrep-AI-Setup-1.1.0.exe" "dist\interview\ShortlistPrep-Interview-Setup-1.1.0.exe" --title "ShortlistPrep 1.1.0" --notes "ShortlistPrep.AI and Mock Interview for Windows"
+
+  Direct links look like
+  https://github.com/Manish1307/ShortlistedPrepRepo/releases/download/v1.1.0/ShortlistPrep-AI-Setup-1.1.0.exe
+
+  Then tell the website where each file is (the Download page counts every
+  download and asks for a free account first). Sign in to the admin
+  dashboard, then send once per tool and version:
+      POST /admin/api/downloads/shortlistprep-ai  {"version":"1.1.0","url":"<link>","sizeMb":150}
+      POST /admin/api/downloads/mock-interview    {"version":"1.1.0","url":"<link>","sizeMb":250}
+  Counts: GET /admin/api/downloads
+  Or set DOWNLOAD_URL_SHORTLISTPREP_AI and DOWNLOAD_URL_MOCK_INTERVIEW on the server.
 
 
 ---------------------------------------------------------------------
- 7. BEFORE YOU LAUNCH (CHECKLIST)
+ 5. SERVER AND WEBSITE
 ---------------------------------------------------------------------
 
-  [ ] Replace the example prices, company name, address and support email
-      in website\site.config.json.
-  [ ] Have a lawyer review the Privacy and Terms pages (they are drafts).
-  [ ] Back up admin\data\ (especially signing-key.pem). Never share it.
-  [ ] Put the admin dashboard behind HTTPS; set SECURE_COOKIES=1; restrict
-      it by IP or VPN. (See admin\README.md.)
-  [ ] Build the licence check inside the desktop tool (trial, key entry,
-      signature check). The server side is ready.
-  [ ] Make an installer, sign it (code-signing certificate), add auto-update.
-  [ ] Connect payments (Paddle or Lemon Squeezy) and a webhook that creates
-      orders and licences automatically.
-  [ ] Connect the website contact form to the admin (POST /api/contact).
-  [ ] Test on a real Teams / Meet / Skype call and on a low-end PC.
+  npm run site:build
+      Builds website\site (upload it, or let Cloudflare Pages build it).
+
+  npm run server:package
+      Creates dist\shortlistprep-server.tgz. Then follow deploy\README.md:
+        tar -xzf shortlistprep-server.tgz
+        sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com
+      Server paths: /opt/shortlistprep   service: shortlistprep-admin
+      A server set up under the old ClassCue name needs the one-time move
+      in deploy\README.md.
+
+  On the server:
+      sudo systemctl status shortlistprep-admin
+      sudo journalctl -u shortlistprep-admin -n 100
+      sudo systemctl restart shortlistprep-admin
+      sudo -u shortlistprep /opt/shortlistprep/backup.sh
+
+
+---------------------------------------------------------------------
+ 6. CHECKS
+---------------------------------------------------------------------
+
+  npm test                  all automated tests
+  npm run test:stt          speech accuracy test with built-in Windows voices
+  npm run admin:create -- you@example.com --reset    new admin password
+
+
+---------------------------------------------------------------------
+ 7. WHERE THINGS ARE
+---------------------------------------------------------------------
+
+  ShortlistPrep.AI ... shortlistprep-ai-main.js, shortlistprep-ai-window.html,
+                       renderer\shortlistprep-ai-ui.js
+                       (how it works: docs\ShortlistPrep-AI-How-It-Works.md)
+  Mock Interview ..... interview-main.js, interview-window.html,
+                       renderer\interview-ui.js
+  Shared code ........ src\ (AI, speech, licence), renderer\brand.*
+  Website ............ website\   (website\site.config.json, website\pages\)
+  Admin server ....... admin\     (admin\data\ = database + signing key: BACK IT UP)
+  Installers ......... installer\ (configs), dist\ (output)
+  App settings, keys, licence, log: %APPDATA%\ShortlistPrep
 
 
 ---------------------------------------------------------------------
@@ -246,72 +135,5 @@ Open a terminal in that folder before running any command below.
   4173  website preview
   4180  admin dashboard
   If a port is busy, close the other program using it and try again.
-
-
----------------------------------------------------------------------
- 9. ONE-TIME RENAME OF THE PROJECT FOLDER (teacher-notes-app -> shortlistprep-app)
----------------------------------------------------------------------
-
-  Close VS Code, Claude and every terminal that is inside the old folder, then in PowerShell:
-
-      cd C:\Personal\Projects
-      Rename-Item teacher-notes-app shortlistprep-app
-      cd shortlistprep-app
-      git status
-
-  Note: the old path had the project twice (teacher-notes-app\teacher-notes-app).
-  If you still see the inner folder, move its contents up one level:
-
-      cd C:\Personal\Projects\shortlistprep-app
-      Move-Item .\teacher-notes-app\* . -Force ; Move-Item .\teacher-notes-app\.* . -Force
-      Remove-Item .\teacher-notes-app
-
-  Your saved settings and AI keys: the app now always uses %APPDATA%\ShortlistPrep.
-  A development copy used %APPDATA%\teacher-notes-app before. Copy it over once:
-
-      Copy-Item $env:APPDATA\teacher-notes-app\* $env:APPDATA\ShortlistPrep\ -Recurse -Force
-
-
----------------------------------------------------------------------
- 10. RELEASE AND DEPLOY
----------------------------------------------------------------------
-
-  A. Build the Windows installer (Interview Assistant)
-      npm run dist
-          Creates dist\ShortlistPrep-Setup-<version>.exe
-          (the logo is build\icon.ico and build\icon.png)
-
-  B. Publish the installer on GitHub Releases
-      git tag v1.0.0
-      git push origin v1.0.0
-      gh release create v1.0.0 dist\ShortlistPrep-Setup-1.0.0.exe --title "ShortlistPrep 1.0.0" --notes "First release"
-          Copy the download link of the file, it looks like
-          https://github.com/<owner>/<repo>/releases/download/v1.0.0/ShortlistPrep-Setup-1.0.0.exe
-
-  C. Tell the website where each tool's file is (counted, sign-up needed)
-      Sign in to the admin dashboard, then send (once per tool and version):
-        POST /admin/api/downloads/assistant       {"version":"1.0.0","url":"<link>","sizeMb":180}
-        POST /admin/api/downloads/mock-interview  {"version":"1.0.0","url":"<link>","sizeMb":90}
-      Counts: GET /admin/api/downloads  (total, last 30 days, people, per version)
-      Or set DOWNLOAD_URL_ASSISTANT / DOWNLOAD_URL_MOCK_INTERVIEW on the server.
-
-  D. Package and publish the server (licence API + admin + downloads)
-      npm run server:package
-          Creates dist\shortlistprep-server.tgz
-      Then follow deploy\README.md (upload, then on the server:
-        tar -xzf shortlistprep-server.tgz
-        sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com )
-      Server paths: /opt/shortlistprep   service: shortlistprep-admin   user: shortlistprep
-      A server set up under the old name needs the one-time move in deploy\README.md.
-
-  E. Publish the website
-      npm run site:build
-          Builds website\site (upload it, or let Cloudflare Pages build it).
-
-  Server day-to-day (on the VM):
-      sudo systemctl status shortlistprep-admin
-      sudo journalctl -u shortlistprep-admin -n 100
-      sudo systemctl restart shortlistprep-admin
-      sudo -u shortlistprep /opt/shortlistprep/backup.sh
 
 =====================================================================

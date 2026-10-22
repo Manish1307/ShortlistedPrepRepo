@@ -1,22 +1,23 @@
 {
   "name": "shortlistprep-app",
   "version": "1.0.0",
-  "description": "Teacher screen-share app with a private notes overlay hidden from screen capture, live offline speech-to-text, and AI answers to questions",
-  "main": "main.js",
+  "description": "ShortlistPrep desktop apps: ShortlistPrep.AI (live interview assistant) and Mock Interview",
+  "main": "shortlistprep-ai-main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "electron shortlistprep-ai-main.js",
     "test": "node --test \"test/*.test.js\"",
     "setup:whisper": "node scripts/setup-whisper.js",
     "test:stt": "node scripts/test-stt.js",
-    "smoke": "electron . --smoke",
     "site:build": "node website/build.js",
     "site:serve": "node website/serve.js",
     "admin": "node admin/server.js",
     "admin:create": "node admin/create-admin.js",
     "web": "node scripts/dev-web.js",
-    "interview": "electron interview-main.js",
     "shortlistprep-ai": "electron shortlistprep-ai-main.js",
-    "dist": "electron-builder --win nsis --x64",
+    "interview": "electron interview-main.js",
+    "dist:ai": "electron-builder --config installer/ai.json --win nsis --x64",
+    "dist:interview": "electron-builder --config installer/interview.json --win nsis --x64",
+    "dist": "npm run dist:ai && npm run dist:interview",
     "server:package": "node website/build.js && tar -czf dist/shortlistprep-server.tgz --exclude=admin/data admin deploy -C website site"
   },
   "devDependencies": {
@@ -25,71 +26,5 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1"
-  },
-  "build": {
-    "appId": "com.shortlistprep.app",
-    "productName": "ShortlistPrep",
-    "copyright": "Copyright © 2026 ShortlistPrep",
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "files": [
-      "package.json",
-      "build/icon.png",
-      "main.js",
-      "preload.js",
-      "select-preload.js",
-      "main-window.html",
-      "notes-window.html",
-      "select-window.html",
-      "renderer/capture.js",
-      "renderer/notes-ui.js",
-      "renderer/select-area.js",
-      "src/**/*",
-      "!src/eval/**",
-      "!src/interview/**"
-    ],
-    "extraResources": [
-      {
-        "from": "whisper/bin",
-        "to": "whisper/bin",
-        "filter": [
-          "whisper-server.exe",
-          "whisper.dll",
-          "ggml*.dll",
-          "SDL2.dll",
-          "VERSION.txt"
-        ]
-      },
-      {
-        "from": "whisper/models",
-        "to": "whisper/models",
-        "filter": [
-          "ggml-small.en-q5_1.bin"
-        ]
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icon.ico",
-      "artifactName": "ShortlistPrep-Setup-${version}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "ShortlistPrep",
-      "deleteAppDataOnUninstall": false
-    }
   }
 }

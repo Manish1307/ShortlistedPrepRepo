@@ -1,0 +1,67 @@
+{
+  "appId": "com.shortlistprep.ai",
+  "productName": "ShortlistPrep.AI",
+  "copyright": "Copyright © 2026 ShortlistPrep",
+  "directories": {
+    "output": "dist/ai",
+    "buildResources": "build"
+  },
+  "extraMetadata": {
+    "main": "shortlistprep-ai-main.js"
+  },
+  "files": [
+    "package.json",
+    "build/icon.png",
+    "shortlistprep-ai-main.js",
+    "shortlistprep-ai-preload.js",
+    "shortlistprep-ai-window.html",
+    "renderer/shortlistprep-ai-ui.js",
+    "renderer/brand.css",
+    "renderer/brand.js",
+    "renderer/capture.js",
+    "src/**/*",
+    "!src/eval/**",
+    "!src/interview/**"
+  ],
+  "extraResources": [
+    {
+      "from": "whisper/bin",
+      "to": "whisper/bin",
+      "filter": [
+        "whisper-server.exe",
+        "whisper.dll",
+        "ggml*.dll",
+        "SDL2.dll",
+        "VERSION.txt"
+      ]
+    },
+    {
+      "from": "whisper/models",
+      "to": "whisper/models",
+      "filter": [
+        "ggml-base.en-q5_1.bin"
+      ]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "build/icon.ico",
+    "artifactName": "ShortlistPrep-AI-Setup-${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "ShortlistPrep.AI",
+    "deleteAppDataOnUninstall": false
+  }
+}

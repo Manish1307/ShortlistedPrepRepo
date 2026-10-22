@@ -183,7 +183,7 @@
       ['candidates', 'Candidates', 'Career toolkit progress, documents and AI activity.', 'briefcase'],
       ['licences', 'Licences', 'Issue, extend or cancel licences and see the computers using them.', 'key']] },
     { id: 'learning', label: 'Activity', items: [
-      ['conversations', 'Conversations', 'Live Class sessions saved by the app.', 'chat'],
+      ['conversations', 'Conversations', 'ShortlistPrep.AI sessions saved by the app.', 'chat'],
       ['profiles', 'Topics and resume', 'The topics and resume that set the area of the AI answers.', 'doc']] },
     { id: 'ai', label: 'AI and jobs', items: [
       ['jobs', 'Jobs', 'AI Job search: the Master Prompt, companies and live openings.', 'briefcase'],
@@ -746,14 +746,14 @@
       h('p', { class: 'muted small' }, 'Visits are counted without cookies or IP addresses: each browser keeps a random id. Search-engine bots and visitors who send "Do Not Track" are not counted.'));
   }
 
-  // ---------- topics and resume per customer (Live Class's AI uses them to choose the area of its answers) ----------
+  // ---------- topics and resume per customer (ShortlistPrep.AI's AI uses them to choose the area of its answers) ----------
   async function profiles(el, query = '') {
     const { customers: all } = await get('/admin/api/profiles');
     const term = query.trim().toLowerCase();
     const rows = term ? all.filter(r => [r.email, r.name, r.organisation, ...r.topics].join(' ').toLowerCase().includes(term)) : all;
     el.replaceChildren(
       head('Topics and resume', searchBox(v => profiles(el, v), 'Search customer or topic', query)),
-      h('p', { class: 'muted' }, 'Set what each customer\'s questions are about. Live Class receives the topics and the resume with its licence check (at start and every 30 minutes), and the AI uses them to decide the area of its answers.'),
+      h('p', { class: 'muted' }, 'Set what each customer\'s questions are about. ShortlistPrep.AI receives the topics and the resume with its licence check (at start and every 30 minutes), and the AI uses them to decide the area of its answers.'),
       table([
         { label: 'Customer', render: r => (r.name ? `${r.name} <${r.email}>` : r.email) },
         { label: 'Topics', wrap: true, render: r => (r.topics.length ? r.topics.join(', ') : h('span', { class: 'muted' }, 'none')) },
@@ -830,7 +830,7 @@
       h('p', { class: 'muted small' }, `${c.email}${p.updatedAt ? ` · last changed ${dateTime(p.updatedAt)} by ${p.updatedBy}` : ''}`),
       topics,
       h('label', { class: 'field' }, 'Resume', write ? picker : null, fileNote, resume, count),
-      h('p', { class: 'muted small' }, 'Live Class gets the changes on its next licence check: when it starts, or within 30 minutes while it runs.'));
+      h('p', { class: 'muted small' }, 'ShortlistPrep.AI gets the changes on its next licence check: when it starts, or within 30 minutes while it runs.'));
     if (!write) body.querySelectorAll('textarea').forEach(t => { t.readOnly = true; });
     const buttons = write ? [{ label: 'Save', kind: 'primary', run: async () => {
       const ok = await guard(async () => {
@@ -1226,7 +1226,7 @@
         field('Prices on the website', { name: 'pricesIncludeGst', type: 'select', value: c.pricesIncludeGst ? 'yes' : 'no', options: [{ value: 'yes', label: 'Include GST (recommended for consumers)' }, { value: 'no', label: 'GST added at checkout' }] })),
       h('div', { class: 'row2' }, field('GSTIN (optional)', { name: 'gstin', value: c.gstin, maxlength: 15, placeholder: '09ABCDE1234F1Z5' }), field('Order number prefix', { name: 'invoicePrefix', value: c.invoicePrefix, maxlength: 8 })),
       h('h3', { style: 'margin:12px 0 4px' }, 'UPI and bank transfer (used until a gateway is connected)'),
-      h('div', { class: 'row2' }, field('UPI ID', { name: 'upiId', value: c.manual.upiId, maxlength: 60, placeholder: 'classcue@icici' }), field('Payee name', { name: 'payeeName', value: c.manual.payeeName, maxlength: 80 })),
+      h('div', { class: 'row2' }, field('UPI ID', { name: 'upiId', value: c.manual.upiId, maxlength: 60, placeholder: 'yourname@bank' }), field('Payee name', { name: 'payeeName', value: c.manual.payeeName, maxlength: 80 })),
       h('div', { class: 'row2' }, field('Bank name', { name: 'bankName', value: c.manual.bankName, maxlength: 80 }), field('Account name', { name: 'accountName', value: c.manual.accountName, maxlength: 80 })),
       h('div', { class: 'row2' }, field('Account number', { name: 'accountNumber', value: c.manual.accountNumber, maxlength: 30 }), field('IFSC', { name: 'ifsc', value: c.manual.ifsc, maxlength: 11 })),
       field('Instructions shown to the customer', { name: 'instructions', type: 'textarea', value: c.manual.instructions, maxlength: 500 }),
@@ -1344,7 +1344,7 @@
         h('button', { class: 'btn', onclick: () => { if (confirm('Go back to the default prompt?')) guard(async () => { await post('/admin/api/jobs/prompt', { reset: true }); toast('Default prompt restored'); done(); }); } }, 'Reset to default')) : null);
   }
 
-  // ---------- Live Class conversations (saved by the app when the class ends) ----------
+  // ---------- ShortlistPrep.AI conversations (saved by the app when the class ends) ----------
   const duration = sec => { const m = Math.round((sec || 0) / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
   const clock = s => new Date(s).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -1356,13 +1356,13 @@
     el.replaceChildren(
       head('Conversations', searchBox(v => redo({ q: v }), 'Search questions, answers, customer', q), day('From', 'from'), day('To', 'to'),
         from || to ? h('button', { class: 'btn sm', onclick: () => redo({ from: '', to: '' }) }, 'All dates') : null),
-      h('p', { class: 'muted' }, 'Every Live Class session is saved here when the teacher presses End: what was heard, and each question with its answer.'),
+      h('p', { class: 'muted' }, 'Every ShortlistPrep.AI session is saved here when the teacher presses End: what was heard, and each question with its answer.'),
       table([
         { label: 'Date and time', render: r => dateTime(r.started_at) }, { label: 'Length', render: r => duration(r.duration_sec) },
         { label: 'Customer', render: r => r.customer_name || r.customer_email }, { label: 'Computer', render: r => r.device_name || '—' },
         { label: 'Questions', render: r => r.question_count },
         { label: 'First question', wrap: true, render: r => (r.first_question ? (r.first_question.length > 80 ? r.first_question.slice(0, 80) + '…' : r.first_question) : '—') },
-      ], rows, r => conversationDetail(r.id, () => conversations(el, filters)), q || from || to ? 'No conversations match.' : 'No conversations yet. They appear here when a Live Class session ends.'));
+      ], rows, r => conversationDetail(r.id, () => conversations(el, filters)), q || from || to ? 'No conversations match.' : 'No conversations yet. They appear here when a ShortlistPrep.AI session ends.'));
   }
 
   async function conversationDetail(id, done) {
@@ -1390,15 +1390,15 @@
       toast('Conversation deleted'); done();
     } });
     buttons.push({ label: 'Close', run: () => {} });
-    dialog(`Live Class · ${dateTime(v.started_at)}`, body, buttons).el.classList.add('wide');
+    dialog(`ShortlistPrep.AI · ${dateTime(v.started_at)}`, body, buttons).el.classList.add('wide');
   }
 
   function downloadConversation(v, items) {
-    const lines = [`Live Class conversation`, `Started: ${dateTime(v.started_at)}`, `Ended: ${dateTime(v.ended_at)} (${duration(v.duration_sec)})`,
+    const lines = [`ShortlistPrep.AI conversation`, `Started: ${dateTime(v.started_at)}`, `Ended: ${dateTime(v.ended_at)} (${duration(v.duration_sec)})`,
       `Customer: ${v.customer_email}`, `Computer: ${v.device_name || '-'}`, v.subject ? `Subject: ${v.subject}` : '', '', 'QUESTIONS AND ANSWERS', ''];
     for (const it of items) lines.push(`${it.position}. [${clock(it.asked_at)}] ${it.question}`, it.status === 'done' ? it.answer : '(no answer)', '');
     lines.push('', 'EVERYTHING THAT WAS HEARD', '', ...v.transcript.map(p => `[${clock(p.at)}] ${p.text}`));
-    const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/plain' })), download: `live-class-${v.started_at.slice(0, 16).replace(/[T:]/g, '-')}.txt` });
+    const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/plain' })), download: `shortlistprep-ai-${v.started_at.slice(0, 16).replace(/[T:]/g, '-')}.txt` });
     document.body.appendChild(a); a.click(); a.remove();
   }
 

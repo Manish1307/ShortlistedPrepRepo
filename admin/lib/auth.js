@@ -70,7 +70,7 @@ const PERMISSIONS = {
   'orders.write': ['owner', 'admin'],
   'releases.write': ['owner', 'admin'],
   'aikeys.write': ['owner', 'admin'],               // add, replace, set default, assign AI keys to licences
-  'conversations.delete': ['owner', 'admin'],       // delete a saved Live Class conversation
+  'conversations.delete': ['owner', 'admin'],       // delete a saved ShortlistPrep.AI conversation
   'profiles.write': ['owner', 'admin', 'support'],  // a customer's topics and resume (what the AI focuses on)
   'accounts.write': ['owner', 'admin'],             // a customer's website login: new password, turn off / on
   'jobs.write': ['owner', 'admin'],                 // AI Job search: the master prompt

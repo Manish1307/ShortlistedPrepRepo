@@ -1,5 +1,5 @@
 'use strict';
-// Topics and resume per customer: set in the admin dashboard, sent to Live Class with the licence check, and put
+// Topics and resume per customer: set in the admin dashboard, sent to ShortlistPrep.AI with the licence check, and put
 // into the AI prompts so the answers stay in that area.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -134,7 +134,7 @@ test('the dashboard saves a customer\'s topics and resume, and lists every custo
   });
 });
 
-test('Live Class receives the topics and resume with its licence check', async () => {
+test('ShortlistPrep.AI receives the topics and resume with its licence check', async () => {
   await withServer(async s => {
     const dir = tmp('cc-prof-app-');
     const client = new LicenceClient({ serverUrl: s.base, publicKeyPem: s.app.signer.publicKeyPem, dir, deviceId: crypto.randomBytes(16).toString('hex') });
@@ -146,7 +146,7 @@ test('Live Class receives the topics and resume with its licence check', async (
     assert.deepEqual((await client.appConfig({ proxy: true })).profile, PROFILE);
     assert.deepEqual((await client.appConfig()).profile, PROFILE);           // older apps (keys instead of the proxy) too
 
-    // offline: undefined, so Live Class keeps the profile from the last check
+    // offline: undefined, so ShortlistPrep.AI keeps the profile from the last check
     const offline = new LicenceClient({ serverUrl: s.base, publicKeyPem: s.app.signer.publicKeyPem, dir, deviceId: client.deviceId, fetchImpl: async () => { throw new Error('offline'); } });
     assert.equal((await offline.appConfig({ proxy: true })).profile, undefined);
   });

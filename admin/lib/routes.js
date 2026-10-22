@@ -79,7 +79,7 @@ function buildRoutes(ctx) {
     return { body: { ...result, ai: handout ? aikeys.keysForApp(db, ctx.vault, lic.id) : {}, profile } };
   });
   if (ctx.tokens) aiproxy.addRoutes({ ...ctx, add });
-  conversations.addRoutes({ ...ctx, add, audit, one, all });   // Live Class conversations (saved by the app, read in the dashboard)
+  conversations.addRoutes({ ...ctx, add, audit, one, all });   // ShortlistPrep.AI conversations (saved by the app, read in the dashboard)
   profiles.addRoutes({ ...ctx, add, audit, one, all });        // topics and resume per customer (sent to the app above)
   accounts.addRoutes({ ...ctx, add, audit, one, all });        // customer logins for the website's My account page
   career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)

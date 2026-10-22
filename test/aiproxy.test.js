@@ -1,5 +1,5 @@
 'use strict';
-// AI proxy: Live Class sends its AI requests to the licence server, which adds the licence's Groq / Gemini key, so no
+// AI proxy: ShortlistPrep.AI sends its AI requests to the licence server, which adds the licence's Groq / Gemini key, so no
 // key reaches the computer. A fake Groq / Gemini records what the server forwards.
 const test = require('node:test');
 const assert = require('node:assert/strict');

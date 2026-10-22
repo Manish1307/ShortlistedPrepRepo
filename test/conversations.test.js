@@ -1,5 +1,5 @@
 'use strict';
-// Live Class conversations: the app saves each finished class on the licence server (with the AI proxy's access
+// ShortlistPrep.AI conversations: the app saves each finished class on the licence server (with the AI proxy's access
 // token), and the dashboard lists them by date and time.
 const test = require('node:test');
 const assert = require('node:assert/strict');

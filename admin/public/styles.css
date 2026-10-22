@@ -157,7 +157,7 @@ dialog::backdrop { background: rgba(27, 23, 64, .5); backdrop-filter: blur(2px);
 }
 @media (max-width: 520px) { .today { display: none; } .brand-text small { display: none; } .banner p { font-size: 13px; } dl.kv { grid-template-columns: 1fr; } }
 
-/* Live Class conversations */
+/* ShortlistPrep.AI conversations */
 input[type=date] { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; color: inherit; }
 dialog.wide { width: min(900px, 96vw); }
 .qa { padding: 12px 0; border-bottom: 1px solid var(--line); }

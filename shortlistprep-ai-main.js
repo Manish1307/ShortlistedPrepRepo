@@ -1,5 +1,5 @@
 'use strict';
-// Live Class overlay: a floating toolbar, live transcript strip and question/answer card for use while teaching.
+// ShortlistPrep.AI overlay: a floating toolbar, live transcript strip and question/answer card for use while teaching.
 // It hears questions with the same offline speech engine and answers them with the same AI service, model, subject
 // and prompts as the teacher assistant (saved Settings are shared; change them in the assistant's Settings).
 // It needs an active ShortlistPrep licence (the same one as the assistant), checked with the licence server. The AI runs
@@ -7,8 +7,8 @@
 // admin dashboard (AI keys), and the keys never reach this computer (only a short-lived access token does).
 // A server without the proxy sends the keys instead (kept in memory only); without either, the key saved on this
 // computer is used.
-// While developing, TNA_LICENCE=off skips the licence check (local keys only).
-// It is a normal window: it is NOT hidden from screen sharing or recording.   npm run liveclass
+// While developing, SP_LICENCE=off skips the licence check (local keys only).
+// It is a normal window: it is NOT hidden from screen sharing or recording.   npm run shortlistprep-ai
 
 const { app, BrowserWindow, ipcMain, session, desktopCapturer, screen, shell } = require('electron');
 const crypto = require('crypto');
@@ -40,14 +40,14 @@ const LIVE_QUIET_MS = 500;
 // (98.5% -> 95.5% on Power Platform test questions). The teacher assistant keeps the model from its Settings.
 // If base.en is not downloaded (npm run setup:whisper -- --model base.en-q5_1 --model-only), that model is used instead.
 const LIVE_MODEL = 'ggml-base.en-q5_1.bin';
-// How often the licence and the AI keys are fetched again while Live Class runs.
+// How often the licence and the AI keys are fetched again while ShortlistPrep.AI runs.
 const CONFIG_REFRESH_MS = 30 * 60 * 1000;
 
-// started as "electron liveclass-main.js": use the same name, settings and keys as the teacher assistant
-app.setName('teacher-notes-app');
-app.setPath('userData', path.join(app.getPath('appData'), 'teacher-notes-app'));
+// started as "electron shortlistprep-ai-main.js": use the same name, settings and keys as the teacher assistant
+app.setName('ShortlistPrep');
+app.setPath('userData', path.join(app.getPath('appData'), 'ShortlistPrep'));
 
-const WHISPER_DIR = process.env.TNA_WHISPER_DIR || path.join(__dirname, 'whisper');
+const WHISPER_DIR = process.env.SP_WHISPER_DIR || path.join(__dirname, 'whisper');
 const BIN_DIR = path.join(WHISPER_DIR, 'bin');
 const MODELS_DIR = path.join(WHISPER_DIR, 'models');
 
@@ -72,19 +72,19 @@ const activeModel = s => (s.provider === 'gemini' ? s.geminiModel : s.provider =
 function createWindow() {
   win = new BrowserWindow({
     width: 940, height: 680, minWidth: 560, minHeight: 120,
-    title: 'Live Class',
+    title: 'ShortlistPrep.AI',
     icon: path.join(__dirname, 'build', 'icon.png'),
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    webPreferences: { preload: path.join(__dirname, 'liveclass-preload.js'), contextIsolation: true },
+    webPreferences: { preload: path.join(__dirname, 'shortlistprep-ai-preload.js'), contextIsolation: true },
   });
   // the Dashboard link opens in the normal browser, never inside the app
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  win.loadFile('liveclass-window.html');
+  win.loadFile('shortlistprep-ai-window.html');
   win.on('closed', () => { win = null; });
 }
 
@@ -92,7 +92,7 @@ function createWindow() {
 function setupMediaPermissions() {
   const ses = session.defaultSession;
   ses.setDisplayMediaRequestHandler(async (request, callback) => {
-    if (!win || win.isDestroyed() || !/liveclass-window\.html$/.test((request.frame && request.frame.url) || '')) return callback({});
+    if (!win || win.isDestroyed() || !/shortlistprep-ai-window\.html$/.test((request.frame && request.frame.url) || '')) return callback({});
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
       callback({ video: sources[0], audio: 'loopback' });   // the page drops the video track straight away
@@ -105,7 +105,7 @@ function setupMediaPermissions() {
 
 // ---- licence and AI keys from the licence server -------------------------------------------------------------
 
-const licenceSkipped = () => !app.isPackaged && process.env.TNA_LICENCE === 'off';
+const licenceSkipped = () => !app.isPackaged && process.env.SP_LICENCE === 'off';
 
 function setupLicence() {
   const dir = app.getPath('userData');
@@ -212,7 +212,7 @@ async function startEngine() {
     prompt: s.subject ? `Topic: ${s.subject}.` : '',
     extraArgs: LIVE_WHISPER_ARGS,
   });
-  whisper.on('exit', code => { if (engine.state === 'ready') setEngine('error', `The speech engine stopped (code ${code}). Restart Live Class.`); });
+  whisper.on('exit', code => { if (engine.state === 'ready') setEngine('error', `The speech engine stopped (code ${code}). Restart ShortlistPrep.AI.`); });
   try { await whisper.start(); } catch (err) { setEngine('error', `Could not start the speech engine: ${err.message}`); return; }
   pipeline.whisper = whisper;
   setEngine('ready');
@@ -289,7 +289,7 @@ ipcMain.on('lc:ask-typed', (event, text, corrected) => {
   if (allowed(event) && pipeline && typeof text === 'string') pipeline.askTyped(text, { corrected: corrected === true });
 });
 ipcMain.on('lc:capture', event => { if (allowed(event)) captureScreen(); });
-// Auto Answer here applies to this Live Class session only; the assistant's saved setting is left as it is
+// Auto Answer here applies to this ShortlistPrep.AI session only; the assistant's saved setting is left as it is
 ipcMain.on('lc:auto-answer', (event, on) => { if (fromWin(event) && pipeline) pipeline.setAutoAnswer(!!on); });
 ipcMain.on('lc:close', event => { if (fromWin(event)) app.quit(); });   // Quit: closes the window and stops the speech engine
 // The see-through parts of the window let clicks reach the app behind it; mouse moves are still forwarded so the

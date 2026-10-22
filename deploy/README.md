@@ -12,10 +12,10 @@ Server (licence API + admin dashboard + SQLite) on a **Google Cloud e2-micro** (
 ## A. Google Cloud: create the free server (about 20 minutes)
 
 1. Go to https://console.cloud.google.com, sign in, accept the terms, add a billing account (a card is required
-   even for the free tier) and create a project, for example `classcue`.
+   even for the free tier) and create a project, for example `shortlistprep`.
 2. **Budget alert first:** Billing → Budgets & alerts → Create budget → amount **$1** → email alerts at 50% and 100%.
 3. Compute Engine → VM instances (enable the API if asked) → **Create instance**:
-   - Name: `classcue-server`
+   - Name: `shortlistprep-server`
    - Region: **us-central1 (Iowa)**, **us-east1** or **us-west1** (only these are in the free tier)
    - Machine type: **E2 → e2-micro**
    - Boot disk → Change: **Ubuntu 24.04 LTS (x86/64)**, disk type **Standard persistent disk** (not Balanced), size **30 GB**
@@ -38,20 +38,20 @@ Wait until they work (minutes to a few hours). Check from your PC: `nslookup api
 
 ## C. Install the server (about 15 minutes)
 
-1. On your PC, in the project folder: `npm run server:package` → creates `dist\classcue-server.tgz`.
+1. On your PC, in the project folder: `npm run server:package` → creates `dist\shortlistprep-server.tgz`.
 2. In Google Cloud, VM instances → **SSH** (opens a terminal in your browser). Use the **Upload file** button
    (top right) to upload:
-   - `dist\classcue-server.tgz`
+   - `dist\shortlistprep-server.tgz`
    - `admin\data\signing-key.pem` (**must** be this file: the app's built-in public key matches it)
 3. In the SSH window:
    ```bash
-   tar -xzf classcue-server.tgz
+   tar -xzf shortlistprep-server.tgz
    sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com
    ```
    The script removes the uploaded `signing-key.pem` from the home folder after copying it.
 4. Create your admin login (prints a password once; copy it):
    ```bash
-   sudo -u classcue ADMIN_DATA_DIR=/opt/classcue/data node /opt/classcue/admin/create-admin.js you@example.com owner "Your Name"
+   sudo -u shortlistprep ADMIN_DATA_DIR=/opt/shortlistprep/data node /opt/shortlistprep/admin/create-admin.js you@example.com owner "Your Name"
    ```
 5. Open `https://admin.yourdomain.com`, sign in, change the password (My account).
    Check `https://api.yourdomain.com/api/health` shows `{"ok":true}`.
@@ -75,22 +75,41 @@ Wait until they work (minutes to a few hours). Check from your PC: `nslookup api
 1. https://dash.cloudflare.com → Workers & Pages → Create → Pages → **Connect to Git** → choose the repository.
 2. Build settings: build command `node website/build.js`, build output directory `website/site`.
 3. Deploy, then Custom domains → add `yourdomain.com` (and `www.yourdomain.com`).
-4. The website carries the ShortlistPrep pages; the ShortlistPrep product pages, real prices and
-   the download link must be added before launch.
+4. Before launch, check the real prices, the company details and the download links.
 
 ## Everyday tasks (in the VM's SSH window)
 
 | Task | Command |
 |---|---|
-| Server status | `sudo systemctl status classcue-admin` |
-| Server log | `sudo journalctl -u classcue-admin -n 100` |
-| Restart | `sudo systemctl restart classcue-admin` |
-| Update the server code | upload a new `classcue-server.tgz`, then `tar -xzf classcue-server.tgz && sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com` (database and key are kept) |
-| Backup now | `sudo -u classcue /opt/classcue/backup.sh` |
-| Download a backup | `sudo cp /opt/classcue/backups/classcue-*.tgz ~ && sudo chown $USER ~/classcue-*.tgz`, then **Download file** (top right) |
+| Server status | `sudo systemctl status shortlistprep-admin` |
+| Server log | `sudo journalctl -u shortlistprep-admin -n 100` |
+| Restart | `sudo systemctl restart shortlistprep-admin` |
+| Update the server code | upload a new `shortlistprep-server.tgz`, then `tar -xzf shortlistprep-server.tgz && sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com` (database and key are kept) |
+| Backup now | `sudo -u shortlistprep /opt/shortlistprep/backup.sh` |
+| Download a backup | `sudo cp /opt/shortlistprep/backups/shortlistprep-*.tgz ~ && sudo chown $USER ~/shortlistprep-*.tgz`, then **Download file** (top right) |
 
 Backups run every day at 02:30 UTC and the newest 14 are kept on the server. **Download one to your PC every week**;
 a backup on the same disk is lost with the server.
+
+## Moving a server that was set up under the old ClassCue names (one time)
+
+Older installs used `/opt/classcue`, the `classcue` user and the `classcue-admin` service. If your server already runs
+that way, do this once in the VM's SSH window, **before** the normal "Update the server code" step. The database and
+signing key move with the folder and are kept.
+
+```bash
+sudo systemctl stop classcue-admin
+sudo systemctl disable classcue-admin
+sudo rm -f /etc/systemd/system/classcue-admin.service /etc/cron.d/classcue-backup
+sudo usermod -l shortlistprep classcue
+sudo groupmod -n shortlistprep classcue
+sudo mv /opt/classcue /opt/shortlistprep
+sudo usermod -d /opt/shortlistprep shortlistprep
+for f in /opt/shortlistprep/backups/classcue-*.tgz; do [ -e "$f" ] && sudo mv "$f" "${f/classcue-/shortlistprep-}"; done
+```
+
+Then upload the new `shortlistprep-server.tgz` and run `sudo bash deploy/setup.sh ...` as in section C. The setup script
+installs the new service, backup job and Caddy settings.
 
 ## Keep safe
 - `signing-key.pem` is the most important file: if it is lost, every installed app needs a rebuilt installer.

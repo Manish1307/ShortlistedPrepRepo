@@ -1,5 +1,5 @@
 'use strict';
-// AI proxy: Live Class sends its AI requests here and the server adds the licence's Groq / Gemini key, so the keys
+// AI proxy: ShortlistPrep.AI sends its AI requests here and the server adds the licence's Groq / Gemini key, so the keys
 // never reach the teacher's computer. The app gets a short-lived access token from /api/app/config; every call
 // re-checks that the licence is still active and the computer still activated, and is rate-limited per licence.
 // Requests are passed through almost as they are (the app builds the same prompts as with its own key), but only
@@ -28,6 +28,7 @@ const b64url = buf => Buffer.from(buf).toString('base64url');
 /** Short-lived access tokens: HMAC-signed {licence id, device id, expiry}. The secret never leaves the server. */
 class TokenSigner {
   constructor(secret, { ttlMs = TOKEN_TTL_MS, clock = Date.now } = {}) {
+    // the label keeps its old name: changing it would end every open AI token
     this.secret = crypto.createHmac('sha256', secret).update('classcue-ai-proxy-token').digest();
     this.ttlMs = ttlMs;
     this.clock = clock;
@@ -94,7 +95,7 @@ function addRoutes(ctx) {
   function tokenOf(req) {
     const m = /^Bearer\s+(\S+)$/.exec(String(req.headers.authorization || ''));
     const t = m && tokens.verify(m[1]);
-    if (!t) throw new ApiError(401, 'AI access has expired. Live Class will renew it.', 'token');
+    if (!t) throw new ApiError(401, 'AI access has expired. ShortlistPrep.AI will renew it.', 'token');
     return t;
   }
 

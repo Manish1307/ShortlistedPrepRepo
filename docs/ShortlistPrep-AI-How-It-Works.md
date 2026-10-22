@@ -1,10 +1,10 @@
-# Live Class: how it works
+# ShortlistPrep.AI: how it works
 
-Live Class is a floating overlay for teaching. It listens to the class, writes down what is said, spots questions
+ShortlistPrep.AI is a floating overlay for teaching. It listens to the class, writes down what is said, spots questions
 and answers them with the same AI service, model, subject and prompts as the Private Assistant.
 
 ```bash
-npm run liveclass
+npm run shortlistprep-ai
 ```
 
 It is a normal window: it is **not** hidden from screen sharing or recording.
@@ -43,7 +43,7 @@ It is a normal window: it is **not** hidden from screen sharing or recording.
 flowchart LR
   subgraph R["Renderer process (Chromium page)"]
     MIC["Mic / system audio<br/>getUserMedia, loopback"] --> AW["AudioWorklet<br/>16 kHz PCM frames"]
-    UI["Live Class UI<br/>HTML, CSS, vanilla JS"]
+    UI["ShortlistPrep.AI UI<br/>HTML, CSS, vanilla JS"]
   end
   subgraph M["Main process (Node.js)"]
     VAD["VAD segmenter<br/>finds phrases"] --> STT["whisper.cpp<br/>offline speech to text"]
@@ -65,13 +65,13 @@ Every Electron app has two kinds of process, and this split runs through the who
 
 **Technology:** Electron 31 (Chromium plus Node.js in one desktop app).
 
-**The window.** [liveclass-main.js](../liveclass-main.js) creates it as a `BrowserWindow` with:
+**The window.** [shortlistprep-ai-main.js](../shortlistprep-ai-main.js) creates it as a `BrowserWindow` with:
 - `frame: false`, `transparent: true` and `alwaysOnTop: true`, which make it a floating overlay;
 - the CSS property `-webkit-app-region: drag` on the move handle, so a window with no title bar can still be dragged.
 
 **How the two processes talk.**
 - The page runs with `contextIsolation` and cannot touch Node or Electron directly.
-- [liveclass-preload.js](../liveclass-preload.js) uses `contextBridge` to give it a small, fixed set of functions as `window.liveClassAPI`.
+- [shortlistprep-ai-preload.js](../shortlistprep-ai-preload.js) uses `contextBridge` to give it a small, fixed set of functions as `window.shortlistAiAPI`.
 - Those functions are IPC messages:
   - `ipcRenderer.invoke` / `ipcMain.handle` for request and response (`lc:info`);
   - `send` / `on` for streams: audio in (`lc:audio`); transcript, status and answer events out (`pipeline`, `engine`).
@@ -102,7 +102,7 @@ API keys stay in the main process and never reach the page.
 | Noise floor | A running estimate of the background level, updated only while nobody is talking |
 | Speech | A frame counts as speech when it is 12 dB above the noise floor (and above −48 dB) |
 | Start | 4 loud frames in a row (80 ms). 300 ms of audio from just before is kept, so the first word is not clipped |
-| End | A pause of `hangMs` (Live Class: **600 ms**) |
+| End | A pause of `hangMs` (ShortlistPrep.AI: **600 ms**) |
 | Long speech | Cut at a natural gap after 5 s, or at the quietest moment by 8 s. Never in the middle of a word |
 
 The "speaking…" indicator in the strip comes straight from this detector's state (`pipeline` `level` events), which is why it appears instantly.
@@ -116,14 +116,14 @@ The "speaking…" indicator in the strip comes straight from this detector's sta
 - [src/stt/whisperServer.js](../src/stt/whisperServer.js) starts it and posts each phrase as a WAV file to `/inference`.
 - No audio leaves the computer.
 
-**Model.** Live Class uses `ggml-base.en-q5_1.bin`:
+**Model.** ShortlistPrep.AI uses `ggml-base.en-q5_1.bin`:
 - `ggml` is whisper.cpp's model format.
 - `base.en` is the English-only base model.
 - `q5_1` means 5-bit quantized, so the file is about 57 MB.
 
-The Private Assistant keeps the model chosen in its Settings (`small.en`). If `base.en` is missing, Live Class falls back to that model.
+The Private Assistant keeps the model chosen in its Settings (`small.en`). If `base.en` is missing, ShortlistPrep.AI falls back to that model.
 
-**Engine settings for Live Class** (`LIVE_WHISPER_ARGS`):
+**Engine settings for ShortlistPrep.AI** (`LIVE_WHISPER_ARGS`):
 
 | Flag | Meaning | Why |
 |---|---|---|
@@ -143,7 +143,7 @@ The Private Assistant keeps the model chosen in its Settings (`small.en`). If `b
 
 **When Auto Answer is on**, the `QuestionGate`:
 - collects what was heard;
-- waits for **0.5 s** of quiet in Live Class (1 s in the assistant), or at most 0.4 s when the phrase ends with "?";
+- waits for **0.5 s** of quiet in ShortlistPrep.AI (1 s in the assistant), or at most 0.4 s when the phrase ends with "?";
 - checks the text against question patterns (`looksLikeQuestion`);
 - skips a question that was already answered in the last 90 s.
 
@@ -174,15 +174,15 @@ The Private Assistant keeps the model chosen in its Settings (`small.en`). If `b
 - Errors are turned into plain messages by `friendlyError`: bad key, quota (429), network.
 
 **Screenshot.**
-- `desktopCapturer` grabs the screen the mouse is on. The Live Class window hides for a moment, so it is not in the picture.
+- `desktopCapturer` grabs the screen the mouse is on. The ShortlistPrep.AI window hides for a moment, so it is not in the picture.
 - The picture is sent as a PNG to the screen-capture AI from Settings (Gemini).
 - Each question found in it is answered like a spoken one.
 
 ## 7. The UI
 
 **Technology:** plain HTML, CSS and JavaScript, no framework.
-- [liveclass-window.html](../liveclass-window.html) holds the page and its styles.
-- [renderer/liveclass-ui.js](../renderer/liveclass-ui.js) holds the behaviour.
+- [shortlistprep-ai-window.html](../shortlistprep-ai-window.html) holds the page and its styles.
+- [renderer/shortlistprep-ai-ui.js](../renderer/shortlistprep-ai-ui.js) holds the behaviour.
 
 **Settings controls.**
 
@@ -203,20 +203,20 @@ The same file runs in Node and in the browser (a UMD module).
 - Everything the AI writes is inserted with `textContent`, never `innerHTML`, so AI output cannot inject HTML or scripts.
 - A Content-Security-Policy allows scripts only from the app itself, plus `blob:` for the AudioWorklet.
 
-**Demo mode.** Opened in a plain browser (no `window.liveClassAPI`), the page uses `demoAPI()`, which plays sample data. This is how the UI can be previewed without Electron.
+**Demo mode.** Opened in a plain browser (no `window.shortlistAiAPI`), the page uses `demoAPI()`, which plays sample data. This is how the UI can be previewed without Electron.
 
 ## 8. Settings and keys
 
 **Settings.**
-- They are shared with the Private Assistant: `%APPDATA%\teacher-notes-app\settings.json`. They cover subject, provider, model, thinking time, audio source and Auto Answer.
+- They are shared with the Private Assistant: `%APPDATA%\ShortlistPrep\settings.json`. They cover subject, provider, model, thinking time, audio source and Auto Answer.
 - Change them in the Private Assistant (`npm start`) under Settings.
-- Auto Answer changed inside Live Class lasts for that session only.
+- Auto Answer changed inside ShortlistPrep.AI lasts for that session only.
 
 **Licence.**
-- Live Class needs an active ShortlistPrep licence: the same one as the Private Assistant (`licence.json` in the same folder).
+- ShortlistPrep.AI needs an active ShortlistPrep licence: the same one as the Private Assistant (`licence.json` in the same folder).
 - At start-up and every 30 minutes it calls the licence server's `POST /api/app/config`. The licence part of the answer is signed (Ed25519) and checked against `src/licence/public-key.pem`, as in the assistant.
 - Without an active licence, a panel in the card asks for the licence key, and listening, Answer, Chat and Screenshot are locked. The ⋮ menu shows the plan and the days left.
-- While developing, `TNA_LICENCE=off` skips the check.
+- While developing, `SP_LICENCE=off` skips the check.
 
 **AI keys from the licence server.**
 - The same `/api/app/config` answer carries the AI keys for this licence: Groq for answers and Gemini for screenshots.
@@ -226,7 +226,7 @@ The same file runs in Node and in the browser (a UMD module).
   - In a licence's window, **AI keys** gives that licence its own key per service, or "Default".
   - A key that is turned off falls back to the default.
 - Only an active licence on an activated computer receives keys.
-- Live Class keeps them in memory only. A key from the server is used before the key saved on the computer; without one, the saved key is used.
+- ShortlistPrep.AI keeps them in memory only. A key from the server is used before the key saved on the computer; without one, the saved key is used.
 - The keys still reach the teacher's computer. Keeping them on the server, with AI calls sent through it, is the safer next step.
 
 **Keys saved on the computer.** API keys entered in the assistant's Settings are encrypted with Electron's `safeStorage`, which uses Windows DPAPI, and are never written in plain text.
@@ -238,12 +238,12 @@ Measured on the development PC. A Windows voice says a 9 s sentence ending in a 
 | Setup | Question ready |
 |---|---|
 | Private Assistant settings (`small.en`, 0.8 s pause, 1 s quiet) | 4.8 s after speech ends |
-| Live Class tuning, `small.en` | 3.4 s |
-| **Live Class tuning, `base.en` (current)** | **1.6 s** |
+| ShortlistPrep.AI tuning, `small.en` | 3.4 s |
+| **ShortlistPrep.AI tuning, `base.en` (current)** | **1.6 s** |
 
 Groq then usually starts writing within another 0.5 to 1.5 s.
 
-**Speech model comparison.** Both models used the Live Class settings and the class subject as a hint. The test set was 40 clips: 10 Power Platform questions, spoken by 2 Windows voices at 2 speeds.
+**Speech model comparison.** Both models used the ShortlistPrep.AI settings and the class subject as a hint. The test set was 40 clips: 10 Power Platform questions, spoken by 2 Windows voices at 2 speeds.
 
 | | `small.en-q5_1` | `base.en-q5_1` |
 |---|---|---|
@@ -263,12 +263,12 @@ Windows voices are cleaner than real classroom speech, so real accuracy will be 
 
 | File | Role |
 |---|---|
-| [liveclass-main.js](../liveclass-main.js) | Main process: window, media permissions, licence and AI keys from the server, speech engine (Live Class tuning), AI router, screen capture, IPC |
+| [shortlistprep-ai-main.js](../shortlistprep-ai-main.js) | Main process: window, media permissions, licence and AI keys from the server, speech engine (ShortlistPrep.AI tuning), AI router, screen capture, IPC |
 | [src/licence/client.js](../src/licence/client.js) | Licence on this computer: activation, signed answers, offline grace period, `appConfig()` for the AI keys |
 | [admin/lib/aikeys.js](../admin/lib/aikeys.js) | Server: AI keys table, encryption, default and per-licence keys |
-| [liveclass-preload.js](../liveclass-preload.js) | `window.liveClassAPI`, the only bridge between page and main process |
-| [liveclass-window.html](../liveclass-window.html) | Page structure and styles (dark and light themes) |
-| [renderer/liveclass-ui.js](../renderer/liveclass-ui.js) | UI behaviour, shortcuts, settings menu, event handling, demo mode |
+| [shortlistprep-ai-preload.js](../shortlistprep-ai-preload.js) | `window.shortlistAiAPI`, the only bridge between page and main process |
+| [shortlistprep-ai-window.html](../shortlistprep-ai-window.html) | Page structure and styles (dark and light themes) |
+| [renderer/shortlistprep-ai-ui.js](../renderer/shortlistprep-ai-ui.js) | UI behaviour, shortcuts, settings menu, event handling, demo mode |
 | [renderer/capture.js](../renderer/capture.js) | Microphone / system-audio capture to 16 kHz PCM (shared) |
 | [src/pipeline.js](../src/pipeline.js) | Glue: audio → phrases → text → questions → answers, as events (shared) |
 | [src/audio/vad.js](../src/audio/vad.js) | Voice activity detector (shared) |
@@ -287,4 +287,4 @@ A good order for reading the code is `capture.js` → `vad.js` → `pipeline.js`
 - **Ideas:**
   - a GPU build of whisper.cpp, for `small.en` accuracy at `base.en` speed;
   - a faster Groq model for quicker first words;
-  - saving Live Class sessions with the existing export.
+  - saving ShortlistPrep.AI sessions with the existing export.

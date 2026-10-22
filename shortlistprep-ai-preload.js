@@ -1,13 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// What the Live Class window may do. AI keys never reach the page.
+// What the ShortlistPrep.AI window may do. AI keys never reach the page.
 const subscribe = (channel, callback) => {
   const handler = (_event, message) => callback(message);
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 };
 
-contextBridge.exposeInMainWorld('liveClassAPI', {
+contextBridge.exposeInMainWorld('shortlistAiAPI', {
   info: () => ipcRenderer.invoke('lc:info'),
   sendAudio: buffer => ipcRenderer.send('lc:audio', buffer),
   setListening: on => ipcRenderer.send('lc:listening', !!on),

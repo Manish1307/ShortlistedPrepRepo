@@ -20,6 +20,7 @@ function computerId(dir) {
   try {
     const out = execFileSync('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
     const m = out.match(/MachineGuid\s+REG_SZ\s+([0-9a-f-]{20,})/i);
+    // the label keeps its old name: changing it would make every registered computer look new
     if (m) return crypto.createHash('sha256').update('classcue-device:' + m[1].toLowerCase()).digest('hex').slice(0, 32);
   } catch (_) { /* not Windows, or not readable */ }
   const file = path.join(dir, 'device-id');

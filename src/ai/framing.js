@@ -34,7 +34,7 @@ function formatPrevious(previous, answerChars = 500) {
 }
 
 /**
- * The customer's focus, set in the admin dashboard (Topics and resume) and sent to Live Class with the licence:
+ * The customer's focus, set in the admin dashboard (Topics and resume) and sent to ShortlistPrep.AI with the licence:
  * the topics questions are about, and (for answers) the resume of the person being helped. Lines to put after the
  * subject; none when nothing is set.
  */

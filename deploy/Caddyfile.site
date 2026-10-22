@@ -2,7 +2,7 @@
 # The website (home page), static files built by website/build.js. Added by deploy/setup.sh when a site host is given.
 __SITE_HOST__ {
 	encode gzip
-	root * /opt/classcue/website
+	root * /opt/shortlistprep/website
 	try_files {path} {path}.html {path}/index.html
 	# browsers keep the files for 30 days; .css/.js are versioned with ?v=, so changes still arrive
 	header /assets/* Cache-Control "public, max-age=2592000"

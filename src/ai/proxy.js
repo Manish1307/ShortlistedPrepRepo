@@ -55,7 +55,7 @@ class ProxyAnswerer {
     delete headers['x-goog-api-key'];
     const attempt = async renew => {
       const token = await this.getToken(renew);
-      if (!token) throw Object.assign(new Error('Live Class could not get AI access from the licence server. Check the licence and the internet connection.'), { code: 'no-key' });
+      if (!token) throw Object.assign(new Error('ShortlistPrep.AI could not get AI access from the licence server. Check the licence and the internet connection.'), { code: 'no-key' });
       return this.fetchImpl(target, { ...init, headers: { ...headers, Authorization: 'Bearer ' + token } });
     };
     const res = await attempt(false);

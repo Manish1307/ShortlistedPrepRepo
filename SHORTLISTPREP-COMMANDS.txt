@@ -1,10 +1,11 @@
 =====================================================================
- CLASSCUE - COMMAND LIST AND QUICK GUIDE
+ SHORTLISTPREP - COMMAND LIST AND QUICK GUIDE
  (the desktop tool, the website, and the admin dashboard)
 =====================================================================
 
 PROJECT FOLDER
-  C:\Personal\Projects\teacher-notes-app\teacher-notes-app
+  C:\Personal\Projects\shortlistprep-app
+  (renamed from teacher-notes-app; see section 9 for the one-time rename steps)
 
 Open a terminal in that folder before running any command below.
 
@@ -46,15 +47,21 @@ Open a terminal in that folder before running any command below.
           Pick company (50 listed), role, round and experience. The AI asks
           questions; answer by voice or typing; get a score out of 10, what was
           good, what to improve and a stronger answer; report at the end
-          (Save report -> DocumentsMock Interviews). Uses the same AI key as the
+          (Save report -> Documents\Mock Interviews). Uses the same AI key as the
           assistant (set in its Settings). This window is NOT hidden from
           screen sharing: it is for practice only.
+
+  SHORTLISTPREP.AI (the floating live overlay, formerly "Live Class"):
+      npm run shortlistprep-ai
+          A floating toolbar with a live transcript and an answer card. Uses the
+          same licence, speech engine and AI settings as the assistant. It is a
+          normal window: it is NOT hidden from screen sharing or recording.
 
   LICENCE (free trial or licence key):
       The assistant asks for a licence the first time it opens. The admin
       server must be running (npm run admin or npm run web), because the app
-      checks licences with it (address in srclicencesettings.js).
-      Developing without a licence: set TNA_LICENCE=off before npm start
+      checks licences with it (address in srcicencesettings.js).
+      Developing without a licence: set SP_LICENCE=off before npm start
       (works only when not installed).
 
 ---------------------------------------------------------------------
@@ -217,8 +224,6 @@ Open a terminal in that folder before running any command below.
  7. BEFORE YOU LAUNCH (CHECKLIST)
 ---------------------------------------------------------------------
 
-  [ ] Choose the real product name (ShortlistPrep is a placeholder) and check
-      the name and domain are free.
   [ ] Replace the example prices, company name, address and support email
       in website\site.config.json.
   [ ] Have a lawyer review the Privacy and Terms pages (they are drafts).
@@ -241,5 +246,72 @@ Open a terminal in that folder before running any command below.
   4173  website preview
   4180  admin dashboard
   If a port is busy, close the other program using it and try again.
+
+
+---------------------------------------------------------------------
+ 9. ONE-TIME RENAME OF THE PROJECT FOLDER (teacher-notes-app -> shortlistprep-app)
+---------------------------------------------------------------------
+
+  Close VS Code, Claude and every terminal that is inside the old folder, then in PowerShell:
+
+      cd C:\Personal\Projects
+      Rename-Item teacher-notes-app shortlistprep-app
+      cd shortlistprep-app
+      git status
+
+  Note: the old path had the project twice (teacher-notes-app\teacher-notes-app).
+  If you still see the inner folder, move its contents up one level:
+
+      cd C:\Personal\Projects\shortlistprep-app
+      Move-Item .\teacher-notes-app\* . -Force ; Move-Item .\teacher-notes-app\.* . -Force
+      Remove-Item .\teacher-notes-app
+
+  Your saved settings and AI keys: the app now always uses %APPDATA%\ShortlistPrep.
+  A development copy used %APPDATA%\teacher-notes-app before. Copy it over once:
+
+      Copy-Item $env:APPDATA\teacher-notes-app\* $env:APPDATA\ShortlistPrep\ -Recurse -Force
+
+
+---------------------------------------------------------------------
+ 10. RELEASE AND DEPLOY
+---------------------------------------------------------------------
+
+  A. Build the Windows installer (Interview Assistant)
+      npm run dist
+          Creates dist\ShortlistPrep-Setup-<version>.exe
+          (the logo is build\icon.ico and build\icon.png)
+
+  B. Publish the installer on GitHub Releases
+      git tag v1.0.0
+      git push origin v1.0.0
+      gh release create v1.0.0 dist\ShortlistPrep-Setup-1.0.0.exe --title "ShortlistPrep 1.0.0" --notes "First release"
+          Copy the download link of the file, it looks like
+          https://github.com/<owner>/<repo>/releases/download/v1.0.0/ShortlistPrep-Setup-1.0.0.exe
+
+  C. Tell the website where each tool's file is (counted, sign-up needed)
+      Sign in to the admin dashboard, then send (once per tool and version):
+        POST /admin/api/downloads/assistant       {"version":"1.0.0","url":"<link>","sizeMb":180}
+        POST /admin/api/downloads/mock-interview  {"version":"1.0.0","url":"<link>","sizeMb":90}
+      Counts: GET /admin/api/downloads  (total, last 30 days, people, per version)
+      Or set DOWNLOAD_URL_ASSISTANT / DOWNLOAD_URL_MOCK_INTERVIEW on the server.
+
+  D. Package and publish the server (licence API + admin + downloads)
+      npm run server:package
+          Creates dist\shortlistprep-server.tgz
+      Then follow deploy\README.md (upload, then on the server:
+        tar -xzf shortlistprep-server.tgz
+        sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com )
+      Server paths: /opt/shortlistprep   service: shortlistprep-admin   user: shortlistprep
+      A server set up under the old name needs the one-time move in deploy\README.md.
+
+  E. Publish the website
+      npm run site:build
+          Builds website\site (upload it, or let Cloudflare Pages build it).
+
+  Server day-to-day (on the VM):
+      sudo systemctl status shortlistprep-admin
+      sudo journalctl -u shortlistprep-admin -n 100
+      sudo systemctl restart shortlistprep-admin
+      sudo -u shortlistprep /opt/shortlistprep/backup.sh
 
 =====================================================================

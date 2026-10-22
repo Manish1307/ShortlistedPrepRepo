@@ -14,11 +14,11 @@ const { WhisperServer } = require('./src/stt/whisperServer');
 const { LicenceClient, computerId } = require('./src/licence/client');
 const licenceSettings = require('./src/licence/settings');
 
-// Installed copies keep their settings, keys and licence in %APPDATA%ShortlistPrep (development keeps teacher-notes-app).
-if (app.isPackaged) app.setName('ShortlistPrep');
+// Installed and development copies keep their settings, keys and licence in the same folder: %APPDATA%\ShortlistPrep.
+app.setName('ShortlistPrep');
 
 // Installed: the speech engine sits next to the app (resources\whisper), because programs cannot run from inside app.asar.
-const WHISPER_DIR = process.env.TNA_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
+const WHISPER_DIR = process.env.SP_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
 const BIN_DIR = path.join(WHISPER_DIR, 'bin');
 const MODELS_DIR = path.join(WHISPER_DIR, 'models');
 
@@ -269,10 +269,10 @@ function stopEngine() {
 
 // ---- licence: free trial or licence key, checked with the licence server ------------------------------
 // Without a valid licence the assistant is locked (listening, capture, asking); settings stay usable.
-// While developing (not installed) TNA_LICENCE=off, or the smoke test, skips the check.
+// While developing (not installed) SP_LICENCE=off, or the smoke test, skips the check.
 
 let licence = null;
-const licenceSkipped = () => !app.isPackaged && (process.env.TNA_LICENCE === 'off' || (process.argv.includes('--smoke') && !process.env.TNA_SMOKE_LICENCE));
+const licenceSkipped = () => !app.isPackaged && (process.env.SP_LICENCE === 'off' || (process.argv.includes('--smoke') && !process.env.SP_SMOKE_LICENCE));
 
 function licenceStatus() {
   if (licenceSkipped()) return { state: 'active', kind: 'development', plan: 'development', dev: true };
@@ -487,7 +487,7 @@ function runSmokeTest() {
     })`);
     // a title="..." added later must be removed straight away (Windows draws those tooltips as separate windows)
     page.elementsWithTooltip = await wc.executeJavaScript("new Promise(r => { const t = document.createElement('button'); t.title = 'late tooltip'; document.body.appendChild(t); setTimeout(() => { const left = document.querySelectorAll('[title]').length; t.remove(); r(left); }, 80); })");
-    if (process.env.TNA_SMOKE_LICENCE) {   // the licence screen with the real licence check (TNA_SMOKE_LICENCE=1)
+    if (process.env.SP_SMOKE_LICENCE) {   // the licence screen with the real licence check (SP_SMOKE_LICENCE=1)
       await new Promise(r => setTimeout(r, 1500));
       page.licence = await wc.executeJavaScript(`({
         gateShown: document.getElementById('licenceGate').classList.contains('show'),
@@ -498,19 +498,19 @@ function runSmokeTest() {
       page.licence.main = licenceStatus().state;
       page.licence.blockedAsk = !requireLicence();
     }
-    if (process.env.TNA_SMOKE_RESTART) {   // really restart the assistant and see it come back
+    if (process.env.SP_SMOKE_RESTART) {   // really restart the assistant and see it come back
       const before = engine.state;
       await restartAssistant('smoke test');
       page.restart = { before, after: engine.state, pipelineBack: !!pipeline, whisperBack: !!(whisper && whisper.ready) };
     }
-    if (process.env.TNA_SMOKE_CAPTURE) {   // screen capture: grab the screen, open the selection screen, press Enter
+    if (process.env.SP_SMOKE_CAPTURE) {   // screen capture: grab the screen, open the selection screen, press Enter
       const { display, image } = await grabDisplay();
       const picked = selectArea(display, image);
       await new Promise(r => setTimeout(r, 1500));
       const shown = !!(selectWindow && selectWindow.isVisible());
-      if (shown && process.env.TNA_SMOKE_CAPTURE_SHOT) {
+      if (shown && process.env.SP_SMOKE_CAPTURE_SHOT) {
         selectWindow.setContentProtection(false);   // test-only: protection also blanks our own screenshot
-        require('fs').writeFileSync(process.env.TNA_SMOKE_CAPTURE_SHOT, (await selectWindow.webContents.capturePage()).toPNG());
+        require('fs').writeFileSync(process.env.SP_SMOKE_CAPTURE_SHOT, (await selectWindow.webContents.capturePage()).toPNG());
       }
       if (selectWindow) selectWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
       const rect = await Promise.race([picked, new Promise(r => setTimeout(() => r('timeout'), 3000))]);
@@ -518,7 +518,7 @@ function runSmokeTest() {
       const ai = forAI(half);
       page.capture = { screen: image.getSize(), selectionShown: shown, enterGives: rect, halfCrop: half.getSize(), aiType: ai.mimeType, aiKB: Math.round(ai.image.length * 0.75 / 1024) };
     }
-    if (process.env.TNA_SMOKE_DEMO) { // sample events so the screenshot shows a real question and answer
+    if (process.env.SP_SMOKE_DEMO) { // sample events so the screenshot shows a real question and answer
       await wc.executeJavaScript("document.getElementById('btnCloseSettings').click()");
       const demo = (type, data) => toNotes('pipeline', { type, ...data });
       demo('transcript', { text: 'Today we are solving quadratic equations by completing the square.' });
@@ -580,14 +580,14 @@ function runSmokeTest() {
     }
     const report = { page, engine, contentProtectionOn: true, problems };
     console.log('SMOKE ' + JSON.stringify(report, null, 1));
-    if (process.env.TNA_SMOKE_REPORT) fs.writeFileSync(process.env.TNA_SMOKE_REPORT, JSON.stringify(report, null, 1));   // an installed app prints nothing
-    if (process.env.TNA_SMOKE_SHOT) {
+    if (process.env.SP_SMOKE_REPORT) fs.writeFileSync(process.env.SP_SMOKE_REPORT, JSON.stringify(report, null, 1));   // an installed app prints nothing
+    if (process.env.SP_SMOKE_SHOT) {
       notesWindow.setContentProtection(false); // test-only: protection also blanks our own screenshot
       notesWindow.showInactive();
       await new Promise(r => setTimeout(r, 1200));
       const image = await wc.capturePage();
       console.log('SHOT size', JSON.stringify(image.getSize()), 'visible', notesWindow.isVisible(), 'bounds', JSON.stringify(notesWindow.getBounds()));
-      require('fs').writeFileSync(process.env.TNA_SMOKE_SHOT, image.toPNG());
+      require('fs').writeFileSync(process.env.SP_SMOKE_SHOT, image.toPNG());
     }
     app.quit();
   }, 3500));

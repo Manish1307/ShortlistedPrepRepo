@@ -27,10 +27,10 @@ const coach = require('./src/interview/coach');
 // started as "electron interview-main.js": use the same name, settings and keys as the teacher assistant
 // the screenshot runs keep painting even when another window covers this one
 if (process.argv.some(a => a.startsWith('--shots'))) { app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion'); app.commandLine.appendSwitch('disable-renderer-backgrounding'); app.commandLine.appendSwitch('disable-backgrounding-occluded-windows'); }
-app.setName('teacher-notes-app');
-app.setPath('userData', process.env.TNA_USER_DATA || path.join(app.getPath('appData'), 'teacher-notes-app'));   // TNA_USER_DATA: a separate folder for tests
+app.setName('ShortlistPrep');
+app.setPath('userData', process.env.SP_USER_DATA || path.join(app.getPath('appData'), 'ShortlistPrep'));   // SP_USER_DATA: a separate folder for tests
 
-const WHISPER_DIR = process.env.TNA_WHISPER_DIR || path.join(__dirname, 'whisper');
+const WHISPER_DIR = process.env.SP_WHISPER_DIR || path.join(__dirname, 'whisper');
 const AI_TIMEOUT_MS = 60000;
 
 let win = null;
@@ -72,7 +72,7 @@ function buildAI() {
 
 // ---- licence and AI from the licence server -------------------------------------------------------------
 
-const licenceSkipped = () => !app.isPackaged && process.env.TNA_LICENCE === 'off';
+const licenceSkipped = () => !app.isPackaged && process.env.SP_LICENCE === 'off';
 
 function setupLicence() {
   const dir = app.getPath('userData');
@@ -249,7 +249,7 @@ ipcMain.on('iv:listening', (event, on) => {
 // ---- "--smoke": walks through a short interview with typed answers, saves a screenshot of each step, then quits ----
 // (uses the real AI with the saved key: three small requests)   electron interview-main.js --smoke
 async function runSmoke() {
-  const dir = process.env.TNA_IV_SHOTS || app.getPath('temp');
+  const dir = process.env.SP_IV_SHOTS || app.getPath('temp');
   const wc = win.webContents;
   const problems = [];
   wc.on('console-message', (_e, level, message) => { if (level >= 2) problems.push(message); });
@@ -286,10 +286,10 @@ async function runSmoke() {
 }
 
 // ---- "--shots": the licence and personalised-questions flow against a test server, a screenshot of each step, then quit ----
-// Needs CLASSCUE_LICENCE_SERVER, CLASSCUE_PUBLIC_KEY_FILE, TNA_USER_DATA, TNA_IV_KEY (a licence key) and TNA_IV_SHOTS (a folder).
+// Needs SHORTLISTPREP_LICENCE_SERVER, SHORTLISTPREP_PUBLIC_KEY_FILE, SP_USER_DATA, SP_IV_KEY (a licence key) and SP_IV_SHOTS (a folder).
 //   electron interview-main.js --shots
 async function runShots() {
-  const dir = process.env.TNA_IV_SHOTS || app.getPath('temp');
+  const dir = process.env.SP_IV_SHOTS || app.getPath('temp');
   const wc = win.webContents;
   const js = code => wc.executeJavaScript(code);
   const wait = async (cond, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await js(cond)) return true; await new Promise(r => setTimeout(r, 250)); } return false; };
@@ -302,7 +302,7 @@ async function runShots() {
   report.gateShown = await js("!document.getElementById('gate').classList.contains('hidden')");
   await shot('1-licence');
   // 2. activate with the key, then choose "My resume"
-  await js("document.getElementById('gateKey').value = " + JSON.stringify(process.env.TNA_IV_KEY || '') + "; document.getElementById('gateActivate').click(); true");
+  await js("document.getElementById('gateKey').value = " + JSON.stringify(process.env.SP_IV_KEY || '') + "; document.getElementById('gateActivate').click(); true");
   report.activated = await wait("document.getElementById('gate').classList.contains('hidden')", 20000);
   await js("document.querySelector('#modes [data-mode=resume]').click(); true");
   report.resumesLoaded = await wait("document.getElementById('resume').options.length > 0 && !/Loading/.test(document.getElementById('resume').options[0].textContent)", 20000);
@@ -310,7 +310,7 @@ async function runShots() {
   await shot('2-resume');
   // 3. personalised questions made from that resume
   await js("document.getElementById('btnStart').click(); true");
-  if (process.env.TNA_IV_PROGRESS_SHOT) { await new Promise(r => setTimeout(r, Number(process.env.TNA_IV_PROGRESS_SHOT))); await shot('2b-progress'); }   // the progress bar while the server is slow
+  if (process.env.SP_IV_PROGRESS_SHOT) { await new Promise(r => setTimeout(r, Number(process.env.SP_IV_PROGRESS_SHOT))); await shot('2b-progress'); }   // the progress bar while the server is slow
   report.setShown = await wait("!document.getElementById('viewSet').classList.contains('hidden')", 90000);
   report.questions = await js("document.querySelectorAll('#setList .qitem').length");
   await shot('3-questions');
@@ -332,7 +332,7 @@ async function runShots() {
 // ---- "--shots-intro": the "Tell me about yourself" flow against a test server, a screenshot of each step, then quit ----
 // Needs the same environment as --shots.   electron interview-main.js --shots-intro
 async function runIntroShots() {
-  const dir = process.env.TNA_IV_SHOTS || app.getPath('temp');
+  const dir = process.env.SP_IV_SHOTS || app.getPath('temp');
   const wc = win.webContents;
   const js = code => wc.executeJavaScript(code);
   const wait = async (cond, ms = 60000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await js(cond)) return true; await new Promise(r => setTimeout(r, 250)); } return false; };
@@ -341,7 +341,7 @@ async function runIntroShots() {
   const report = {};
   await new Promise(r => setTimeout(r, 1500));
   win.setSize(1180, 860);
-  await js("document.getElementById('gateKey').value = " + JSON.stringify(process.env.TNA_IV_KEY || '') + "; document.getElementById('gateActivate').click(); true");
+  await js("document.getElementById('gateKey').value = " + JSON.stringify(process.env.SP_IV_KEY || '') + "; document.getElementById('gateActivate').click(); true");
   report.activated = await wait("document.getElementById('gate').classList.contains('hidden')", 20000);
   await js("document.querySelector('#modes [data-mode=intro]').click(); true");
   report.resumes = await wait("document.getElementById('introResume').options.length > 0 && !/Loading/.test(document.getElementById('introResume').options[0].textContent)", 20000);

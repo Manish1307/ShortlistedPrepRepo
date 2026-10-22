@@ -1,5 +1,5 @@
 'use strict';
-// Finished Live Class conversations on their way to the licence server (POST /api/app/conversations).
+// Finished ShortlistPrep.AI conversations on their way to the licence server (POST /api/app/conversations).
 // Each one is written to a file first, then uploaded; the file is removed once the server has it. If the computer is
 // offline or the server is down, the files wait and are sent at the next start or the next class end.
 // No Electron code here, so it can be tested with a fake server.

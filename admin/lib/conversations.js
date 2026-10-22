@@ -1,5 +1,5 @@
 'use strict';
-// Live Class conversations: when the teacher presses End, the app sends the whole class (what was heard, and every
+// ShortlistPrep.AI conversations: when the teacher presses End, the app sends the whole class (what was heard, and every
 // question with its answer) to POST /api/app/conversations, signed in with the same short-lived access token as the
 // AI proxy. The dashboard lists them by date and time (Conversations).
 // Sending the same conversation again (a retry after a lost connection) does not make a second copy: each one has
@@ -59,7 +59,7 @@ function addRoutes(ctx) {
   function authorise(req) {
     const m = /^Bearer\s+(\S+)$/.exec(String(req.headers.authorization || ''));
     const t = m && tokens && tokens.verify(m[1]);
-    if (!t) throw new ApiError(401, 'Access has expired. Live Class will renew it.', 'token');
+    if (!t) throw new ApiError(401, 'Access has expired. ShortlistPrep.AI will renew it.', 'token');
     const lic = one('SELECT * FROM licences WHERE id = ?', t.licenceId);
     if (!lic || licences.effectiveStatus(lic) !== 'active') throw new ApiError(403, 'The licence is not active.', 'licence');
     const device = one('SELECT * FROM devices WHERE licence_id = ? AND device_id = ?', lic.id, t.deviceId);

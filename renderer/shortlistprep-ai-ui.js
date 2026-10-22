@@ -1,12 +1,12 @@
-// Live Class overlay: toolbar, live transcript strip, question/answer card and a settings menu.
-// In the app (npm run liveclass) it listens with the offline speech engine and answers with the same AI, model,
+// ShortlistPrep.AI overlay: toolbar, live transcript strip, question/answer card and a settings menu.
+// In the app (npm run shortlistprep-ai) it listens with the offline speech engine and answers with the same AI, model,
 // subject and prompts as the teacher assistant. Opened in a plain browser it runs a demo with sample data instead.
 // Everything shown is inserted as TEXT (never as HTML): nothing the AI writes can inject markup into the page.
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const live = !!window.liveClassAPI;
-  const api = window.liveClassAPI || demoAPI();
+  const live = !!window.shortlistAiAPI;
+  const api = window.shortlistAiAPI || demoAPI();
   if (!/Electron/i.test(navigator.userAgent)) document.body.classList.add('web');
 
   function el(tag, className, text) {
@@ -202,7 +202,7 @@
   const isLicensed = () => state.licence.state === 'active';
   const LICENCE_TEXT = {
     checking: 'Checking your ShortlistPrep licence…',
-    none: 'Live Class needs a ShortlistPrep licence. Enter your licence key to activate this computer.',
+    none: 'ShortlistPrep.AI needs a ShortlistPrep licence. Enter your licence key to activate this computer.',
     expired: 'Your licence has expired. Renew it, or enter a new licence key.',
     revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
     removed: 'This computer was removed from the licence. Enter the key again to activate it.',
@@ -222,7 +222,7 @@
     if (oldBar && l2.state !== 'checking') oldBar.remove();
     if (!gate.hidden) {
       if (l2.state === 'checking' && !$('gatePg')) { const slot = el('div'); slot.id = 'gatePg'; gate.insertBefore(slot, gate.children[1]); B.progress(slot, { title: 'Checking your licence', expectedSec: 6, compact: true }); }
-      $('gateMsg').textContent = l2.message || LICENCE_TEXT[l2.state] || 'Live Class needs an active licence.';
+      $('gateMsg').textContent = l2.message || LICENCE_TEXT[l2.state] || 'ShortlistPrep.AI needs an active licence.';
       $('gateKey').parentElement.hidden = l2.state === 'checking';
       $('gateActivate').hidden = l2.state === 'check-needed';
       if (state.listening) stopListening();
@@ -501,7 +501,7 @@
   $('btnEnd').addEventListener('click', endClass);
   $('btnRestart').addEventListener('click', restart);
   function quit() {
-    if (!live) { toast('Quit closes the Live Class window in the app (npm run liveclass)'); return; }
+    if (!live) { toast('Quit closes the ShortlistPrep.AI window in the app (npm run shortlistprep-ai)'); return; }
     stopListening();
     api.close();
   }
@@ -612,7 +612,7 @@
     function answer(question, source) {
       const n = ++id;
       const hit = KNOWLEDGE.find(k => k.keys.some(key => question.toLowerCase().includes(key)));
-      const text = hit ? hit.text : 'Sample answer (open Live Class with "npm run liveclass" for real AI answers).\n- Restate the question simply.\n- Give one clear fact and an example.';
+      const text = hit ? hit.text : 'Sample answer (open ShortlistPrep.AI with "npm run shortlistprep-ai" for real AI answers).\n- Restate the question simply.\n- Give one clear fact and an example.';
       pipe('answer-start', { id: n, question, source });
       setTimeout(() => pipe('answer-delta', { id: n, delta: text.split('\n')[0] }), 350);
       setTimeout(() => pipe('answer-done', { id: n, text }), 800);

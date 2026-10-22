@@ -1,5 +1,5 @@
 'use strict';
-// Topics and resume per customer (dashboard: Topics and resume). Live Class receives them with the licence check
+// Topics and resume per customer (dashboard: Topics and resume). ShortlistPrep.AI receives them with the licence check
 // (/api/app/config) and the AI uses them to decide the area of the questions and answers.
 
 const { ApiError, text, integer } = require('./http');

@@ -272,7 +272,7 @@
   }
 
   function classList(list, limit) {
-    if (!list.length) return empty('No classes yet', 'Each Live Class session is saved here when you press End.');
+    if (!list.length) return empty('No classes yet', 'Each ShortlistPrep.AI session is saved here when you press End.');
     return h('div', {}, list.slice(0, limit || list.length).map(function (c) {
       var d = new Date(c.started_at);
       var body = h('div', { class: 'ac-class-body' });
@@ -445,7 +445,7 @@
     return h('div', { class: 'ac-panel' }, card('My tools', body, h('a', { class: 'ac-link', href: 'download.html' }, 'Download page')));
   }
 
-  var TABS = [['overview', 'Overview'], ['tools', 'My tools'], ['licences', 'Licences & machines'], ['classes', 'Live Class history'], ['interview', 'Interview prep'], ['topics', 'Topics & resume'], ['orders', 'Orders'], ['security', 'Security']];
+  var TABS = [['overview', 'Overview'], ['tools', 'My tools'], ['licences', 'Licences & machines'], ['classes', 'ShortlistPrep.AI history'], ['interview', 'Interview prep'], ['topics', 'Topics & resume'], ['orders', 'Orders'], ['security', 'Security']];
   var panels = {};
   function show(id) {
     if (!panels[id]) id = 'overview';
@@ -499,7 +499,7 @@
               h('a', { class: 'btn btn-primary', href: 'career.html' }, 'Open the career toolkit')))))),
       tools: toolsPanel(),
       licences: h('div', { class: 'ac-panel' }, card('Licences and machines', me.licences.length ? me.licences.map(licenceBlock) : empty('No licence yet', 'Contact us to get started.'))),
-      classes: h('div', { class: 'ac-panel' }, card('Live Class history', classList(me.conversations))),
+      classes: h('div', { class: 'ac-panel' }, card('ShortlistPrep.AI history', classList(me.conversations))),
       interview: h('div', { class: 'ac-panel' }, interviewPanel()),
       topics: h('div', { class: 'ac-panel' }, card('Topics and resume', h('div', {},
         h('p', { class: 'ac-muted', style: 'margin-bottom:14px' }, 'The AI uses your topics and resume to decide the area of its answers and to fit examples to your experience.'), topicsBody(p, false)))),

@@ -16,8 +16,8 @@ This kit has four parts. Do them in order; each has a checklist you can tick.
 ### A1. Before you start
 - [ ] **Download a backup to your PC.** In the VM's SSH window:
   ```bash
-  sudo -u classcue /opt/classcue/backup.sh
-  sudo cp /opt/classcue/backups/classcue-*.tgz ~ && sudo chown $USER ~/classcue-*.tgz
+  sudo -u shortlistprep /opt/shortlistprep/backup.sh
+  sudo cp /opt/shortlistprep/backups/shortlistprep-*.tgz ~ && sudo chown $USER ~/shortlistprep-*.tgz
   ```
   Then **Download file** (top right of the SSH window). Keep it until the pilot is over.
 - [ ] Make sure the PR branch is what you want to ship (`feature/screen-capture-and-ask-tools`), and run the tests on your PC:
@@ -31,28 +31,28 @@ This kit has four parts. Do them in order; each has a checklist you can tick.
   ```bash
   npm run server:package
   ```
-  This builds the website and creates `dist\classcue-server.tgz` (server + website).
-- [ ] In the VM's SSH window, delete the old package first (otherwise the upload is renamed `classcue-server(1).tgz`):
+  This builds the website and creates `dist\shortlistprep-server.tgz` (server + website).
+- [ ] In the VM's SSH window, delete the old package first (otherwise the upload is renamed `shortlistprep-server(1).tgz`):
   ```bash
-  rm -f ~/classcue-server*.tgz
+  rm -f ~/shortlistprep-server*.tgz
   ```
-- [ ] Upload `dist\classcue-server.tgz` with **Upload file**.
+- [ ] Upload `dist\shortlistprep-server.tgz` with **Upload file**.
 
 ### A3. Install
 - [ ] In the SSH window (use the same three addresses as last time: API, admin, website):
   ```bash
   rm -rf ~/admin ~/deploy ~/site
-  tar -xzf classcue-server.tgz
+  tar -xzf shortlistprep-server.tgz
   sudo bash deploy/setup.sh api.34-61-176-96.sslip.io <your admin address> shortlistprep.com
   ```
   The database, signing key and AI keys are kept. New tables (job searches, activity, tokens, saved plans) are created on start.
 - [ ] Check the server is running and healthy:
   ```bash
-  sudo systemctl status classcue-admin --no-pager
+  sudo systemctl status shortlistprep-admin --no-pager
   curl -s https://api.34-61-176-96.sslip.io/api/health
   ```
   The second command must print `{"ok":true}`.
-- [ ] If something is wrong, read the log: `sudo journalctl -u classcue-admin -n 100 --no-pager`
+- [ ] If something is wrong, read the log: `sudo journalctl -u shortlistprep-admin -n 100 --no-pager`
 
 ### A4. Settings in the admin dashboard (before anyone signs in)
 - [ ] **AI keys:** a working default key. For the pilot, a **paid** key (Gemini Tier 1 or Claude) is strongly recommended; the free keys run out after a few dozen AI actions a day for everyone.
@@ -119,7 +119,7 @@ A mix gives the most useful feedback:
 - [ ] **Candidates page:** who signed in, who uploaded a resume, where people stop (the progress dots show the step).
 - [ ] **AI tokens page:** tokens used today, anyone running out, requests waiting.
 - [ ] **Server memory** (in the SSH window): `free -h`. If "used" is near the total and swap keeps growing, move the VM to e2-small.
-- [ ] **Errors:** `sudo journalctl -u classcue-admin -n 50 --no-pager | grep -i error`
+- [ ] **Errors:** `sudo journalctl -u shortlistprep-admin -n 50 --no-pager | grep -i error`
 - [ ] Message anyone who signed in but stopped, and ask why (that is the most valuable feedback).
 
 ### C5. At the end of the pilot

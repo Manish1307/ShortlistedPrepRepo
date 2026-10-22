@@ -539,3 +539,15 @@ html:not([data-auth="member"]) [data-member] { display: none !important; }
 .hp-feat { list-style: none; margin: 12px 0 0; padding: 0; text-align: left; font-size: 14.5px; color: var(--body); }
 .hp-feat li { padding: 4px 0 4px 22px; position: relative; }
 .hp-feat li::before { content: "✓"; position: absolute; left: 0; color: #0a8a5c; font-weight: 700; }
+.hero-byline { margin: 18px 0 0; font-size: 14.5px; color: var(--body); }
+.hero-byline a { font-weight: 700; }
+.gap-more { text-align: center; margin: 10px 0 20px; }
+.gap-more a { color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.home-founder { padding: 46px 0 20px; }
+.founder { display: grid; grid-template-columns: 260px 1fr; gap: 34px; align-items: center; max-width: 920px; margin: 0 auto; background: #fff; border: 1px solid var(--bd); border-radius: 28px; padding: 26px; box-shadow: 0 30px 70px -50px rgba(80, 40, 160, .5); }
+.founder img { width: 100%; height: auto; aspect-ratio: 4 / 5; object-fit: cover; object-position: 50% 24%; border-radius: 20px; }
+.founder h2 { font-size: clamp(24px, 3vw, 34px); margin: 10px 0 12px; }
+.founder p { margin: 0 0 12px; line-height: 1.6; }
+.founder-sign { display: flex; flex-direction: column; margin-top: 16px !important; }
+.founder-sign span { color: var(--body); font-size: 14px; }
+@media (max-width: 760px) { .founder { grid-template-columns: 1fr; padding: 20px; } .founder img { max-width: 240px; margin: 0 auto; } }

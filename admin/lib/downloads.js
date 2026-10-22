@@ -12,6 +12,12 @@ const TOOLS = [
   { id: 'mock-interview', name: 'Mock Interview', platform: 'Windows 10 and 11',
     description: 'Practise with an AI interviewer. Questions are made from your resume, and every answer gets feedback.' },
 ];
+// The current public release on GitHub. The dashboard (or DOWNLOAD_URL_*) can override it for a newer one.
+const RELEASE = 'https://github.com/Manish1307/ShortlistedPrepRepo/releases/download/v1.1.1/';
+const DEFAULTS = {
+  'shortlistprep-ai': { version: '1.1.1', url: RELEASE + 'ShortlistPrep-AI-Setup-1.1.1.exe', sizeMb: 130 },
+  'mock-interview': { version: '1.1.1', url: RELEASE + 'ShortlistPrep-Interview-Setup-1.1.1.exe', sizeMb: 247 },
+};
 const toolOf = id => TOOLS.find(t => t.id === id);
 // a link can also come from the environment, e.g. DOWNLOAD_URL_SHORTLISTPREP_AI / DOWNLOAD_URL_MOCK_INTERVIEW
 const envUrl = id => process.env['DOWNLOAD_URL_' + id.toUpperCase().replace(/-/g, '_')] || '';
@@ -24,7 +30,8 @@ function addRoutes(ctx) {
     const row = one('SELECT * FROM download_files WHERE tool = ?', id);
     if (row && row.url) return { version: row.version, url: row.url, sizeMb: row.size_mb };
     const url = envUrl(id);
-    return url ? { version: '', url, sizeMb: 0 } : null;
+    if (url) return { version: '', url, sizeMb: 0 };
+    return DEFAULTS[id] || null;
   };
 
   // what the Download page shows (never the link itself)

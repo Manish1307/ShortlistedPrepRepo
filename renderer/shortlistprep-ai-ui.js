@@ -38,6 +38,7 @@
   }
 
   const DASHBOARD_URL = 'https://shortlistprep.com/account.html';   // My account on the ShortlistPrep website
+  const SIGNUP_URL = 'https://shortlistprep.com/signup.html';
   const SOURCES = { mic: 'Mic', system: 'System', both: 'Mic + System' };
   const PROVIDERS = { groq: 'Groq', gemini: 'Gemini', claude: 'Claude', demo: 'Demo', proxy: 'Groq' };   // proxy: Groq through the licence server
 
@@ -202,7 +203,7 @@
   const isLicensed = () => state.licence.state === 'active';
   const LICENCE_TEXT = {
     checking: 'Checking your ShortlistPrep licence…',
-    none: 'ShortlistPrep.AI needs a ShortlistPrep licence. Enter your licence key to activate this computer.',
+    none: 'Log in to ShortlistPrep.AI with your licence key.',
     expired: 'Your licence has expired. Renew it, or enter a new licence key.',
     revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
     removed: 'This computer was removed from the licence. Enter the key again to activate it.',
@@ -225,12 +226,47 @@
       $('gateMsg').textContent = l2.message || LICENCE_TEXT[l2.state] || 'ShortlistPrep.AI needs an active licence.';
       $('gateKey').parentElement.hidden = l2.state === 'checking';
       $('gateActivate').hidden = l2.state === 'check-needed';
+      $('gateHint').hidden = l2.state === 'checking' || l2.state === 'check-needed';
+      $('gateLinks').hidden = l2.state === 'checking' || l2.state === 'check-needed';
       if (state.listening) stopListening();
     }
     $('licenceRow').textContent = l2.dev ? (live ? 'Licence: not checked (development)' : 'Licence: demo')
       : l2.state === 'active' ? `Licence: ${l2.plan}${l2.kind === 'trial' ? ' trial' : ''}${l2.daysLeft !== null && l2.daysLeft !== undefined ? ` · ${l2.daysLeft} days left` : ' · lifetime'}`
         : 'Licence: ' + (l2.state === 'checking' ? 'checking…' : l2.state.replace('-', ' '));
     $('licenceRow').parentElement.title = l2.maskedKey ? 'Key ' + l2.maskedKey : '';
+    applyIdentity(l2);
+  }
+
+  // ---- who is logged in, and log out --------------------------------------------------------------
+  function initialsOf(s) { return String(s || '?').replace(/@.*$/, '').replace(/[._-]+/g, ' ').trim().split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase() || '?'; }
+  function applyIdentity(l2) {
+    const signedIn = l2.state === 'active' && !l2.dev && !!(l2.email || l2.name || l2.maskedKey);
+    const shown = l2.name || l2.email || (l2.maskedKey ? 'Licence ' + l2.maskedKey : '');
+    $('identityRow').hidden = !signedIn;
+    $('btnLogout').hidden = !signedIn;
+    $('identityHr').hidden = !signedIn;
+    $('btnUser').hidden = !signedIn;
+    if (!signedIn) return;
+    $('userAvatar').textContent = initialsOf(l2.name || l2.email);
+    $('userName').textContent = shown;
+    $('userEmail').textContent = l2.email && l2.name ? l2.email : (l2.plan ? cap(l2.plan) + (l2.kind === 'trial' ? ' trial' : ' plan') : '');
+    $('btnUser').textContent = initialsOf(l2.name || l2.email);
+    $('btnUser').title = shown + (l2.email && l2.name ? ' · ' + l2.email : '');
+  }
+  function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  let logoutArmed = null;
+  async function logout() {
+    if (!logoutArmed) {   // click twice: the first click only asks
+      $('logoutLabel').textContent = 'Click again to log out';
+      logoutArmed = setTimeout(() => { logoutArmed = null; $('logoutLabel').textContent = 'Log out'; }, 4000);
+      return;
+    }
+    clearTimeout(logoutArmed); logoutArmed = null; $('logoutLabel').textContent = 'Log out';
+    closeMenus();
+    if (state.listening) stopListening();
+    const res = await api.logoutLicence();
+    if (res && res.licence) applyLicence(res.licence);
+    toast(res && res.freed === false ? 'Logged out. This computer will stay on your licence until you remove it in My account.' : 'Logged out');
   }
   async function activate() {
     const key = $('gateKey').value.trim();
@@ -299,7 +335,7 @@
   function applyEngine(e) {
     state.engine = e || state.engine;
     if (state.engine.state === 'setup-needed' || state.engine.state === 'error') notice('error', state.engine.message);
-    else if (state.info && !state.info.hasKey && isLicensed()) notice('warn', `No ${PROVIDERS[state.info.provider] || state.info.provider} key for answers. Ask your administrator to give your licence one (admin dashboard, AI keys), or add it in the teacher assistant's Settings (npm start).`);
+    else if (state.info && !state.info.hasKey && isLicensed()) notice('warn', `No ${PROVIDERS[state.info.provider] || state.info.provider} key for answers. Ask your administrator to give your licence one (admin dashboard, AI keys).`);
     else if (state.notice && state.notice.kind === 'warn' && state.info && state.info.hasKey) notice();
     renderPhrases();
   }
@@ -519,6 +555,10 @@
     applyView();
     toast(state.autoAnswer ? 'Auto Answer on: questions are answered as soon as they are heard' : 'Auto Answer off: press Answer (Ctrl+Enter) when a question is finished');
   });
+  $('btnLogout').addEventListener('click', logout);
+  $('btnUser').addEventListener('click', e => { e.stopPropagation(); toggleMenu('settings'); });
+  $('gateAccount').addEventListener('click', () => window.open(DASHBOARD_URL, '_blank', 'noopener'));
+  $('gateSignup').addEventListener('click', () => window.open(SIGNUP_URL, '_blank', 'noopener'));
   $('btnDashboard').addEventListener('click', () => { closeMenus(); window.open(DASHBOARD_URL, '_blank', 'noopener'); });
   $('btnEdit').addEventListener('click', () => {
     closeMenus();

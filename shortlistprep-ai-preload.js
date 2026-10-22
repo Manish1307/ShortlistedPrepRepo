@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('shortlistAiAPI', {
   saveConversation: conversation => ipcRenderer.invoke('lc:save-conversation', conversation),
   activateLicence: key => ipcRenderer.invoke('lc:licence-activate', String(key || '')),
   checkLicence: () => ipcRenderer.invoke('lc:licence-check'),
+  logoutLicence: () => ipcRenderer.invoke('lc:licence-logout'),
   onLicence: callback => subscribe('licence', callback),
   onInfo: callback => subscribe('info', callback),
   onEngine: callback => subscribe('engine', callback),

@@ -45,7 +45,7 @@ const CONFIG_REFRESH_MS = 30 * 60 * 1000;
 
 // started as "electron shortlistprep-ai-main.js": use the same name, settings and keys as the teacher assistant
 app.setName('ShortlistPrep');
-app.setPath('userData', path.join(app.getPath('appData'), 'ShortlistPrep'));
+app.setPath('userData', process.env.SP_USER_DATA || path.join(app.getPath('appData'), 'ShortlistPrep'));   // SP_USER_DATA: a separate folder for tests
 
 // Installed: the speech engine sits next to the app (resources/whisper), because programs cannot run from inside app.asar.
 const WHISPER_DIR = process.env.SP_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
@@ -273,6 +273,15 @@ ipcMain.handle('lc:licence-activate', async (event, key) => {
   const res = await licence.activate(String(key || ''));
   if (res.ok) await syncLicence();
   return { ok: res.ok, message: res.message || '', licence: licenceStatus() };
+});
+// Log out: this computer leaves the licence, listening stops and the AI access is dropped, so the login screen shows again
+ipcMain.handle('lc:licence-logout', async event => {
+  if (!fromWin(event) || !licence || licenceSkipped()) return null;
+  const res = await licence.signOut();
+  if (pipeline) pipeline.pause();
+  serverKeys = {}; proxyGrant = null; serverProfile = null; applyKeys();
+  send('licence', licenceStatus());
+  return { ok: true, freed: res.freed, licence: licenceStatus() };
 });
 ipcMain.handle('lc:licence-check', async event => {
   if (!fromWin(event)) return null;

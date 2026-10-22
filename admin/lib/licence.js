@@ -99,9 +99,11 @@ function checkLicence(db, signer, { key, deviceId, deviceName = '', appVersion =
       .run(licence.id, device, String(deviceName).slice(0, 100), String(appVersion).slice(0, 30), t, t);
   }
 
+  // who the licence belongs to: the app shows it, and the signature keeps it from being edited on the computer
+  const owner = db.prepare('SELECT name, email FROM customers WHERE id = ?').get(licence.customer_id) || {};
   const answer = signer.sign({
     key: licence.key, deviceId: device, plan: licence.plan, kind: licence.kind,
-    expiresAt: licence.expires_at, issuedAt: t,
+    expiresAt: licence.expires_at, issuedAt: t, name: owner.name || '', email: owner.email || '',
   });
   return { ok: true, plan: licence.plan, kind: licence.kind, expiresAt: licence.expires_at, ...answer };
 }

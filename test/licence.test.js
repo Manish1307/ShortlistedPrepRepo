@@ -159,3 +159,33 @@ test('the public key built into the app matches the local signing key', () => {
   const pub = crypto.createPublicKey(crypto.createPrivateKey(fs.readFileSync(keyFile))).export({ type: 'spki', format: 'pem' });
   assert.equal(fs.readFileSync(path.join(__dirname, '..', 'src', 'licence', 'public-key.pem'), 'utf8'), pub);
 });
+
+test('the licence carries who it belongs to, signed, and logging out forgets it here and frees the place', async () => {
+  const srv = await server();
+  try {
+    srv.app.db.prepare("INSERT INTO customers (email, name, created_at) VALUES ('neha@example.com', 'Neha Sharma', datetime('now'))").run();
+    const key = paidKey(srv, { email: 'neha@example.com', maxDevices: 1 });
+    const c = client(srv, { deviceId: 'pc-login' });
+    const res = await c.activate(key);
+    assert.equal(res.status.name, 'Neha Sharma');
+    assert.equal(res.status.email, 'neha@example.com');
+    assert.equal(c.status().email, 'neha@example.com');
+
+    const out = await c.signOut();
+    assert.equal(out.freed, true);
+    assert.equal(c.status().state, 'none');
+    assert.equal(srv.app.db.prepare('SELECT COUNT(*) AS n FROM devices').get().n, 0);   // the place on the licence is free again
+    assert.equal((await client(srv, { deviceId: 'pc-other' }).activate(key)).ok, true);   // a one-computer licence moves to another PC
+  } finally { await srv.close(); }
+});
+
+test('logging out works offline too: the licence is forgotten here, the place is freed later in My account', async () => {
+  const srv = await server();
+  const c = client(srv, { deviceId: 'pc-offline-out' });
+  await c.activate(paidKey(srv));
+  await srv.close();
+  const out = await c.signOut();
+  assert.equal(out.ok, true);
+  assert.equal(out.freed, false);
+  assert.equal(c.status().state, 'none');
+});

@@ -86,6 +86,7 @@ class LicenceClient {
     const info = {
       key: p.key, maskedKey: p.key.replace(/^(CC-....)-....-(....)$/, '$1-••••-$2'), plan: p.plan, kind: p.kind,
       expiresAt: p.expiresAt, checkedAt: p.issuedAt, deviceName: this.deviceName,
+      name: typeof p.name === 'string' ? p.name : '', email: typeof p.email === 'string' ? p.email : '',
       daysLeft: p.expiresAt ? Math.max(0, Math.ceil((Date.parse(p.expiresAt) - t) / DAY)) : null,
       lastError: this.lastError,
     };
@@ -192,6 +193,22 @@ class LicenceClient {
       this.lastError = err.message;
     }
     return { status: this.status(), ai: {}, proxy: null, profile: undefined };   // undefined: unknown (offline), keep what was there
+  }
+
+  /**
+   * Log out: free this computer's place on the licence when the server can be reached, and in any case forget the
+   * licence here, so the next person has to enter their own key. Offline, the place stays used until it is removed
+   * in My account; "freed" says which one happened.
+   */
+  async signOut() {
+    const p = this._verified(this._read());
+    let freed = !p;
+    if (p) {
+      try { await this._post('/api/licence/deactivate', { key: p.key, deviceId: this.deviceId }); freed = true; } catch (_) { /* offline */ }
+    }
+    this._clear();
+    this.lastError = '';
+    return { ok: true, freed, status: this.status() };
   }
 
   /** Free this computer's place on the licence (moving to a new PC), then forget the licence here. */

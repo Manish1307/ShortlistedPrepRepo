@@ -25,6 +25,13 @@
     .caret { width: 11px !important; height: 11px !important; opacity: .7; }
     .timer { font-variant-numeric: tabular-nums; font-weight: 750; font-size: 14px; padding: 0 8px; min-width: 56px; text-align: center; color: var(--ink); }
     .handle { cursor: move; -webkit-app-region: drag; }
+    .userchip { width: 32px; height: 32px; padding: 0; border-radius: 50%; justify-content: center; font-size: 12px; font-weight: 800; color: #fff; background: var(--accent); border: 0; }
+    .identity { align-items: center; gap: 10px; padding: 9px; }
+    .identity .avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff; background: var(--accent); }
+    .identity .who { min-width: 0; display: grid; line-height: 1.25; }
+    .identity .who b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .identity .who small { font-size: 12px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .srow.danger .lbl, .srow.danger .lbl .i { color: var(--end); }
     .toolbar .tbtn .i { width: 17px; height: 17px; }
 
     .srcmenu { left: 0; top: 52px; min-width: 220px; }
@@ -80,6 +87,7 @@
     .gate .row { display: flex; gap: 8px; flex-wrap: wrap; }
     .gate input { flex: 1; min-width: 180px; font: 13px ui-monospace, Consolas, monospace; letter-spacing: .06em; text-transform: uppercase; }
     .gate .err { font-size: 12px; }
+    .gate .hint { font-size: 12px; font-weight: 500; opacity: .85; }
     .empty { color: var(--muted); padding: 18px 0; font-size: 14px; line-height: 1.6; }
     .editwrap { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
     .editwrap textarea { width: 100%; min-height: 56px; resize: vertical; border-color: var(--accent); }
@@ -145,6 +153,7 @@
       <button class="tbtn handle" id="btnMove" title="Drag to move" aria-label="Drag to move"><i data-icon="move"></i></button>
       <button class="tbtn" id="btnCollapse" title="Collapse / expand" aria-label="Collapse or expand"><i data-icon="collapse"></i></button>
       <span class="timer" id="timer" title="Time since the class started">00:00</span>
+      <button class="tbtn userchip" id="btnUser" title="Account" aria-label="Account" aria-haspopup="menu" hidden></button>
       <button class="tbtn" id="btnMenu" title="Settings" aria-haspopup="menu" aria-label="Settings"><i data-icon="dots"></i></button>
       <button class="end" id="btnEnd" title="End the class session">End</button>
       <button class="quit" id="btnQuit" title="Quit: close ShortlistPrep.AI (Ctrl+Q)" aria-label="Quit"><i data-icon="x"></i></button>
@@ -161,6 +170,14 @@
 
     <!-- settings menu -->
     <div class="popover settings" id="settings" role="menu" hidden>
+      <div class="srow identity" id="identityRow" hidden>
+        <span class="avatar" id="userAvatar" aria-hidden="true"></span>
+        <div class="who"><b id="userName"></b><small id="userEmail"></small></div>
+      </div>
+      <div class="srow link danger" id="btnLogout" hidden title="Log out of this computer">
+        <div class="lbl"><i data-icon="logout"></i><span id="logoutLabel">Log out</span></div>
+      </div>
+      <hr id="identityHr" hidden />
       <div class="srow">
         <div class="lbl"><i data-icon="user"></i><span id="account"></span></div>
       </div>
@@ -208,10 +225,15 @@
       <div class="notice" id="notice" hidden></div>
       <div class="gate" id="gate" hidden>
         <p id="gateMsg"></p>
+        <p class="hint" id="gateHint">Your key is in My account on shortlistprep.com. A free account comes with a free key.</p>
         <div class="row">
           <input id="gateKey" placeholder="CC-XXXX-XXXX-XXXX" maxlength="17" autocomplete="off" spellcheck="false" aria-label="Licence key" />
-          <button class="sbtn primary" id="gateActivate">Activate</button>
+          <button class="sbtn primary" id="gateActivate">Log in</button>
           <button class="sbtn" id="gateCheck">Check again</button>
+        </div>
+        <div class="row" id="gateLinks">
+          <button class="sbtn" id="gateAccount">My account (find my key)</button>
+          <button class="sbtn" id="gateSignup">Create free account</button>
         </div>
         <span class="err" id="gateErr"></span>
       </div>

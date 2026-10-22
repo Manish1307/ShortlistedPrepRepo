@@ -74,7 +74,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 940, height: 680, minWidth: 560, minHeight: 120,
     title: 'ShortlistPrep.AI',
-    icon: path.join(__dirname, 'build', 'icon.png'),
+    icon: path.join(__dirname, 'build', 'ai', 'icon.png'),
     frame: false,
     transparent: true,
     alwaysOnTop: true,

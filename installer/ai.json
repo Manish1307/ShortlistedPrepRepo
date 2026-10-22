@@ -11,7 +11,7 @@
   },
   "files": [
     "package.json",
-    "build/icon.png",
+    "build/ai/icon.png",
     "shortlistprep-ai-main.js",
     "shortlistprep-ai-preload.js",
     "shortlistprep-ai-window.html",
@@ -52,7 +52,7 @@
         ]
       }
     ],
-    "icon": "build/icon.ico",
+    "icon": "build/ai/icon.ico",
     "artifactName": "ShortlistPrep-AI-Setup-${version}.${ext}"
   },
   "nsis": {

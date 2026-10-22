@@ -58,7 +58,8 @@ Open a terminal in that folder before running any command below.
   Needs the speech engine first (npm run setup:whisper). Each installer
   carries its own speech model: ShortlistPrep.AI the small base.en model,
   Mock Interview the small.en model. Configs: installer\ai.json and
-  installer\interview.json (the icon is build\icon.ico).
+  installer\interview.json. Icons: build\ai\icon.ico and
+  build\interview\icon.ico (build\icon.* stays the ShortlistPrep brand logo).
 
 
 ---------------------------------------------------------------------

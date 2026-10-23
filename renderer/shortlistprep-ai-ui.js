@@ -258,19 +258,23 @@
     if (who) node.textContent = initialsOf(who); else node.replaceChildren(B.icon('user'));
   }
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
-  let logoutArmed = null;
+  let loggingOut = false;
   async function logout() {
-    if (!logoutArmed) {   // click twice: the first click only asks
-      $('logoutLabel').textContent = 'Click again to log out';
-      logoutArmed = setTimeout(() => { logoutArmed = null; $('logoutLabel').textContent = 'Log out'; }, 4000);
-      return;
-    }
-    clearTimeout(logoutArmed); logoutArmed = null; $('logoutLabel').textContent = 'Log out';
+    if (loggingOut) return;
+    loggingOut = true;
+    $('logoutLabel').textContent = 'Logging out…';
     closeMenus();
-    if (state.listening) stopListening();
-    const res = await api.logoutLicence();
-    if (res && res.licence) applyLicence(res.licence);
-    toast(res && res.freed === false ? 'Logged out. This computer will stay on your licence until you remove it in My account.' : 'Logged out');
+    try {
+      if (state.listening) await stopListening();
+      const res = await api.logoutLicence();
+      applyLicence((res && res.licence) || { state: 'none' });
+      toast(res && res.freed === false ? 'Logged out. This computer will stay on your licence until you remove it in My account.' : 'Logged out');
+    } catch (err) {
+      toast('Could not log out: ' + (err && err.message ? err.message : err));
+    } finally {
+      loggingOut = false;
+      $('logoutLabel').textContent = 'Log out';
+    }
   }
   async function activate() {
     const key = $('gateKey').value.trim();

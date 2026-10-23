@@ -183,6 +183,18 @@ ipcMain.handle('iv:licence-activate', async (event, key) => {
   return { ok: res.ok, message: res.message || '', licence: licenceStatus() };
 });
 // Log out: this computer leaves the licence and the AI access is dropped, so the login screen shows again
+/** The other ShortlistPrep app (they share the licence file) logged in or out: follow it at once, not 30 minutes later. */
+async function onLicenceFileChanged() {
+  if (licenceSkipped() || !licence) return;
+  if (!licensed()) {
+    serverKeys = {}; proxyGrant = null;
+    try { applyKeys(); } catch (_) { /* not built yet */ }
+    if (pipeline) pipeline.pause();
+    send('licence', licenceStatus());
+  } else {
+    await syncLicence();
+  }
+}
 ipcMain.handle('iv:licence-logout', async event => {
   if (!fromWin(event) || !licence || licenceSkipped()) return null;
   const res = await licence.signOut();
@@ -386,6 +398,7 @@ app.whenReady().then(() => {
     callback(!!(win && wc === win.webContents && permission === 'media'));
   });
   setupLicence();
+  if (licence) licence.onFileChange(() => { onLicenceFileChanged(); });
   buildAI();
   prep = new InterviewPrepClient({ serverUrl: licenceSettings.SERVER_URL, getToken: proxyToken });
   createWindow();

@@ -110,22 +110,30 @@
     $('userName').textContent = who || ('Licence ' + lic.maskedKey);
     $('userEmail').textContent = lic.name && lic.email ? lic.email : (lic.plan ? lic.plan.charAt(0).toUpperCase() + lic.plan.slice(1) + (lic.kind === 'trial' ? ' trial' : ' plan') : '');
   }
-  let logoutArmed = null;
+  let loggingOut = false;
   async function logout() {
+    if (loggingOut) return;
+    loggingOut = true;
     const b = $('btnLogout');
-    if (!logoutArmed) {   // click twice: the first click only asks
-      b.textContent = 'Click again to log out';
-      logoutArmed = setTimeout(() => { logoutArmed = null; b.textContent = 'Log out'; }, 4000);
-      return;
+    b.disabled = true; b.textContent = 'Logging out…';
+    try {
+      await leaveToSetup();
+      const res = await api.logoutLicence();
+      info = await api.info();
+      applyLicence((res && res.licence) || { state: 'none' });
+      banner(res && res.freed === false ? 'Logged out. This computer stays on your licence until you remove it in My account.' : 'Logged out.', 'info');
+    } catch (err) {
+      banner('Could not log out: ' + (err && err.message ? err.message : err));
+    } finally {
+      loggingOut = false; b.disabled = false; b.textContent = 'Log out';
     }
-    clearTimeout(logoutArmed); logoutArmed = null; b.textContent = 'Log out';
+  }
+  /** Stop everything that is running and go back to the start screen (logged out here, or by the other app). */
+  async function leaveToSetup() {
     await stopMic(false); stopTimer(); hush();
-    const res = await api.logoutLicence();
+    runId++; busy = false; current = null;
     resumesLoaded = false;
-    info = await api.info();
     show('viewSetup');
-    if (res && res.licence) applyLicence(res.licence);
-    banner(res && res.freed === false ? 'Logged out. This computer stays on your licence until you remove it in My account.' : 'Logged out.', 'info');
   }
 
   async function activateLicence() {
@@ -829,7 +837,15 @@
     segmented($('levels'), Object.fromEntries(Object.entries(info.levels).map(([k, v]) => [k, v.split(' / ')[0].replace(' of experience', '')])), 'level');
     paintChips();
     applyLicence();
-    api.onLicence(async l => { info = await api.info(); applyLicence(l); });
+    api.onLicence(async l => {
+      const wasLicensed = isLicensed();
+      info = await api.info();
+      if (wasLicensed && !isLicensed() && !loggingOut) {   // the other ShortlistPrep app logged out: stop here too
+        await leaveToSetup();
+        banner('You were logged out (from the other ShortlistPrep app). Log in with your licence key to continue.', 'info');
+      }
+      applyLicence(info.licence || l);
+    });
     $('gateActivate').addEventListener('click', activateLicence);
     $('btnLogout').addEventListener('click', logout);
     $('gateAccount').addEventListener('click', () => window.open(ACCOUNT_URL, '_blank', 'noopener'));

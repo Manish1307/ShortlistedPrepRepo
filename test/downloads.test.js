@@ -71,7 +71,7 @@ test('the download list is public and never shows the link', async () => {
     const before = await s.call('GET', '/api/downloads');
     assert.equal(before.status, 200);
     assert.deepEqual(before.json.tools.map(t => t.id), ['shortlistprep-ai', 'mock-interview']);
-    assert.ok(before.json.tools.every(t => t.available === true && t.version === '1.1.3'));   // the GitHub release is built in
+    assert.ok(before.json.tools.every(t => t.available === true && t.version === '1.1.4'));   // the GitHub release is built in
     const a = await s.admin();
     const set = await a('POST', '/admin/api/downloads/shortlistprep-ai', { version: '1.0.0', url: 'https://github.com/o/r/releases/download/v1.0.0/ShortlistPrep-Setup-1.0.0.exe', sizeMb: 180 });
     assert.equal(set.status, 200);
@@ -99,7 +99,7 @@ test('starting a download needs an account, is counted, and returns the link', a
     assert.equal(ok.json.url, 'https://github.com/o/r/releases/download/v1.0.0/a.exe');
     await s.call('POST', '/api/downloads/shortlistprep-ai/start', {}, token);
 
-    assert.match((await s.call('POST', '/api/downloads/mock-interview/start', {}, token)).json.url, /ShortlistPrep-Interview-Setup-1.1.3.exe$/);   // the built-in release link
+    assert.match((await s.call('POST', '/api/downloads/mock-interview/start', {}, token)).json.url, /ShortlistPrep-Interview-Setup-1.1.4.exe$/);   // the built-in release link
     assert.equal((await s.call('POST', '/api/downloads/nope/start', {}, token)).status, 404);
 
     const stats = (await a('GET', '/admin/api/downloads')).json.tools.find(t => t.id === 'shortlistprep-ai');

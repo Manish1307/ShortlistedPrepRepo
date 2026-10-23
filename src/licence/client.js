@@ -55,6 +55,7 @@ class LicenceClient {
     this.fetch = o.fetchImpl || fetch;
     this.now = o.now || Date.now;
     this.lastError = '';
+    this.epoch = 0;   // bumped on every log out: an answer that was on its way back must not bring the licence back
   }
 
   // ---- what is saved on this computer --------------------------------------------------------------
@@ -62,6 +63,39 @@ class LicenceClient {
   _read() { try { return JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch (_) { return null; } }
   _write(data) { fs.mkdirSync(this.dir, { recursive: true }); fs.writeFileSync(this.file, JSON.stringify(data, null, 2)); }
   _clear() { try { fs.unlinkSync(this.file); } catch (_) { /* nothing saved */ } }
+
+  /** Who holds the licence right now: its key (and a rejection, if any). Changes when this or another app logs in or out. */
+  _signature() {
+    const saved = this._read();
+    const p = this._verified(saved);
+    return p ? p.key + '|' + ((saved.rejected && saved.rejected.code) || '') : '';
+  }
+
+  /**
+   * True while the licence p is still the one saved here and nobody logged out meanwhile (from this app, or from the
+   * other ShortlistPrep app that shares the file). Checked after every server call before anything is written.
+   */
+  _stillCurrent(p, epoch) {
+    if (epoch !== this.epoch) return false;
+    const now = this._verified(this._read());
+    return !!now && now.key === p.key;
+  }
+
+  /**
+   * Calls back when the licence file changes hands: another ShortlistPrep app logged in, logged out, or this one did.
+   * Re-checks that refresh the same licence do not count. Returns a function that stops watching.
+   */
+  onFileChange(callback, intervalMs = 1500) {
+    let last = this._signature();
+    const listener = () => {
+      const now = this._signature();
+      if (now === last) return;
+      last = now;
+      try { callback(this.status()); } catch (_) { /* the listener must never stop the watch */ }
+    };
+    fs.watchFile(this.file, { interval: intervalMs, persistent: false }, listener);
+    return () => fs.unwatchFile(this.file, listener);
+  }
 
   /** The signed payload, if the signature is genuine and it was issued for this computer; otherwise null. */
   _verified(saved) {
@@ -154,8 +188,10 @@ class LicenceClient {
     const saved = this._read();
     const p = this._verified(saved);
     if (!p) return this.status();
+    const epoch = this.epoch;
     try {
       const data = await this._post('/api/licence/validate', { key: p.key, deviceId: this.deviceId, deviceName: this.deviceName, appVersion: this.appVersion });
+      if (!this._stillCurrent(p, epoch)) return this.status();   // logged out while the server was answering
       if (data.ok) this._accept(data);
       else if (REJECTED[data.code]) this._write({ ...saved, rejected: { code: data.code, message: data.message || '', at: new Date(this.now()).toISOString() } });
     } catch (err) {
@@ -174,9 +210,11 @@ class LicenceClient {
     const saved = this._read();
     const p = this._verified(saved);
     if (!p) return { status: this.status(), ai: {}, proxy: null, profile: null };
+    const epoch = this.epoch;
     try {
       // proxy: ask for an AI proxy access token instead of the keys; a server without the proxy sends keys as before
       const data = await this._post('/api/app/config', { key: p.key, deviceId: this.deviceId, deviceName: this.deviceName, appVersion: this.appVersion, ...(proxy ? { proxy: true } : {}) });
+      if (!this._stillCurrent(p, epoch)) return { status: this.status(), ai: {}, proxy: null, profile: null };   // logged out meanwhile
       if (data.ok) {
         const accepted = this._accept(data);
         const grant = data.aiProxy;
@@ -201,6 +239,7 @@ class LicenceClient {
    * in My account; "freed" says which one happened.
    */
   async signOut() {
+    this.epoch++;   // any server answer already on its way back is now ignored
     const p = this._verified(this._read());
     let freed = !p;
     if (p) {
@@ -213,6 +252,7 @@ class LicenceClient {
 
   /** Free this computer's place on the licence (moving to a new PC), then forget the licence here. */
   async deactivate() {
+    this.epoch++;
     const p = this._verified(this._read());
     if (p) {
       try { await this._post('/api/licence/deactivate', { key: p.key, deviceId: this.deviceId }); } catch (err) {

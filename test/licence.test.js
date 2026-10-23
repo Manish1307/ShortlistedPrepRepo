@@ -189,3 +189,63 @@ test('logging out works offline too: the licence is forgotten here, the place is
   assert.equal(out.freed, false);
   assert.equal(c.status().state, 'none');
 });
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const slowFetch = ms => async (...args) => { await wait(ms); return fetch(...args); };
+
+test('logging out while a re-check is still on its way does not bring the licence back', async () => {
+  const srv = await server();
+  try {
+    const dir = tmp('cc-lic-app-');
+    const c = client(srv, { dir, deviceId: 'pc-race' });
+    await c.activate(paidKey(srv));
+    c.fetch = (url, ...rest) => (String(url).includes('app/config') ? slowFetch(300)(url, ...rest) : fetch(url, ...rest));   // only the sync is slow
+    const pending = c.appConfig({ proxy: true });   // the sync that runs every 30 minutes, answer not back yet
+    await wait(30);
+    await c.signOut();
+    await pending;
+    assert.equal(c.status().state, 'none', 'still logged out');
+    assert.equal(fs.existsSync(path.join(dir, 'licence.json')), false, 'the licence file did not come back');
+    const r = c.refresh();
+    assert.equal((await r).state, 'none');
+  } finally { await srv.close(); }
+});
+
+test('the other app logging out (it shares the licence file) stops this one from writing the licence back', async () => {
+  const srv = await server();
+  try {
+    const dir = tmp('cc-lic-app-');
+    const a = client(srv, { dir, deviceId: 'pc-shared' });
+    const b = client(srv, { dir, deviceId: 'pc-shared' });    // the other app: another client on the same folder
+    await a.activate(paidKey(srv));
+    a.fetch = (url, ...rest) => (String(url).includes("validate") ? slowFetch(300)(url, ...rest) : fetch(url, ...rest));
+    const pending = a.refresh();
+    await wait(30);
+    await b.signOut();
+    await pending;
+    assert.equal(a.status().state, 'none');
+    assert.equal(fs.existsSync(path.join(dir, 'licence.json')), false);
+  } finally { await srv.close(); }
+});
+
+test('apps are told when the other one logs in or out, but not about their own re-checks', async () => {
+  const srv = await server();
+  try {
+    const dir = tmp('cc-lic-app-');
+    const a = client(srv, { dir, deviceId: 'pc-watch' });
+    const b = client(srv, { dir, deviceId: 'pc-watch' });
+    const key = paidKey(srv, { maxDevices: 3 });
+    const seen = [];
+    const stop = a.onFileChange(s => seen.push(s.state), 40);
+    await b.activate(key);                 // the other app logs in
+    await wait(150);
+    assert.deepEqual(seen, ['active']);
+    await a.refresh();                     // a normal re-check rewrites the file but changes nobody's login
+    await wait(150);
+    assert.deepEqual(seen, ['active']);
+    await b.signOut();                     // the other app logs out
+    await wait(150);
+    assert.deepEqual(seen, ['active', 'none']);
+    stop();
+  } finally { await srv.close(); }
+});

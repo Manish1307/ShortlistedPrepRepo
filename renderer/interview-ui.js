@@ -17,6 +17,12 @@
   let introActive = false;   // practising "Tell me about yourself"
   function show(view) { ['viewSetup', 'viewSet', 'viewInterview', 'viewReport'].forEach(v => $(v).classList.toggle('hidden', v !== view)); if (view !== 'viewInterview') introActive = false; window.scrollTo(0, 0); }
   function banner(text, kind) { const b = $('banner'); b.textContent = text || ''; b.className = 'banner' + (kind === 'info' ? ' info' : '') + (text ? '' : ' hidden'); }
+  /** A button inside the banner that opens a website page. */
+  function addBannerLink(label, url) {
+    const b = el('button', 'btn', label); b.type = 'button'; b.style.marginLeft = '10px';
+    b.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+    $('banner').appendChild(b);
+  }
   function chip(id, kind, text) { const c = $(id); c.className = 'chip ' + kind; c.lastChild.textContent = text; }
   const scoreClass = s => (s >= 7 ? 'good' : s >= 5 ? 'mid' : 'bad');
   const fmtTime = sec => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
@@ -30,6 +36,7 @@
   let asked = [];          // every question asked in this app session (so "Practise again" gets new ones)
   let startedAt = null;
   let busy = false;
+  let runId = 0;           // bumped when the interview ends, so an answer still being reviewed is dropped
   let mode = 'generic';    // 'generic': a company, role and round | 'resume': questions made from the candidate's own resume
   let resumeSet = null;    // the personalised question set on screen
   const isLicensed = () => !!(info && info.licence && info.licence.state === 'active');
@@ -67,7 +74,7 @@
 
   const LICENCE_TEXT = {
     checking: 'Checking your ShortlistPrep licence…',
-    none: 'Mock Interview needs a ShortlistPrep licence. Enter your licence key to activate this computer.',
+    none: 'Log in to Mock Interview with your licence key.',
     expired: 'Your licence has expired. Renew it, or enter a new licence key.',
     revoked: 'This licence has been cancelled. Please contact support, or enter another licence key.',
     removed: 'This computer was removed from the licence. Enter the key again to activate it.',
@@ -82,10 +89,45 @@
       $('gateMsg').textContent = lic.message || LICENCE_TEXT[lic.state] || 'Mock Interview needs an active licence.';
       $('gateKey').parentElement.classList.toggle('hidden', lic.state === 'checking');
       $('gateActivate').classList.toggle('hidden', lic.state === 'check-needed');
+      $('gateHint').classList.toggle('hidden', lic.state === 'checking' || lic.state === 'check-needed');
+      $('gateLinks').classList.toggle('hidden', lic.state === 'checking' || lic.state === 'check-needed');
     }
+    applyIdentity(lic);
     paintChips();
     if (isLicensed() && mode !== 'generic') loadResumes();
   }
+  // ---- who is logged in, and log out ----------------------------------------------------------------
+  const ACCOUNT_URL = 'https://shortlistprep.com/account.html';
+  const SIGNUP_URL = 'https://shortlistprep.com/signup.html';
+  const CAREER_URL = 'https://shortlistprep.com/career.html';
+  const initialsOf = s => String(s || '').replace(/@.*$/, '').replace(/[._-]+/g, ' ').trim().split(/\s+/).map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase();
+  function applyIdentity(lic) {
+    const signedIn = lic.state === 'active' && !lic.dev && !!(lic.email || lic.name || lic.maskedKey);
+    $('userBox').hidden = !signedIn;
+    if (!signedIn) return;
+    const who = lic.name || lic.email;
+    if (who) $('userAvatar').textContent = initialsOf(who); else $('userAvatar').replaceChildren(B.icon('user'));
+    $('userName').textContent = who || ('Licence ' + lic.maskedKey);
+    $('userEmail').textContent = lic.name && lic.email ? lic.email : (lic.plan ? lic.plan.charAt(0).toUpperCase() + lic.plan.slice(1) + (lic.kind === 'trial' ? ' trial' : ' plan') : '');
+  }
+  let logoutArmed = null;
+  async function logout() {
+    const b = $('btnLogout');
+    if (!logoutArmed) {   // click twice: the first click only asks
+      b.textContent = 'Click again to log out';
+      logoutArmed = setTimeout(() => { logoutArmed = null; b.textContent = 'Log out'; }, 4000);
+      return;
+    }
+    clearTimeout(logoutArmed); logoutArmed = null; b.textContent = 'Log out';
+    await stopMic(false); stopTimer(); hush();
+    const res = await api.logoutLicence();
+    resumesLoaded = false;
+    info = await api.info();
+    show('viewSetup');
+    if (res && res.licence) applyLicence(res.licence);
+    banner(res && res.freed === false ? 'Logged out. This computer stays on your licence until you remove it in My account.' : 'Logged out.', 'info');
+  }
+
   async function activateLicence() {
     const key = $('gateKey').value.trim().toUpperCase();
     $('gateErr').textContent = '';
@@ -141,6 +183,7 @@
     if (!res.resumes.length) {
       sel.appendChild(el('option', '', 'No resume yet'));
       banner('You have no resume yet. Upload it in the Career toolkit on the website (step 1), then come back here.');
+      addBannerLink('Open the Career toolkit', CAREER_URL);
     } else res.resumes.forEach(r => { const o = el('option', '', r.label); o.value = r.key; sel.appendChild(o); });
     $('introResume').replaceChildren(...[...$('resume').options].map(o => o.cloneNode(true)));
     const prev = $('prevSets');
@@ -313,6 +356,7 @@
   async function submitAnswer() {
     if (!current || busy) return;
     busy = true;
+    const myRun = runId;
     await stopMic(true);
     stopTimer(); hush();
     const answer = $('answer').value.trim();
@@ -328,6 +372,7 @@
 
     const res = await api.evaluate({ ...setup, question: current.question, points: current.points || [], reference: current.reference || '', answer });
     pg.stop();
+    if (myRun !== runId) return;   // the interview was ended while this was being reviewed
     if (!res || !res.ok) {
       fb.textContent = '';
       const card = el('div', 'card');
@@ -409,10 +454,12 @@
     card.appendChild(row);
     fb.appendChild(card);
     fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    busy = false; paintChips();   // the feedback is shown: End interview and Next must work now
     next.focus();
   }
 
   async function finish() {
+    runId++; busy = false;
     await stopMic(false); stopTimer(); hush();
     if (current) { current = null; }
     const summary = await api.summary(items);
@@ -455,7 +502,18 @@
 
   // ---- voice answers ---------------------------------------------------------------------------------
 
-  let capture = null, listening = false, transcribing = false, lastPaint = 0;
+  let capture = null, listening = false, transcribing = false, speakingNow = false, queued = 0, lastPaint = 0;
+
+  /** What the person should do right now: keep talking, or pause while the speech is being turned into text. */
+  function paintMicStatus() {
+    if (!listening) return;
+    const h = $('micHint');
+    if (queued >= 2) { h.className = 'hint busy'; h.textContent = 'Still converting your speech to text. Please pause for a moment so no words are lost.'; }
+    else if (transcribing && !speakingNow) { h.className = 'hint busy'; h.textContent = 'Converting your speech to text…'; }
+    else if (speakingNow) { h.className = 'hint'; h.textContent = 'Listening…'; }
+    else { h.className = 'hint'; h.textContent = 'Speak your answer. The text appears in the box; you can edit it before submitting.'; }
+  }
+  function showPartial(text) { const p = $('livePartial'); p.hidden = !text; p.textContent = text || ''; }
 
   async function startMic() {
     if (listening || speech.state !== 'ready') return;
@@ -470,7 +528,7 @@
       api.setListening(true);
       $('btnMic').classList.add('on');
       B.setButton($('btnMic'), 'x', 'Stop recording');
-      $('micHint').textContent = 'Speak your answer. The text appears in the box; you can edit it before submitting.';
+      paintMicStatus();
     } catch (err) {
       banner('Could not use the microphone: ' + (err && err.message ? err.message : err));
     }
@@ -485,7 +543,8 @@
       $('btnMic').classList.remove('on');
       B.setButton($('btnMic'), 'mic', 'Answer by voice');
       $('meter').style.width = '0%';
-      $('micHint').textContent = '';
+      $('micHint').className = 'hint'; $('micHint').textContent = '';
+      speakingNow = false; showPartial('');
     }
     if (wait) {
       const until = Date.now() + 10000;
@@ -495,8 +554,10 @@
   }
 
   function onSpeechEvent(m) {
-    if (m.type === 'status') transcribing = !!m.transcribing;
+    if (m.type === 'status') { transcribing = !!m.transcribing; speakingNow = !!m.speaking; queued = m.queued || 0; paintMicStatus(); }
+    else if (m.type === 'partial') showPartial(m.text);
     else if (m.type === 'transcript' && current) {
+      showPartial('');
       const box = $('answer');
       box.value = (box.value.trim() ? box.value.replace(/\s+$/, '') + ' ' : '') + m.text;
       box.scrollTop = box.scrollHeight;
@@ -770,6 +831,9 @@
     applyLicence();
     api.onLicence(async l => { info = await api.info(); applyLicence(l); });
     $('gateActivate').addEventListener('click', activateLicence);
+    $('btnLogout').addEventListener('click', logout);
+    $('gateAccount').addEventListener('click', () => window.open(ACCOUNT_URL, '_blank', 'noopener'));
+    $('gateSignup').addEventListener('click', () => window.open(SIGNUP_URL, '_blank', 'noopener'));
     $('gateCheck').addEventListener('click', checkLicence);
     $('gateKey').addEventListener('keydown', e => { if (e.key === 'Enter') activateLicence(); });
     [...$('modes').children].forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
@@ -795,7 +859,7 @@
     $('btnStart').addEventListener('click', startInterview);
     $('btnSubmit').addEventListener('click', submitAnswer);
     $('btnSkip').addEventListener('click', skipQuestion);
-    $('btnEnd').addEventListener('click', () => { if (busy) return; if (introActive) { stopMic(false); stopTimer(); hush(); $('feedback').textContent = ''; current = null; show('viewSetup'); } else finish(); });
+    $('btnEnd').addEventListener('click', () => { runId++; busy = false; if (introActive) { stopMic(false); stopTimer(); hush(); $('feedback').textContent = ''; current = null; show('viewSetup'); } else finish(); });
     $('btnRepeat').addEventListener('click', () => { if (current) say(current.question); });
     $('btnMic').addEventListener('click', () => (listening ? stopMic(false) : startMic()));
     $('answer').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submitAnswer(); } });

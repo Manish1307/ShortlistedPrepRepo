@@ -45,7 +45,7 @@
   // ---- state ---------------------------------------------------------------------------------------
   const DEFAULTS = { zoom: 100, opacity: 100, font: 15 };
   const state = {
-    startedAt: Date.now(), ended: false, collapsed: false,
+    startedAt: Date.now(), listenMs: 0, listenSince: null, ended: false, collapsed: false,
     listening: false, starting: false, source: 'both', theme: 'light', zoom: DEFAULTS.zoom, opacity: DEFAULTS.opacity, font: DEFAULTS.font,
     autoAnswer: false, editing: false,
     engine: { state: 'starting', message: '' }, info: null, notice: null, reading: 0,
@@ -77,7 +77,7 @@
     }
     if (state.partial) box.appendChild(el('span', 'partial', state.partial));   // still being spoken
     else if (state.listening && state.speaking) box.appendChild(el('span', 'partial', 'speaking'));
-    else if (state.listening && state.transcribing) box.appendChild(el('span', 'partial', 'writing it down'));
+    else if (state.listening && state.transcribing) box.appendChild(el('span', 'partial busy', state.queued >= 2 ? 'still catching up, pause for a moment' : 'converting to text'));
     box.scrollLeft = box.scrollWidth;
   }
 
@@ -247,11 +247,15 @@
     $('identityHr').hidden = !signedIn;
     $('btnUser').hidden = !signedIn;
     if (!signedIn) return;
-    $('userAvatar').textContent = initialsOf(l2.name || l2.email);
+    setWho($('userAvatar'), l2.name || l2.email);
     $('userName').textContent = shown;
     $('userEmail').textContent = l2.email && l2.name ? l2.email : (l2.plan ? cap(l2.plan) + (l2.kind === 'trial' ? ' trial' : ' plan') : '');
-    $('btnUser').textContent = initialsOf(l2.name || l2.email);
+    setWho($('btnUser'), l2.name || l2.email);
     $('btnUser').title = shown + (l2.email && l2.name ? ' · ' + l2.email : '');
+  }
+  /** Initials when the name or email is known; otherwise a person icon (never a "?"). */
+  function setWho(node, who) {
+    if (who) node.textContent = initialsOf(who); else node.replaceChildren(B.icon('user'));
   }
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
   let logoutArmed = null;
@@ -303,6 +307,7 @@
         });
       }
       state.listening = true;
+      state.listenSince = Date.now();
       api.setListening(true);
       if (state.notice && state.notice.kind !== 'error') notice();
     } catch (err) {
@@ -314,6 +319,7 @@
   }
 
   async function stopListening() {
+    if (state.listenSince) { state.listenMs += Date.now() - state.listenSince; state.listenSince = null; }   // the timer counts listening time only
     state.listening = false;
     api.setListening(false);
     if (capture) { const c = capture; capture = null; await c.stop(); }
@@ -329,7 +335,8 @@
     for (const b of $('bars').children) b.style.height = (on ? 3 + Math.round(level * 13 * (0.55 + Math.random() * 0.45)) : 4) + 'px';
     if (live) level *= 0.7;
   }, 110);
-  setInterval(() => { if (!state.ended) $('timer').textContent = fmtElapsed(Math.floor((Date.now() - state.startedAt) / 1000)); }, 500);
+  const listenedSec = () => Math.floor((state.listenMs + (state.listenSince ? Date.now() - state.listenSince : 0)) / 1000);
+  setInterval(() => { if (!state.ended) $('timer').textContent = fmtElapsed(listenedSec()); }, 500);   // runs only while listening
 
   // ---- events from the speech / AI engine ------------------------------------------------------------
   function applyEngine(e) {
@@ -345,11 +352,11 @@
     const find = id => state.items.find(i => i.id === id);
     switch (m.type) {
       case 'speaking': state.speaking = m.on; renderPhrases(); break;
-      case 'status': state.transcribing = !!m.transcribing; renderPhrases(); break;
+      case 'status': state.transcribing = !!m.transcribing; state.queued = m.queued || 0; renderPhrases(); break;
       case 'partial': {   // the words so far of a phrase still being spoken (demo)
         state.partial = m.text;
         clearTimeout(partialTimer);
-        partialTimer = setTimeout(() => { state.partial = ''; renderPhrases(); }, 4000);
+        if (m.text) partialTimer = setTimeout(() => { state.partial = ''; renderPhrases(); }, 4000);
         renderPhrases();
         break;
       }
@@ -477,7 +484,7 @@
     if (state.ended) return;
     stopListening();
     state.ended = true;
-    $('endedTime').textContent = fmtElapsed(Math.floor((Date.now() - state.startedAt) / 1000));
+    $('endedTime').textContent = fmtElapsed(listenedSec());
     const done = state.items.filter(i => i.status === 'done').length;
     $('endedCount').textContent = `${done} question${done === 1 ? '' : 's'} answered`;
     $('strip').hidden = true;
@@ -506,7 +513,7 @@
   }
 
   function restart() {
-    Object.assign(state, { startedAt: Date.now(), ended: false, heard: [], log: [], uid: newUid(), partial: '', items: [], index: -1, editing: false, collapsed: false, notice: null });
+    Object.assign(state, { startedAt: Date.now(), listenMs: 0, listenSince: null, ended: false, heard: [], log: [], uid: newUid(), partial: '', items: [], index: -1, editing: false, collapsed: false, notice: null });
     $('endedSave').textContent = '';
     $('strip').hidden = false;
     $('card').hidden = false;

@@ -185,9 +185,9 @@ async function startEngine() {
     proxy: new ProxyAnswerer({ serverUrl: licenceSettings.SERVER_URL, getToken: proxyToken, model: s.groqModel, effort: s.effort, subject: s.subject }),
   });
   applyKeys();
-  pipeline = new Pipeline({ whisper: null, answerer, subject: s.subject, autoAnswer: s.autoAnswer, vad: LIVE_VAD, quietMs: LIVE_QUIET_MS });
+  pipeline = new Pipeline({ whisper: null, answerer, subject: s.subject, autoAnswer: s.autoAnswer, vad: LIVE_VAD, quietMs: LIVE_QUIET_MS, livePartials: true, mergeMaxMs: 9000 });
   pipeline.pause();   // listening starts when the teacher presses the mic button
-  for (const type of ['transcript', 'status', 'warning', 'error', 'screen',
+  for (const type of ['transcript', 'partial', 'status', 'warning', 'error', 'screen',
     'answer-start', 'answer-delta', 'answer-done', 'answer-skip', 'answer-cancelled', 'answer-error']) {
     pipeline.on(type, data => send('pipeline', { type, ...data }));
   }

@@ -20,6 +20,17 @@
     h2 { font-size: 19px; margin: 0 0 12px; font-weight: 750; }
     .lead { color: var(--muted); margin: 0 0 20px; }
     .hint { font-size: 12.5px; color: var(--muted); }
+    .userbox { display: flex; align-items: center; gap: 10px; margin-left: 14px; }
+    .userbox .avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff; background: #6C4CF1; }
+    .userbox .avatar .i { width: 17px; height: 17px; }
+    .userbox .who { display: grid; line-height: 1.25; min-width: 0; }
+    .userbox .who b { font-size: 13.5px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .userbox .who small { font-size: 12px; color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .userbox .btn { padding: 6px 12px; font-size: 13px; }
+    @media (max-width: 960px) { .userbox .who { display: none; } }
+    .hint.busy { color: #c2410c; font-weight: 700; }
+    .livepartial { margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--raise-2); color: var(--muted); font-style: italic; font-size: 13px; }
+    .livepartial::after { content: " …"; }
     .note { font-size: 12.5px; color: var(--muted); margin-top: 14px; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .banner { margin: 0 0 16px; padding: 11px 15px; border-radius: 12px; background: var(--err-bg); color: var(--err-ink); font-weight: 600; border: 1px solid rgba(255, 92, 120, .3); }
@@ -172,6 +183,11 @@
         <span id="aiChip" class="chip"><span class="dot"></span><span>AI</span></span>
         <span id="speechChip" class="chip"><span class="dot"></span><span>Speech</span></span>
       </div>
+      <div class="userbox" id="userBox" hidden>
+        <span class="avatar" id="userAvatar" aria-hidden="true"></span>
+        <div class="who"><b id="userName"></b><small id="userEmail"></small></div>
+        <button id="btnLogout" class="btn ghost" type="button">Log out</button>
+      </div>
     </div>
   </div>
 
@@ -186,10 +202,15 @@
           <p class="lead">Practise for a company, or get questions made only from your own resume. The AI interviewer asks the questions; you answer out loud or by typing, and get a score with feedback after each answer.</p>
           <div id="gate" class="gate hidden">
             <p id="gateMsg"></p>
+            <p class="hint" id="gateHint">Your key is in My account on shortlistprep.com. A free account comes with a free key.</p>
             <div class="row">
               <input id="gateKey" type="text" placeholder="CC-XXXX-XXXX-XXXX" maxlength="17" autocomplete="off" spellcheck="false" aria-label="Licence key" />
-              <button id="gateActivate" class="btn primary" type="button">Activate</button>
+              <button id="gateActivate" class="btn primary" type="button">Log in</button>
               <button id="gateCheck" class="btn" type="button">Check again</button>
+            </div>
+            <div class="row" id="gateLinks" style="margin-top:8px">
+              <button id="gateAccount" class="btn" type="button">My account (find my key)</button>
+              <button id="gateSignup" class="btn" type="button">Create free account</button>
             </div>
             <span id="gateErr" class="err"></span>
           </div>
@@ -327,6 +348,7 @@
             <span id="timer" class="timer">0:00</span>
           </div>
           <textarea id="answer" placeholder="Speak with Answer by voice, or type your answer here…"></textarea>
+          <div id="livePartial" class="livepartial" hidden></div>
           <div class="row" style="margin-top:12px">
             <button id="btnMic" class="btn mic"><i data-icon="mic"></i>Answer by voice</button>
             <div class="meter" aria-label="Microphone level"><i id="meter"></i></div>

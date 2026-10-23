@@ -8,7 +8,11 @@ const { toReadingText } = require('./format');
 const { pcm16ToWav } = require('./audio/wav');
 const { QuestionGate, cleanTranscript, isHallucination, extractQuestion, looksLikeQuestion, stripLeadIn, countQuestions, normalizeForCompare } = require('./ai/questions');
 
-const MAX_QUEUE = 4;          // utterances waiting for Whisper before we start dropping the oldest
+const SOFT_QUEUE = 2;         // more than this many phrases waiting: neighbours are joined into one request (fewer, longer ones catch up faster)
+const HARD_QUEUE = 24;        // only if joining cannot keep up: the oldest phrase is dropped, with a warning
+const MERGE_MAX_MS = 13000;   // a joined phrase stays within what the speech engine reads at once (about 15 s)
+const PARTIAL_MS = 1100;      // a live preview of the phrase being spoken is refreshed about this often
+const PARTIAL_MIN_MS = 900;   // ...once it has lasted this long
 const CONTEXT_LINES = 8;      // transcript lines sent to Claude along with the question
 const CONTEXT_WINDOW_MS = 120000;
 const MEMORY_ANSWERS = 4;                 // earlier questions and answers shown to the AI, for follow-up questions
@@ -32,9 +36,18 @@ class Pipeline extends EventEmitter {
     this.setTimer = o.setTimer || setTimeout;
     this.clearTimer = o.clearTimer || clearTimeout;
     this.autoAnswer = o.autoAnswer !== false;
+    this.livePartials = o.livePartials === true;   // the words so far of the phrase being spoken (opt-in: it asks the speech engine more often)
+    this.mergeMaxMs = o.mergeMaxMs || MERGE_MAX_MS;   // joined phrases stay inside what the speech engine reads at once (-ac 512: ~10 s, -ac 768: ~15 s)
+    this.partialGap = PARTIAL_MS;
+    this.partialAt = 0;
+    this.partialBusy = false;
+    this.speakingNow = false;
 
     this.lastLevel = null;
-    this.segmenter = new Segmenter(seg => this._onSegment(seg), lvl => { this.lastLevel = lvl; this.emit('level', lvl); }, o.vad);
+    this.segmenter = new Segmenter(seg => this._onSegment(seg), lvl => {
+      this.lastLevel = lvl; this.emit('level', lvl);
+      if (lvl.speaking !== this.speakingNow) { this.speakingNow = lvl.speaking; this.emit('speaking', { on: lvl.speaking }); this._status(); }
+    }, o.vad);
     this.gate = new QuestionGate({ quietMs: o.quietMs || 1000 });
     this.history = [];      // { at, text }
     this.queue = [];
@@ -50,7 +63,11 @@ class Pipeline extends EventEmitter {
   }
 
   /** Feed 16 kHz mono Int16 samples. */
-  feed(samples) { if (!this.paused) this.segmenter.push(samples); }
+  feed(samples) {
+    if (this.paused) return;
+    this.segmenter.push(samples);
+    if (this.livePartials) this._maybePartial();
+  }
 
   pause() { this.segmenter.flush(); this.paused = true; this._status(); }   // flush first: the phrase being spoken when Stop is pressed is still transcribed
   resume() { this.paused = false; this._status(); }
@@ -205,20 +222,62 @@ class Pipeline extends EventEmitter {
     this.emit('status', {
       listening: !this.paused,
       transcribing: this.busy || this.queue.length > 0,
+      speaking: this.speakingNow,
       answering: this.active.size > 0,
-      queued: this.queue.length,
+      queued: this.queue.length + (this.busy ? 1 : 0),   // phrases not yet turned into text, including the one being worked on
     });
   }
 
   _onSegment(seg) {
     if (this.paused) return;
     this.queue.push(seg);
-    while (this.queue.length > MAX_QUEUE) {
+    this._compact();
+    while (this.queue.length > HARD_QUEUE) {
       this.queue.shift();
       this.emit('warning', { code: 'behind', message: 'Transcription is falling behind; an earlier phrase was skipped.' });
     }
     this._status();
     this._drain();
+  }
+
+  /**
+   * Behind on speech: join neighbouring phrases into one request instead of dropping any. The speech engine reads a
+   * fixed window per request, so one joined request costs about the same as one short one, and nothing is lost.
+   */
+  _compact() {
+    while (this.queue.length > SOFT_QUEUE) {
+      let at = -1;
+      for (let i = 0; i + 1 < this.queue.length; i++) {
+        if (this.queue[i + 1].endMs - this.queue[i].startMs <= this.mergeMaxMs) { at = i; break; }
+      }
+      if (at < 0) return;
+      const a = this.queue[at], b = this.queue[at + 1];
+      const gapSamples = Math.round(Math.min(300, Math.max(0, b.startMs - a.endMs)) * 16);   // a little silence between the two
+      const pcm = new Int16Array(a.pcm.length + gapSamples + b.pcm.length);
+      pcm.set(a.pcm, 0); pcm.set(b.pcm, a.pcm.length + gapSamples);
+      this.queue.splice(at, 2, { pcm, startMs: a.startMs, endMs: b.endMs, voicedMs: (a.voicedMs || 0) + (b.voicedMs || 0), peakDb: Math.max(a.peakDb, b.peakDb) });
+    }
+  }
+
+  /** A live preview: the words so far of the phrase being spoken, asked only while the speech engine is otherwise idle. */
+  _maybePartial() {
+    const seg = this.segmenter;
+    if (this.partialBusy || this.busy || this.queue.length || !seg.isSpeaking() || seg.speechMs() < PARTIAL_MIN_MS) return;
+    const t = this.now();
+    if (t - this.partialAt < this.partialGap) return;
+    const pcm = seg.snapshot(this.mergeMaxMs - 1000);
+    if (!pcm) return;
+    this.partialBusy = true; this.partialAt = t;
+    const utterance = seg.utteranceId;
+    const started = Date.now();
+    this.whisper.transcribe(pcm16ToWav(pcm), { prompt: this._whisperPrompt(), timeoutMs: 6000 }).then(raw => {
+      const text = cleanTranscript(raw);
+      if (!this.paused && utterance === seg.utteranceId && seg.isSpeaking() && text && !isHallucination(text)) this.emit('partial', { text });
+    }).catch(() => { /* a preview is optional: the real transcript follows */ }).finally(() => {
+      this.partialBusy = false;
+      // slow computer: ask less often, so the previews never hold up the real transcript
+      this.partialGap = Math.min(6000, Math.max(PARTIAL_MS, (Date.now() - started) * 1.6));
+    });
   }
 
   async _drain() {
@@ -254,6 +313,7 @@ class Pipeline extends EventEmitter {
         this.history.push({ at, text });
         if (this.history.length > 60) this.history.shift();
         this.emit('segment', { ms: seg.endMs - seg.startMs, peakDb: Math.round(seg.peakDb), raw, outcome: 'heard' });
+        this.emit('partial', { text: '' });   // the preview is replaced by the real text
         this.emit('transcript', { text, at, durationMs: seg.endMs - seg.startMs });
         this.sinceLast.push(text);
         if (this.sinceLast.length > 30) this.sinceLast.shift();

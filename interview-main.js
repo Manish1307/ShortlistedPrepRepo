@@ -140,9 +140,9 @@ async function startSpeech() {
     speech = { state: 'error', message: 'Could not start the speech engine: ' + err.message + '. You can type your answers.' }; send('speech', speech); return;
   }
   // the pipeline only turns speech into text here: it never answers anything itself
-  pipeline = new Pipeline({ whisper, answerer: ai, autoAnswer: false });
+  pipeline = new Pipeline({ whisper, answerer: ai, autoAnswer: false, livePartials: true, vad: { hangMs: 650 } });
   pipeline.pause();
-  for (const type of ['transcript', 'status', 'warning', 'error']) pipeline.on(type, d => send('speech-event', { type, ...d }));
+  for (const type of ['transcript', 'partial', 'status', 'warning', 'error']) pipeline.on(type, d => send('speech-event', { type, ...d }));
   speech = { state: 'ready', message: '' }; send('speech', speech);
 }
 
@@ -181,6 +181,15 @@ ipcMain.handle('iv:licence-activate', async (event, key) => {
   const res = await licence.activate(String(key || ''));
   if (res.ok) await syncLicence();
   return { ok: res.ok, message: res.message || '', licence: licenceStatus() };
+});
+// Log out: this computer leaves the licence and the AI access is dropped, so the login screen shows again
+ipcMain.handle('iv:licence-logout', async event => {
+  if (!fromWin(event) || !licence || licenceSkipped()) return null;
+  const res = await licence.signOut();
+  if (pipeline) pipeline.pause();
+  serverKeys = {}; proxyGrant = null; applyKeys();
+  send('licence', licenceStatus());
+  return { ok: true, freed: res.freed, licence: licenceStatus() };
 });
 ipcMain.handle('iv:licence-check', async event => {
   if (!fromWin(event)) return null;

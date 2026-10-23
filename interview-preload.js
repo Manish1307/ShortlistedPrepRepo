@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('interviewAPI', {
   summary: items => ipcRenderer.invoke('iv:summary', items),
   activateLicence: key => ipcRenderer.invoke('iv:licence-activate', key),
   checkLicence: () => ipcRenderer.invoke('iv:licence-check'),
+  logoutLicence: () => ipcRenderer.invoke('iv:licence-logout'),
   onLicence: callback => subscribe('licence', callback),
   resumes: () => ipcRenderer.invoke('iv:resumes'),
   makeSet: p => ipcRenderer.invoke('iv:make-set', p),

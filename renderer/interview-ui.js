@@ -516,10 +516,12 @@
   function paintMicStatus() {
     if (!listening) return;
     const h = $('micHint');
-    if (queued >= 2) { h.className = 'hint busy'; h.textContent = 'Still converting your speech to text. Please pause for a moment so no words are lost.'; }
-    else if (transcribing && !speakingNow) { h.className = 'hint busy'; h.textContent = 'Converting your speech to text…'; }
+    // nothing is lost while it converts, so the speaker never has to wait: keep talking, the text catches up
+    $('voiceBar').hidden = !(transcribing || queued > 0);
+    if (queued >= 2) { h.className = 'hint busy'; h.textContent = 'Converting ' + queued + ' phrases… keep talking, nothing is lost.'; }
+    else if (transcribing) { h.className = 'hint busy'; h.textContent = speakingNow ? 'Listening, and converting what you just said…' : 'Converting what you just said…'; }
     else if (speakingNow) { h.className = 'hint'; h.textContent = 'Listening…'; }
-    else { h.className = 'hint'; h.textContent = 'Speak your answer. The text appears in the box; you can edit it before submitting.'; }
+    else { h.className = 'hint'; h.textContent = 'Speak your answer. The text appears as you speak; you can edit it before submitting.'; }
   }
   function showPartial(text) { const p = $('livePartial'); p.hidden = !text; p.textContent = text || ''; }
 
@@ -552,7 +554,7 @@
       B.setButton($('btnMic'), 'mic', 'Answer by voice');
       $('meter').style.width = '0%';
       $('micHint').className = 'hint'; $('micHint').textContent = '';
-      speakingNow = false; showPartial('');
+      speakingNow = false; transcribing = false; queued = 0; $('voiceBar').hidden = true; showPartial('');
     }
     if (wait) {
       const until = Date.now() + 10000;

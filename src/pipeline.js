@@ -38,6 +38,9 @@ class Pipeline extends EventEmitter {
     this.autoAnswer = o.autoAnswer !== false;
     this.livePartials = o.livePartials === true;   // the words so far of the phrase being spoken (opt-in: it asks the speech engine more often)
     this.mergeMaxMs = o.mergeMaxMs || MERGE_MAX_MS;   // joined phrases stay inside what the speech engine reads at once (-ac 512: ~10 s, -ac 768: ~15 s)
+    this.parallel = Math.max(1, o.parallel || 1);   // phrases converted at the same time (needs a speech engine that allows it)
+    this.inflight = 0;
+    this.pending = [];      // phrases being converted, oldest first
     this.partialGap = PARTIAL_MS;
     this.partialAt = 0;
     this.partialBusy = false;
@@ -224,7 +227,7 @@ class Pipeline extends EventEmitter {
       transcribing: this.busy || this.queue.length > 0,
       speaking: this.speakingNow,
       answering: this.active.size > 0,
-      queued: this.queue.length + (this.busy ? 1 : 0),   // phrases not yet turned into text, including the one being worked on
+      queued: this.queue.length + this.inflight,   // phrases not yet turned into text, including those being worked on
     });
   }
 
@@ -236,8 +239,18 @@ class Pipeline extends EventEmitter {
       this.queue.shift();
       this.emit('warning', { code: 'behind', message: 'Transcription is falling behind; an earlier phrase was skipped.' });
     }
+    this._startMore();   // a new phrase starts converting at once if an engine is free, even while earlier ones are still running
     this._status();
     this._drain();
+  }
+
+  /** Start converting queued phrases, up to `parallel` at a time. */
+  _startMore() {
+    while (this.queue.length && this.pending.length < this.parallel) {
+      const seg = this.queue.shift();
+      this.inflight++;
+      this.pending.push({ seg, done: this._convert(seg) });
+    }
   }
 
   /**
@@ -262,7 +275,8 @@ class Pipeline extends EventEmitter {
   /** A live preview: the words so far of the phrase being spoken, asked only while the speech engine is otherwise idle. */
   _maybePartial() {
     const seg = this.segmenter;
-    if (this.partialBusy || this.busy || this.queue.length || !seg.isSpeaking() || seg.speechMs() < PARTIAL_MIN_MS) return;
+    if (this.partialBusy || !seg.isSpeaking() || seg.speechMs() < PARTIAL_MIN_MS) return;
+    if (this.parallel < 2 && (this.busy || this.queue.length)) return;   // one engine: real phrases come first
     const t = this.now();
     if (t - this.partialAt < this.partialGap) return;
     const pcm = seg.snapshot(this.mergeMaxMs - 1000);
@@ -270,7 +284,7 @@ class Pipeline extends EventEmitter {
     this.partialBusy = true; this.partialAt = t;
     const utterance = seg.utteranceId;
     const started = Date.now();
-    this.whisper.transcribe(pcm16ToWav(pcm), { prompt: this._whisperPrompt(), timeoutMs: 6000 }).then(raw => {
+    this.whisper.transcribe(pcm16ToWav(pcm), { prompt: this._whisperPrompt(), timeoutMs: 6000, onlyIfIdle: true }).then(raw => {
       const text = cleanTranscript(raw);
       if (!this.paused && utterance === seg.utteranceId && seg.isSpeaking() && text && !isHallucination(text)) this.emit('partial', { text });
     }).catch(() => { /* a preview is optional: the real transcript follows */ }).finally(() => {
@@ -284,21 +298,22 @@ class Pipeline extends EventEmitter {
     if (this.busy) return;
     this.busy = true;
     try {
-      while (this.queue.length) {
-        const seg = this.queue.shift();
+      while (this.queue.length || this.pending.length) {
+        this._startMore();
         this._status();
-        let raw = '';
-        try {
-          raw = await this.whisper.transcribe(pcm16ToWav(seg.pcm), { prompt: this._whisperPrompt(), timeoutMs: STT_TIMEOUT_MS });
-        } catch (err) {
+        const { seg, done } = this.pending[0];   // the oldest first: text is used in the order it was spoken
+        const result = await done;
+        this.pending.shift();   // only now: until then it still occupies one of the parallel places
+        this.inflight--;
+        this._status();
+        if (result.error) {
+          const err = result.error;
           this.emit('segment', { ms: seg.endMs - seg.startMs, peakDb: Math.round(seg.peakDb), raw: '', outcome: 'engine-failed: ' + err.message });
           this.emit('error', { code: 'stt', message: `Speech recognition failed: ${err.message}` });
-          // a stuck request would block every phrase behind it: start the speech engine again
-          if (typeof this.whisper.restart === 'function') {
-            try { await this.whisper.restart(); this.emit('warning', { code: 'stt-restart', message: 'The speech engine was restarted.' }); } catch (e) { /* the next phrase will report it */ }
-          }
+          await this._restartEngine(result.startedAt);
           continue;
         }
+        const raw = result.raw;
         const text = cleanTranscript(raw);
         if (!text || isHallucination(text)) {
           this.emit('segment', { ms: seg.endMs - seg.startMs, peakDb: Math.round(seg.peakDb), raw, outcome: !text ? 'nothing-recognised' : 'ignored-as-noise' });
@@ -321,8 +336,33 @@ class Pipeline extends EventEmitter {
       }
     } finally {
       this.busy = false;
+      this.inflight = 0;
+      this.pending = [];
       this._status();
     }
+  }
+
+  /** One phrase to text. Never throws: a failure comes back as { error }, so the phrases behind it keep their order. */
+  async _convert(seg) {
+    const startedAt = Date.now();
+    try {
+      return { raw: await this.whisper.transcribe(pcm16ToWav(seg.pcm), { prompt: this._whisperPrompt(), timeoutMs: STT_TIMEOUT_MS }), startedAt };
+    } catch (err) {
+      return { error: err, startedAt };
+    }
+  }
+
+  /** A stuck request would block every phrase behind it: start the speech engine again (once, even if several failed together). */
+  async _restartEngine(failedRequestStartedAt = 0) {
+    if (typeof this.whisper.restart !== 'function') return;
+    if (failedRequestStartedAt && failedRequestStartedAt <= (this.lastRestartAt || 0)) return;   // it failed before the restart that already fixed things
+    if (!this.restarting) {
+      this.restarting = this.whisper.restart()
+        .then(() => { this.lastRestartAt = Date.now(); this.emit('warning', { code: 'stt-restart', message: 'The speech engine was restarted.' }); })
+        .catch(() => { /* the next phrase will report it */ })
+        .finally(() => { this.restarting = null; });
+    }
+    await this.restarting;
   }
 
   /** Subject + a few recent words help Whisper spell the vocabulary correctly. */

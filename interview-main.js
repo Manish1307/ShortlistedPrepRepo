@@ -22,6 +22,7 @@ const licenceSettings = require('./src/licence/settings');
 const { InterviewPrepClient } = require('./src/interview/prep');
 const { Pipeline } = require('./src/pipeline');
 const { WhisperServer } = require('./src/stt/whisperServer');
+const { WhisperPool } = require('./src/stt/whisperPool');
 const coach = require('./src/interview/coach');
 
 // started as "electron interview-main.js": use the same name, settings and keys as ShortlistPrep.AI
@@ -33,6 +34,14 @@ app.setPath('userData', process.env.SP_USER_DATA || path.join(app.getPath('appDa
 // Installed: the speech engine sits next to the app (resources/whisper), because programs cannot run from inside app.asar.
 const WHISPER_DIR = process.env.SP_WHISPER_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'whisper') : path.join(__dirname, 'whisper'));
 const AI_TIMEOUT_MS = 60000;
+
+// Speaking an answer should feel live, like ShortlistPrep.AI: the small, fast model, one decoding pass, a phrase closes
+// after a short pause or at the next natural gap while the speaker carries on, and on a computer with enough cores two
+// speech engines convert phrases at the same time (the text still appears in the order it was spoken).
+const LIVE_MODEL = 'ggml-base.en-q5_1.bin';
+const LIVE_VAD = { hangMs: 600, softMaxMs: 5000, softGapMs: 120, maxUtteranceMs: 8000 };
+const LIVE_WHISPER_ARGS = ['-ac', '512', '-bo', '1', '-nf'];
+const LIVE_MERGE_MAX_MS = 9000;   // joined phrases stay inside the engine's ~10 s window
 
 let win = null;
 let ai = null;
@@ -128,19 +137,22 @@ async function syncLicence() {
 /** The offline speech engine, for spoken answers. Without it the candidate types instead. */
 async function startSpeech() {
   const s = config.load();
-  const modelPath = path.join(WHISPER_DIR, 'models', s.whisperModel);
-  const problem = WhisperServer.problem(path.join(WHISPER_DIR, 'bin'), modelPath);
+  const binDir = path.join(WHISPER_DIR, 'bin');
+  const liveModel = path.join(WHISPER_DIR, 'models', LIVE_MODEL);
+  const modelPath = WhisperServer.problem(binDir, liveModel) ? path.join(WHISPER_DIR, 'models', s.whisperModel) : liveModel;
+  const problem = WhisperServer.problem(binDir, modelPath);
   if (problem) { speech = { state: 'missing', message: 'Speech engine not installed (run "npm run setup:whisper"). You can type your answers.' }; send('speech', speech); return; }
   speech = { state: 'starting', message: 'Loading the speech engine…' }; send('speech', speech);
-  whisper = new WhisperServer({
-    binDir: path.join(WHISPER_DIR, 'bin'), modelPath,
-    threads: Math.max(2, Math.min(8, os.cpus().length - 2)), language: s.language, prompt: '',
-  });
+  const cores = os.cpus().length;
+  const workers = cores >= 6 ? 2 : 1;
+  const threads = Math.max(2, Math.min(8, Math.floor((cores - 2) / workers)));
+  const makeServer = () => new WhisperServer({ binDir, modelPath, threads, language: s.language, prompt: '', extraArgs: LIVE_WHISPER_ARGS });
+  whisper = workers > 1 ? new WhisperPool(Array.from({ length: workers }, makeServer)) : makeServer();
   try { await whisper.start(); } catch (err) {
     speech = { state: 'error', message: 'Could not start the speech engine: ' + err.message + '. You can type your answers.' }; send('speech', speech); return;
   }
   // the pipeline only turns speech into text here: it never answers anything itself
-  pipeline = new Pipeline({ whisper, answerer: ai, autoAnswer: false, livePartials: true, vad: { hangMs: 650 } });
+  pipeline = new Pipeline({ whisper, answerer: ai, autoAnswer: false, livePartials: true, vad: LIVE_VAD, mergeMaxMs: LIVE_MERGE_MAX_MS, parallel: workers });
   pipeline.pause();
   for (const type of ['transcript', 'partial', 'status', 'warning', 'error']) pipeline.on(type, d => send('speech-event', { type, ...d }));
   speech = { state: 'ready', message: '' }; send('speech', speech);

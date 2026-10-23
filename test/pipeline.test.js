@@ -423,3 +423,51 @@ test('live previews are off unless asked for', async () => {
   for (let i = 0; i < 6; i++) { p.feed(speech(0.5)); await sleep(20); }
   assert.equal(whisper.calls, 0);
 });
+
+test('parallel: two phrases are converted at the same time and the text still comes out in the order spoken', async () => {
+  let active = 0, peak = 0, n = 0;
+  const whisper = {
+    async transcribe() {
+      const me = ++n;
+      active++; peak = Math.max(peak, active);
+      await sleep(me === 1 ? 160 : 20);      // the first phrase is slow, the second is quick: it finishes first
+      active--;
+      return 'phrase ' + me;
+    },
+  };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, parallel: 2 });
+  const heard = [];
+  p.on('transcript', t => heard.push(t.text));
+  say(p, 1); say(p, 1);
+  await sleep(400);
+  assert.equal(peak, 2, 'both were converted at once');
+  assert.deepEqual(heard, ['phrase 1', 'phrase 2'], 'in the order they were spoken');
+});
+
+test('parallel: the status counts every phrase being converted', async () => {
+  const whisper = { async transcribe() { await sleep(120); return 'hello world'; } };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, parallel: 3 });
+  const queued = [];
+  p.on('status', s => queued.push(s.queued));
+  say(p, 1); say(p, 1); say(p, 1);
+  await sleep(500);
+  assert.ok(Math.max(...queued) >= 2, 'several phrases were reported as being converted');
+  assert.equal(queued[queued.length - 1], 0);
+});
+
+test('parallel: when the engine fails, the phrases behind it are not lost out of order and it restarts once', async () => {
+  let restarts = 0, calls = 0;
+  const whisper = {
+    async transcribe() { const me = ++calls; await sleep(30); if (me <= 2) throw new Error('stuck'); return 'ok ' + me; },
+    async restart() { restarts++; await sleep(20); },
+  };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, parallel: 2 });
+  const heard = [], errors = [];
+  p.on('transcript', t => heard.push(t.text));
+  p.on('error', e => errors.push(e.code));
+  say(p, 1); say(p, 1); say(p, 1);
+  await sleep(600);
+  assert.equal(restarts, 1, 'one restart for two failures at the same time');
+  assert.deepEqual(errors, ['stt', 'stt']);
+  assert.deepEqual(heard, ['ok 3'], 'the phrase after the failures still arrived');
+});

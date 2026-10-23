@@ -38,7 +38,7 @@
       "from": "whisper/models",
       "to": "whisper/models",
       "filter": [
-        "ggml-small.en-q5_1.bin"
+        "ggml-base.en-q5_1.bin"
       ]
     }
   ],

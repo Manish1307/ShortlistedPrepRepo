@@ -77,7 +77,7 @@
     }
     if (state.partial) box.appendChild(el('span', 'partial', state.partial));   // still being spoken
     else if (state.listening && state.speaking) box.appendChild(el('span', 'partial', 'speaking'));
-    else if (state.listening && state.transcribing) box.appendChild(el('span', 'partial busy', state.queued >= 2 ? 'still catching up, pause for a moment' : 'converting to text'));
+    else if (state.listening && state.transcribing) box.appendChild(el('span', 'partial busy', state.queued >= 2 ? 'converting ' + state.queued + ' phrases, keep talking' : 'converting to text'));
     box.scrollLeft = box.scrollWidth;
   }
 

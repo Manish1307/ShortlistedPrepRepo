@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ShortlistPrep LinkedIn slides</title>
+<style>
+  /* One 1080 x 1350 slide per ?s=1..6. Rendered at 2x by render.js. */
+  :root { --ink:#1b1436; --body:#4b4668; --muted:#6a6388; --line:#e6def7; --purple:#7d2ae8; --purple-d:#5b21b6; --teal:#00a3aa;
+          --grad:linear-gradient(120deg,#00c4cc 0%,#7d2ae8 72%); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { width: 1080px; height: 1350px; overflow: hidden; font-family: "Segoe UI Variable Display","Segoe UI",Arial,sans-serif; color: var(--ink);
+         background: radial-gradient(900px 560px at 8% -4%, rgba(125,42,232,.16), transparent 62%), radial-gradient(900px 560px at 100% 104%, rgba(0,196,204,.2), transparent 62%), linear-gradient(165deg,#f8f3ff 0%,#ffffff 46%,#eefcfd 100%); }
+  .slide { display: none; position: relative; width: 1080px; height: 1350px; padding: 64px 72px; }
+  .slide.on { display: flex; flex-direction: column; }
+  .top { display: flex; align-items: center; gap: 14px; }
+  .mark { width: 54px; height: 54px; border-radius: 16px; background: var(--grad); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 30px; box-shadow: 0 8px 22px rgba(125,42,232,.4); }
+  .brand { font-weight: 800; font-size: 32px; letter-spacing: -.02em; }
+  .step { margin-left: auto; font-weight: 800; font-size: 22px; color: var(--purple-d); background: #f0e6ff; padding: 8px 18px; border-radius: 999px; }
+  .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 24px; color: var(--muted); font-weight: 600; }
+  .foot b { color: var(--purple-d); font-size: 26px; }
+  .pill { display: inline-block; align-self: flex-start; padding: 10px 24px; border-radius: 999px; background: var(--grad); color: #fff; font-weight: 800; font-size: 24px; letter-spacing: .06em; text-transform: uppercase; }
+  h1 { font-size: 76px; line-height: 1.04; letter-spacing: -.035em; margin: 22px 0 18px; font-weight: 800; }
+  h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h2 { font-size: 66px; line-height: 1.06; letter-spacing: -.03em; margin: 26px 0 14px; font-weight: 800; }
+  p.lead { font-size: 31px; line-height: 1.42; color: var(--body); margin: 0; }
+  .card { background: #fff; border: 2px solid #ddd0f7; border-radius: 34px; box-shadow: 0 30px 70px -34px rgba(125,42,232,.5); }
+
+  /* cover: the fact check */
+  .check { padding: 24px 38px; margin-top: 30px; }
+  .check .hd { display: flex; justify-content: space-between; align-items: baseline; font-size: 30px; font-weight: 800; padding-bottom: 14px; }
+  .check .hd span { font-size: 22px; color: var(--muted); font-weight: 600; }
+  .line { display: grid; grid-template-columns: 70px 1fr; gap: 22px; align-items: center; padding: 16px 0; border-top: 2px dashed var(--line); }
+  .line i { width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 34px; }
+  .line b { display: block; font-size: 34px; } .line small { font-size: 26px; font-weight: 600; }
+  .ok i { background: #d9f5ea; color: #0a7a55; } .ok small { color: #0a7a55; }
+  .part i { background: #fff3cd; color: #8a5a00; } .part small { color: #8a5a00; }
+  .no i { background: #ffe5ea; color: #b4235e; } .no small { color: #b4235e; }
+  .banner { margin-top: 22px; padding: 18px 28px; border-radius: 24px; background: linear-gradient(135deg,#e6fafb,#efe3ff); font-size: 32px; font-weight: 800; text-align: center; }
+
+  /* feature slides */
+  .shot { margin-top: 36px; padding: 14px; overflow: hidden; }
+  .shot img { display: block; width: 100%; border-radius: 22px; }
+  .points { margin: 28px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+  .points li { font-size: 31px; line-height: 1.35; padding-left: 52px; position: relative; color: var(--body); font-weight: 600; }
+  .points li::before { content: "✓"; position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%; background: #d9f5ea; color: #0a7a55; font-weight: 800; font-size: 22px; display: grid; place-items: center; }
+  .points b { color: var(--ink); }
+
+  /* journey */
+  .jtitle { font-size: 60px; margin: 20px 0 4px; }
+  .jsub { font-size: 28px; color: var(--body); margin: 0 0 20px; }
+  .phase { margin: 14px 0 8px; font-size: 20px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; padding: 6px 16px; border-radius: 999px; align-self: flex-start; }
+  .p1 { background: #e4eefc; color: #1e4fa3; } .p2 { background: #f0e6ff; color: #5b21b6; } .p3 { background: #d9f5ea; color: #0a7a55; }
+  .row { display: grid; grid-template-columns: 62px 1fr; gap: 20px; align-items: center; background: #fff; border: 2px solid #e8def9; border-radius: 22px; padding: 11px 20px; margin-bottom: 9px; }
+  .row .n { width: 54px; height: 54px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 800; font-size: 26px; display: grid; place-items: center; }
+  .row b { display: block; font-size: 29px; line-height: 1.15; } .row span { font-size: 22.5px; color: var(--body); line-height: 1.3; display: block; margin-top: 2px; }
+  .row.new { border: 3px solid var(--purple); background: linear-gradient(135deg,#fbf8ff,#e9fbfc); box-shadow: 0 14px 34px -18px rgba(125,42,232,.6); }
+  .row.new b::after { content: "NEW"; margin-left: 12px; font-size: 17px; font-weight: 800; letter-spacing: .08em; color: #fff; background: var(--grad); padding: 3px 11px; border-radius: 999px; vertical-align: 3px; }
+</style>
+</head>
+<body>
+
+<!-- 1. cover -->
+<section class="slide" data-s="1">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div></div>
+  <span class="pill" style="margin-top:40px">New · Introduction coach</span>
+  <h1>“Tell me about yourself”: now <em>checked against your resume</em></h1>
+  <p class="lead">Practise the first question of every interview. We verify every claim, show what to change and give you personalised points to cover.</p>
+  <div class="card check">
+    <div class="hd">Checked against your resume<span>Example</span></div>
+    <div class="line ok"><i>✓</i><div><b>“I work at GreenSeed Labs”</b><small>In your resume</small></div></div>
+    <div class="line part"><i>!</i><div><b>“12 years of experience”</b><small>Your resume says 5 years</small></div></div>
+    <div class="line no"><i>✕</i><div><b>“I have a PhD in genetics”</b><small>Your resume shows an M.Sc.</small></div></div>
+  </div>
+  <div class="banner">Fix it before the interviewer finds it.</div>
+  <div class="foot"><span>AI interview preparation</span><b>shortlistprep.com</b></div>
+</section>
+
+<!-- 2. answer -->
+<section class="slide" data-s="2">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="step">1 of 4</div></div>
+  <h2>Answer it your way, out loud or typed</h2>
+  <p class="lead">A timer shows the 60 to 90 second target. Stuck? Peek at your personalised talking points. They stay hidden until you ask.</p>
+  <div class="card shot"><img src="../../website/assets/intro-2-answer.jpg" alt=""></div>
+  <ul class="points"><li><b>Pick your resume</b>, role and company</li><li><b>Voice or typing</b>, with a live timer</li></ul>
+  <div class="foot"><span>Tell me about yourself</span><b>shortlistprep.com</b></div>
+</section>
+
+<!-- 3. checked -->
+<section class="slide" data-s="3">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="step">2 of 4</div></div>
+  <h2>Every fact is checked against your resume</h2>
+  <p class="lead">A score out of 10 and five sub-scores. Each claim is marked in your resume, only partly, or not in your resume.</p>
+  <div class="card shot"><img src="../../website/assets/intro-3-checked.jpg" alt=""></div>
+  <ul class="points"><li>Catch an <b>exaggeration</b> before the interviewer does</li><li>Numbers your resume doesn’t show are <b>flagged</b></li></ul>
+  <div class="foot"><span>Tell me about yourself</span><b>shortlistprep.com</b></div>
+</section>
+
+<!-- 4. improve -->
+<section class="slide" data-s="4">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="step">3 of 4</div></div>
+  <h2>See exactly what to change</h2>
+  <p class="lead">What worked, what to cut, and the strong results your resume has that you left out.</p>
+  <div class="card shot"><img src="../../website/assets/intro-4-improve.jpg" alt=""></div>
+  <ul class="points"><li>A <b>more impressive version</b>, built only from your real facts</li><li>Nothing invented: <b>every point comes from your resume</b></li></ul>
+  <div class="foot"><span>Tell me about yourself</span><b>shortlistprep.com</b></div>
+</section>
+
+<!-- 5. points -->
+<section class="slide" data-s="5">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="step">4 of 4</div></div>
+  <h2>Walk in with your personal points</h2>
+  <p class="lead">Six to eight bullet points to cover, in speaking order, each tied to the line of your resume it comes from.</p>
+  <div class="card shot"><img src="../../website/assets/intro-5-points.jpg" alt=""></div>
+  <ul class="points"><li>Present, past, strengths, <b>why this role</b></li><li>Plus the <b>questions to expect next</b></li></ul>
+  <div class="foot"><span>Saved to your account</span><b>shortlistprep.com</b></div>
+</section>
+
+<!-- 6. complete journey -->
+<section class="slide" data-s="6" style="padding-top:52px;padding-bottom:44px">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div></div>
+  <h2 class="jtitle">Your complete journey, from resume to offer</h2>
+  <p class="jsub">One platform. Every step, guided by AI.</p>
+  <span class="phase p1">Get shortlisted</span>
+  <div class="row"><div class="n">1</div><div><b>Resume &amp; ATS check</b><span>Score, fixes and an ATS-ready rewrite. Role-based resumes for every kind of job.</span></div></div>
+  <div class="row"><div class="n">2</div><div><b>AI job search</b><span>Live jobs from company career sites, scored for fit with high, medium and low groups.</span></div></div>
+  <div class="row"><div class="n">3</div><div><b>Skill Gap Matrix &amp; Insight</b><span>See why you’re not getting the call, with a plan, practice questions and learning links.</span></div></div>
+  <div class="row"><div class="n">4</div><div><b>Apply with confidence</b><span>The right resume and a tailored cover letter for every job.</span></div></div>
+  <span class="phase p2">Get interview-ready</span>
+  <div class="row"><div class="n">5</div><div><b>Virtual interview coaching</b><span>Personalised and scenario questions made from your own resume, with answers to explore.</span></div></div>
+  <div class="row new"><div class="n">6</div><div><b>“Tell me about yourself”</b><span>Checked against your resume: what to fix, and your personal talking points.</span></div></div>
+  <span class="phase p3">Get hired</span>
+  <div class="row"><div class="n">7</div><div><b>Live interview support</b><span>Questions captured as they are asked, with talking points from your own resume.</span></div></div>
+  <div class="foot" style="margin-top:auto;padding-top:8px"><span>Start free</span><b>shortlistprep.com</b></div>
+</section>
+
+<script>
+  var s = new URLSearchParams(location.search).get('s') || '1';
+  var el = document.querySelector('.slide[data-s="' + s + '"]');
+  if (el) el.classList.add('on');
+  var z = Number(new URLSearchParams(location.search).get('z')) || 1;
+  document.documentElement.style.zoom = z;
+</script>
+</body>
+</html>

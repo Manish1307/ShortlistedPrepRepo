@@ -25,7 +25,7 @@ const MODEL_FILE = `ggml-${MODEL}.bin`;
 const MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${MODEL_FILE}`;
 
 async function download(url, dest, label) {
-  const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'teacher-notes-app-setup' } });
+  const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'shortlistprep-app-setup' } });
   if (!res.ok) throw new Error(`${label}: HTTP ${res.status} for ${url}`);
   const total = Number(res.headers.get('content-length')) || 0;
   const tmp = dest + '.part';
@@ -62,7 +62,7 @@ async function setupBinaries() {
     return;
   }
   console.log('Finding the latest whisper.cpp Windows build...');
-  const res = await fetch('https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=20', { headers: { 'User-Agent': 'teacher-notes-app-setup' } });
+  const res = await fetch('https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=20', { headers: { 'User-Agent': 'shortlistprep-app-setup' } });
   if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
   const releases = await res.json();
   let asset = null, tag = '';

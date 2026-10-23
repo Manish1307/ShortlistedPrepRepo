@@ -5,26 +5,73 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{title}} · {{name}}</title>
   <meta name="description" content="{{description}}">
+  <link rel="canonical" href="{{canonical}}">
+  <meta name="robots" content="{{robots}}">
+  <meta property="og:type" content="{{ogType}}">
+  <meta property="og:site_name" content="{{name}}">
+  <meta property="og:locale" content="en_IN">
+  <meta property="og:url" content="{{canonical}}">
   <meta property="og:title" content="{{title}} · {{name}}">
   <meta property="og:description" content="{{description}}">
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="assets/styles.css">
+  <meta property="og:image" content="{{siteUrl}}/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{name}}: from resume to offer letter, with AI">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{title}} · {{name}}">
+  <meta name="twitter:description" content="{{description}}">
+  <meta name="twitter:image" content="{{siteUrl}}/assets/og-image.png">
+  <meta name="theme-color" content="#7d2ae8">
+{{jsonLd}}
+  <meta name="api-url" content="{{apiUrl}}">
+  <link rel="icon" href="assets/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"></noscript>
+  <link rel="stylesheet" href="assets/styles.css?v=4">
+  <link rel="stylesheet" href="assets/home.css?v=16">
+  <script>
+    // signed in? (the token kept by account.js) — set before the page draws, so the menu never flashes "Sign in"
+    (function () {
+      for (var i = 0; i < 2; i++) {
+        try {
+          var s = JSON.parse((i ? localStorage : sessionStorage).getItem('sp_account') || 'null');
+          if (s && s.token && Date.parse(s.expiresAt) > Date.now()) { document.documentElement.setAttribute('data-auth', 'member'); return; }
+        } catch (e) { /* storage blocked */ }
+      }
+    })();
+  </script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
   {{demoBar}}
   <header class="nav">
     <div class="wrap nav-inner">
-      <a class="brand" href="index.html"><span class="logo" aria-hidden="true">S</span>{{name}}</a>
+      <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="" width="36" height="36">{{name}}</a>
       <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
       <nav id="menu" class="menu">
+        <a href="index.html" data-page="index">Home</a>
         <a href="features.html" data-page="features">Features</a>
         <a href="how-it-works.html" data-page="how-it-works">How it works</a>
-        <a href="reviews.html" data-page="reviews">Reviews</a>
         <a href="pricing.html" data-page="pricing">Pricing</a>
-        <a href="blog.html" data-page="blog">Blog</a>
-        <a href="login.html" data-page="login">Sign in</a>
-        <a class="btn btn-primary btn-sm" href="signup.html">Get early access</a>
+        <a href="download.html" data-page="download">Download</a>
+        <details class="dropdown">
+          <summary>Resources</summary>
+          <div class="dropdown-panel">
+            <a href="blog.html">Blog</a>
+            <!-- if:reviews --><a href="reviews.html">Reviews</a><!-- endif:reviews -->
+            <a href="faq.html">FAQ</a>
+            <a href="help.html">Help centre</a>
+            <a href="trust.html">Privacy and trust</a>
+          </div>
+        </details>
+        <a class="btn btn-sm" href="login.html" data-page="login" data-guest>Sign in</a>
+        <a class="btn btn-primary btn-sm" href="signup.html" data-guest>Get Started Free →</a>
+        <a class="btn btn-sm" href="career.html" data-page="career" data-member>Career toolkit</a>
+        <a class="btn btn-primary btn-sm" href="account.html" data-page="account" data-member>My account</a>
       </nav>
     </div>
   </header>
@@ -36,7 +83,7 @@
   <footer class="footer">
     <div class="wrap footer-grid">
       <div>
-        <a class="brand" href="index.html"><span class="logo" aria-hidden="true">S</span>{{name}}</a>
+        <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="" width="36" height="36">{{name}}</a>
         <p class="muted small">{{tagline}}.</p>
         <p class="social small"><a href="#" aria-label="X (Twitter), not connected yet">X</a> · <a href="#" aria-label="LinkedIn, not connected yet">LinkedIn</a> · <a href="#" aria-label="YouTube, not connected yet">YouTube</a></p>
       </div>
@@ -51,7 +98,7 @@
       <div>
         <h4>Learn</h4>
         <a href="blog.html">Blog</a>
-        <a href="reviews.html">Reviews</a>
+        <!-- if:reviews --><a href="reviews.html">Reviews</a><!-- endif:reviews -->
         <a href="faq.html">FAQ</a>
         <a href="help.html">Help centre</a>
         <a href="trust.html">Privacy and trust</a>
@@ -65,11 +112,29 @@
         <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>
       </div>
     </div>
+    <div class="wrap tok-foot" id="tok-foot" data-member hidden></div>
     <div class="wrap footer-bottom small">
       <span>© <span id="year">2026</span> {{company}}. All rights reserved.</span>
       <span>Other product and company names belong to their owners. {{name}} is not affiliated with or endorsed by them.</span>
     </div>
   </footer>
-  <script src="assets/site.js"></script>
+
+  <dialog id="demo-dialog" class="modal" aria-labelledby="demo-title">
+    <form class="stack opp-form" data-kind="demo" method="dialog">
+      <div class="modal-head"><h2 id="demo-title">Get a personal demo</h2><button type="button" class="modal-x" data-close-demo aria-label="Close">×</button></div>
+      <p class="muted small" style="margin:0">Tell us a little about you and we will email you to book a short walkthrough of {{name}}.</p>
+      <label>Your name<input type="text" name="name" required autocomplete="name" maxlength="100"></label>
+      <label>Email<input type="email" name="email" required autocomplete="email" maxlength="200"></label>
+      <label>Phone (optional)<input type="text" name="phone" autocomplete="tel" maxlength="40"></label>
+      <label>Company or college (optional)<input type="text" name="company" maxlength="150"></label>
+      <label>Role you are preparing for (optional)<input type="text" name="role" maxlength="100" placeholder="e.g. Software engineer"></label>
+      <label>Anything you want to see? (optional)<textarea name="message" maxlength="2000" style="min-height:80px"></textarea></label>
+      <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <label class="check"><input type="checkbox" name="terms" required> <span>I agree that {{name}} may contact me about my request. See the <a href="privacy.html">Privacy policy</a>.</span></label>
+      <button class="btn btn-primary" type="submit">Request my demo</button>
+      <p class="form-result" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+  <script src="assets/site.js?v=3"></script>
 </body>
 </html>

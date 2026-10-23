@@ -295,3 +295,72 @@ test('helpers: key format and licence status', () => {
   assert.equal(effectiveStatus({ status: 'active', expires_at: '2000-01-01T00:00:00Z' }), 'expired');
   assert.equal(effectiveStatus({ status: 'revoked', expires_at: null }), 'revoked');
 });
+
+test('website visits: counted per visitor without bots, shown in the admin analytics', async () => {
+  await withServer(async s => {
+    s.addAdmin('boss@example.com', 'owner');
+    const web = s.client();
+    const view = (visitor, path, extra = {}) => web.post('/api/track', { visitor, path, ...extra }, { csrf: false });
+    assert.equal((await view('visitor-aaaa-1111', '/index.html?x=1', { referrer: 'https://www.google.com/search?q=x', source: 'linkedin' })).status, 200);
+    await view('visitor-aaaa-1111', '/pricing.html');
+    await view('visitor-bbbb-2222', '/index.html');
+    assert.equal((await view('bad id!', '/')).status, 400);
+    // a search-engine bot is ignored
+    await fetch(s.base + '/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Googlebot/2.1' }, body: JSON.stringify({ visitor: 'visitor-cccc-3333', path: '/' }) });
+
+    const boss = s.client(); await boss.login('boss@example.com');
+    const a = (await boss.get('/admin/api/analytics?days=7')).json;
+    assert.equal(a.visitors, 2);
+    assert.equal(a.views, 3);
+    assert.equal(a.series.length, 7);
+    assert.equal(a.topPages.find(p => p.path === '/index.html').views, 2);   // the query string is dropped
+    assert.equal(a.referrers.find(r => r.name === 'google.com').visitors, 1);   // host only, no search words
+    assert.equal(a.sources[0].name, 'linkedin');
+    assert.equal((await boss.get('/admin/api/overview')).json.website.today, 2);
+    assert.equal((await s.client().get('/admin/api/analytics')).status, 401);   // signed-in admins only
+  });
+});
+
+test('opportunities: demo and interest requests are captured, de-duplicated, managed and turned into customers', async () => {
+  await withServer(async s => {
+    s.addAdmin('boss@example.com', 'owner'); s.addAdmin('help@example.com', 'support');
+    const web = s.client();
+    const ask = body => web.post('/api/opportunity', body, { csrf: false });
+    await web.post('/api/track', { visitor: 'visitor-aaaa-1111', path: '/features.html' }, { csrf: false });
+    assert.equal((await ask({ kind: 'interest', email: 'Sam@Uni.edu', visitor: 'visitor-aaaa-1111', page: '/index.html' })).status, 201);
+    assert.equal((await ask({ kind: 'demo', name: '', email: 'x@y.org' })).status, 400);   // a demo needs a name
+    assert.equal((await ask({ kind: 'demo', name: 'Sam', email: 'not-an-email' })).status, 400);
+    assert.equal((await ask({ kind: 'demo', name: 'Bot', email: 'bot@spam.com', website: 'http://spam' })).status, 201);   // honeypot: pretends to succeed, stores nothing
+    // the same person asking for a demo later is the same opportunity, upgraded
+    assert.equal((await ask({ kind: 'demo', name: 'Sam Lee', email: 'sam@uni.edu', company: 'City Uni', message: 'Can we see the resume tool?' })).status, 201);
+
+    const boss = s.client(); await boss.login('boss@example.com');
+    const list = (await boss.get('/admin/api/opportunities')).json;
+    assert.equal(list.opportunities.length, 1);
+    assert.equal(list.counts.new, 1);
+    const o = list.opportunities[0];
+    assert.equal(o.kind, 'demo'); assert.equal(o.name, 'Sam Lee'); assert.equal(o.company, 'City Uni'); assert.equal(o.email, 'sam@uni.edu');
+
+    const detail = (await boss.get(`/admin/api/opportunities/${o.id}`)).json;
+    assert.equal(detail.pages[0].path, '/features.html');   // what the visitor looked at before asking
+    assert.equal(detail.notes.length, 1);
+
+    const support = s.client(); await support.login('help@example.com');
+    const moved = await support.patch(`/admin/api/opportunities/${o.id}`, { status: 'contacted', owner: 'Manish', followUp: '2026-11-02', valueCents: 9900, note: 'Called, demo booked' });
+    assert.equal(moved.json.opportunity.status, 'contacted');
+    assert.equal((await support.patch(`/admin/api/opportunities/${o.id}`, { status: 'nonsense' })).status, 400);
+    assert.equal((await support.patch(`/admin/api/opportunities/${o.id}`, { followUp: 'tomorrow' })).status, 400);
+    assert.equal((await support.post(`/admin/api/opportunities/${o.id}/customer`)).status, 403);   // support cannot create customers
+
+    const made = await boss.post(`/admin/api/opportunities/${o.id}/customer`);
+    assert.equal(made.json.customer.email, 'sam@uni.edu');
+    assert.equal((await boss.get('/admin/api/customers?q=uni.edu')).json.customers.length, 1);
+    assert.equal((await boss.get('/admin/api/opportunities?status=contacted')).json.opportunities.length, 1);
+    assert.equal((await boss.get('/admin/api/overview')).json.website.newOpportunities, 0);
+
+    // once an opportunity is won or lost, a new request starts a fresh one
+    await boss.patch(`/admin/api/opportunities/${o.id}`, { status: 'won' });
+    await ask({ kind: 'interest', email: 'sam@uni.edu' });
+    assert.equal((await boss.get('/admin/api/opportunities')).json.opportunities.length, 2);
+  });
+});

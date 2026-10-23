@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- The share image (1200 × 630) shown when shortlistprep.com is shared on WhatsApp, LinkedIn, X or Facebook.
+     Make the PNG with:  msedge --headless --screenshot=website/assets/og-image.png --window-size=1200,630 marketing/og/og-image.html -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body { font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; color: #fff; background: radial-gradient(700px 500px at 90% 0%, #3a1d8a 0%, transparent 60%), radial-gradient(700px 500px at 0% 100%, #0e3a66 0%, transparent 60%), #120c2c; padding: 64px 70px; display: grid; grid-template-columns: 1.25fr 1fr; gap: 40px; align-items: center; }
+  .brand { display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 800; margin-bottom: 34px; }
+  .logo { width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(120deg, #00c4cc, #7d2ae8 70%); display: grid; place-items: center; font-size: 30px; }
+  h1 { font-size: 58px; line-height: 1.06; letter-spacing: -.03em; font-weight: 800; margin-bottom: 22px; }
+  h1 span { background: linear-gradient(90deg, #6ee7d8, #b794ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p { font-size: 24px; color: #cfc8ef; line-height: 1.45; }
+  .tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .tags span { border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .08); border-radius: 999px; padding: 8px 16px; font-size: 18px; font-weight: 700; }
+  .card { background: #fff; color: #0e1318; border-radius: 26px; padding: 26px; box-shadow: 0 40px 80px -30px rgba(0, 0, 0, .7); }
+  .card h3 { font-size: 20px; margin-bottom: 14px; }
+  .row { display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee9f8; border-radius: 14px; padding: 12px 14px; margin-top: 10px; font-size: 18px; font-weight: 700; }
+  .row em { font-style: normal; font-size: 15px; border-radius: 999px; padding: 4px 12px; }
+  .ok { background: #dcf5ea; color: #0a8a5c; } .pt { background: #fff1d6; color: #a86c00; } .no { background: #fde2e7; color: #b4235e; }
+  .score { margin-top: 16px; font-size: 18px; font-weight: 700; color: #4b5361; } .score b { color: #7d2ae8; font-size: 26px; }
+</style>
+</head>
+<body>
+  <div>
+    <div class="brand"><span class="logo">S</span>ShortlistPrep</div>
+    <h1>From resume to<br><span>offer letter</span>, with AI</h1>
+    <p>ATS resume check · AI job search with fit scores · Skill gap plan · Interview coaching</p>
+    <div class="tags"><span>Free to start</span><span>Built for India</span><span>Real company jobs</span></div>
+  </div>
+  <div class="card">
+    <h3>📊 Skill Gap Matrix</h3>
+    <div class="row">C# / .NET <em class="ok">✓ Match</em></div>
+    <div class="row">REST APIs <em class="ok">✓ Match</em></div>
+    <div class="row">Docker <em class="pt">◐ Partial</em></div>
+    <div class="row">Kubernetes <em class="no">✕ Missing</em></div>
+    <div class="score">Weighted skill score <b>68</b>/100 → <b>100</b> with the plan</div>
+  </div>
+</body>
+</html>

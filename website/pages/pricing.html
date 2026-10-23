@@ -1,30 +1,29 @@
-<!-- title: Pricing | description: Start free, then choose the plan that fits how you prepare. -->
+<!-- title: Pricing | description: Start free. Job hunt passes in INR for an ATS-ready resume, AI job search with fit scores, skill gap plans and interview preparation. Prices include GST. -->
 <section class="page-head">
   <div class="wrap narrow center">
     <span class="eyebrow">Pricing</span>
-    <h1>Simple pricing. Start free.</h1>
-    <p class="lead">Your first mock interview is free. Upgrade only when you want more.</p>
-    <div class="note info" style="margin-top:16px">{{sampleTag}} Prices on this page are sample data. Edit them in <code>website/data/sample.json</code> before launch.</div>
-    <label class="toggle"><span>Monthly</span><input id="billing" type="checkbox" role="switch"><span class="track" aria-hidden="true"></span><span>Yearly <span class="muted small">(save about 30%)</span></span></label>
+    <h1>Simple passes for your job hunt</h1>
+    <p class="lead">Start free. Buy a pass only for the weeks you are job hunting: no automatic renewal, no surprises.</p>
   </div>
 </section>
 
 <section style="padding-top:20px">
   <div class="wrap">
-    {{planCards}}
-
-    <h2 class="center" style="margin-top:64px">Compare plans</h2>
-    <div style="margin-top:22px">{{compareTable}}</div>
-    <p class="muted small center" style="margin-top:18px">Prices are before any local taxes. Early-access members keep their launch price.</p>
+    <p class="note pr-current" id="pr-current" hidden></p>
+    <div id="pr-plans" aria-live="polite"><div class="grid pr-grid pr-n3" aria-busy="true"><div class="card plan"><h3>Free</h3><div class="price">Free</div><p class="muted small">Try the ATS check and a role-based resume.</p></div><div class="card plan featured"><h3>Shortlist Pass</h3><div class="price">One-time pass</div><p class="muted small">No auto-renewal. Loading the latest price…</p></div></div></div>
+    <noscript><p class="center">Please turn on JavaScript to see our plans, or write to <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p></noscript>
+    <p class="muted small center" id="pr-gst" style="margin-top:18px"></p>
   </div>
 </section>
 
 <section class="soft">
   <div class="wrap narrow">
     <div class="head"><h2>Billing questions</h2></div>
-    <details class="faq"><summary>Is the first mock interview really free?</summary><p>Yes. No card is needed to start.</p></details>
-    <details class="faq"><summary>Can I get a refund?</summary><p>Yes, within 14 days of purchase. See the <a href="refund.html">Refund policy</a>.</p></details>
-    <details class="faq"><summary>Can I cancel any time?</summary><p>Yes. You keep access until the end of the period you paid for.</p></details>
-    <details class="faq"><summary>Are taxes included?</summary><p>Taxes such as VAT or sales tax are added at checkout where they apply.</p></details>
+    <details class="faq"><summary>Is there a free plan?</summary><p>Yes. Start free with no card, and buy a pass only when you need more.</p></details>
+    <details class="faq"><summary>Does a pass renew automatically?</summary><p>No. A pass lasts for the days shown and then ends. Buy another one whenever you like; buying the same pass again adds the days to your current one.</p></details>
+    <details class="faq"><summary>How do I pay?</summary><p>By UPI or bank transfer for now. After paying, enter the payment reference (UTR) and we start your plan as soon as we confirm the payment. Card and net banking payments are coming soon.</p></details>
+    <details class="faq"><summary>Are taxes included?</summary><p>Prices include GST unless the page says otherwise. You get an order number for every purchase.</p></details>
+    <details class="faq"><summary>Can I get a refund?</summary><p>See the <a href="refund.html">Refund policy</a>, or write to <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p></details>
   </div>
 </section>
+<script src="assets/pricing.js?v=1"></script>

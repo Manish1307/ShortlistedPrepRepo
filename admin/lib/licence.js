@@ -99,11 +99,41 @@ function checkLicence(db, signer, { key, deviceId, deviceName = '', appVersion =
       .run(licence.id, device, String(deviceName).slice(0, 100), String(appVersion).slice(0, 30), t, t);
   }
 
+  // who the licence belongs to: the app shows it, and the signature keeps it from being edited on the computer
+  const owner = db.prepare('SELECT name, email FROM customers WHERE id = ?').get(licence.customer_id) || {};
   const answer = signer.sign({
     key: licence.key, deviceId: device, plan: licence.plan, kind: licence.kind,
-    expiresAt: licence.expires_at, issuedAt: t,
+    expiresAt: licence.expires_at, issuedAt: t, name: owner.name || '', email: owner.email || '',
   });
   return { ok: true, plan: licence.plan, kind: licence.kind, expiresAt: licence.expires_at, ...answer };
+}
+
+/**
+ * "Start free trial" in the app: one trial per computer and one per email. A computer whose trial is still running
+ * (the app was reinstalled) gets that same trial back instead of a new one. Returns the same answer as checkLicence.
+ */
+function startTrial(db, signer, { email, deviceId, deviceName = '', appVersion = '' }, { days = 7 } = {}) {
+  const mail = String(email || '').trim().toLowerCase();
+  if (mail.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return fail('invalid_email', 'Enter a valid email address.');
+  const device = String(deviceId || '').trim().slice(0, 100);
+  if (!device) return fail('invalid_device', 'This computer could not be identified.');
+
+  const onThisPc = db.prepare(`SELECT l.* FROM devices d JOIN licences l ON l.id = d.licence_id
+                               WHERE d.device_id = ? AND l.kind = 'trial' ORDER BY l.id DESC`).get(device);
+  if (onThisPc) {
+    if (effectiveStatus(onThisPc) === 'active') return checkLicence(db, signer, { key: onThisPc.key, deviceId: device, deviceName, appVersion }, { register: false });
+    return fail('trial_used', 'The free trial has already been used on this computer. Buy a licence to keep using the app.');
+  }
+  let customer = db.prepare('SELECT * FROM customers WHERE email = ?').get(mail);
+  if (customer && db.prepare("SELECT id FROM licences WHERE customer_id = ? AND kind = 'trial'").get(customer.id)) {
+    return fail('trial_used', 'A free trial was already started with this email. Buy a licence to keep using the app.');
+  }
+  if (!customer) {
+    const r = db.prepare('INSERT INTO customers (email, created_at) VALUES (?, ?)').run(mail, now());
+    customer = { id: r.lastInsertRowid };
+  }
+  const lic = createLicence(db, { customerId: customer.id, plan: 'trial', days, note: 'Trial started from the app' });
+  return checkLicence(db, signer, { key: lic.key, deviceId: device, deviceName, appVersion }, { register: true });
 }
 
 function removeDevice(db, { key, deviceId }) {
@@ -112,4 +142,4 @@ function removeDevice(db, { key, deviceId }) {
   return db.prepare('DELETE FROM devices WHERE licence_id = ? AND device_id = ?').run(licence.id, String(deviceId || '')).changes > 0;
 }
 
-module.exports = { PLANS, generateKey, effectiveStatus, createLicence, Signer, verifySigned, checkLicence, removeDevice, addDays };
+module.exports = { PLANS, generateKey, effectiveStatus, createLicence, Signer, verifySigned, checkLicence, startTrial, removeDevice, addDays };

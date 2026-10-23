@@ -44,6 +44,7 @@ class Segmenter {
     this.carry = new Int16Array(0);
     this.frameIndex = 0;
     this.noiseDb = -60;
+    this.utteranceId = 0;   // changes whenever a new utterance starts (lets a late partial result be recognised as stale)
     this.reset();
   }
 
@@ -61,6 +62,19 @@ class Segmenter {
 
   /** True while someone is talking (the utterance has not ended yet). */
   isSpeaking() { return this.state === 'speech'; }
+
+  /** How long the utterance being spoken has lasted so far, in ms. */
+  speechMs() { return this.state === 'speech' ? this.frames.length * this.o.frameMs : 0; }
+
+  /** The audio of the utterance being spoken so far (the last maxMs of it), for a live preview; null when nobody is talking. */
+  snapshot(maxMs = 12000) {
+    if (this.state !== 'speech' || !this.frames.length) return null;
+    const keep = Math.min(this.frames.length, Math.ceil(maxMs / this.o.frameMs));
+    const from = this.frames.length - keep;
+    const pcm = new Int16Array(keep * this.frameLen);
+    for (let i = 0; i < keep; i++) pcm.set(this.frames[from + i], i * this.frameLen);
+    return pcm;
+  }
 
   /** Feed any amount of 16 kHz mono Int16 samples. */
   push(samples) {
@@ -106,6 +120,7 @@ class Segmenter {
       this.loudRun = loud ? this.loudRun + 1 : 0;
       if (this.loudRun >= o.startFrames) {
         this.state = 'speech';
+        this.utteranceId++;
         const pre = this.preRoll;
         this.frames = pre.map(p => p.frame);
         this.dbs = pre.map(p => p.db);

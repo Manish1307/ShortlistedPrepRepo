@@ -1,22 +1,28 @@
 {
-  "name": "teacher-notes-app",
-  "version": "1.0.0",
-  "description": "Teacher screen-share app with a private notes overlay hidden from screen capture, live offline speech-to-text, and AI answers to questions",
-  "main": "main.js",
+  "name": "shortlistprep-app",
+  "version": "1.1.5",
+  "description": "ShortlistPrep desktop apps: ShortlistPrep.AI (live interview assistant) and Mock Interview",
+  "main": "shortlistprep-ai-main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "electron shortlistprep-ai-main.js",
     "test": "node --test \"test/*.test.js\"",
     "setup:whisper": "node scripts/setup-whisper.js",
     "test:stt": "node scripts/test-stt.js",
-    "smoke": "electron . --smoke",
     "site:build": "node website/build.js",
     "site:serve": "node website/serve.js",
     "admin": "node admin/server.js",
     "admin:create": "node admin/create-admin.js",
-    "web": "node scripts/dev-web.js"
+    "web": "node scripts/dev-web.js",
+    "shortlistprep-ai": "electron shortlistprep-ai-main.js",
+    "interview": "electron interview-main.js",
+    "dist:ai": "electron-builder --config installer/ai.json --win nsis --x64",
+    "dist:interview": "electron-builder --config installer/interview.json --win nsis --x64",
+    "dist": "npm run dist:ai && npm run dist:interview",
+    "server:package": "node website/build.js && tar -czf dist/shortlistprep-server.tgz --exclude=admin/data admin deploy -C website site"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1"

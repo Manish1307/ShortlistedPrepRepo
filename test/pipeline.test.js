@@ -374,3 +374,100 @@ test('the finished answer is delivered one statement per line', async () => {
     'Then it shows up like any built-in action.',
   ]);
 });
+
+test('behind on speech: phrases are joined, none is dropped or skipped', async () => {
+  const heard = [];
+  // a slow speech engine: each request takes a while, so phrases pile up behind it
+  const whisper = { calls: 0, async transcribe(wav) { this.calls++; await sleep(120); return 'phrase ' + this.calls; } };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false });
+  const warnings = [];
+  p.on('warning', w => warnings.push(w.code));
+  p.on('transcript', t => heard.push(t.text));
+  for (let i = 0; i < 8; i++) say(p, 1);     // eight phrases arrive at once
+  await sleep(1200);
+  assert.ok(!warnings.includes('behind'), 'no phrase was skipped');
+  assert.ok(whisper.calls < 8, 'neighbouring phrases were joined into fewer requests (' + whisper.calls + ')');
+  assert.ok(heard.length >= 1 && heard.length === whisper.calls, 'every request produced its text');
+});
+
+test('status tells the screen how many phrases are still being converted, and whether someone is speaking', async () => {
+  const whisper = { async transcribe() { await sleep(150); return 'hello there'; } };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false });
+  const status = [], speaking = [];
+  p.on('status', s => status.push(s));
+  p.on('speaking', s => speaking.push(s.on));
+  say(p, 1);
+  await sleep(60);
+  assert.ok(status.some(s => s.transcribing && s.queued >= 1), 'busy while converting');
+  await sleep(300);
+  assert.equal(status[status.length - 1].transcribing, false);
+  assert.ok(speaking.includes(true) && speaking.includes(false), 'speaking on and off was reported');
+});
+
+test('live preview: words so far are shown while someone is still speaking, then replaced by the real text', async () => {
+  const whisper = { calls: 0, async transcribe() { this.calls++; await sleep(10); return 'what is a th'; } };
+  let t = 0;
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, livePartials: true, now: () => (t += 400) });
+  const partials = [];
+  p.on('partial', m => partials.push(m.text));
+  for (let i = 0; i < 6; i++) { p.feed(speech(0.5)); await sleep(30); }   // still speaking: no pause yet
+  assert.ok(partials.some(x => x === 'what is a th'), 'a preview was shown while speaking');
+  p.feed(silence(1.2));
+  await sleep(100);
+  assert.equal(partials[partials.length - 1], '', 'the preview is cleared when the real text arrives');
+});
+
+test('live previews are off unless asked for', async () => {
+  const whisper = { calls: 0, async transcribe() { this.calls++; return 'x'; } };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false });
+  for (let i = 0; i < 6; i++) { p.feed(speech(0.5)); await sleep(20); }
+  assert.equal(whisper.calls, 0);
+});
+
+test('parallel: two phrases are converted at the same time and the text still comes out in the order spoken', async () => {
+  let active = 0, peak = 0, n = 0;
+  const whisper = {
+    async transcribe() {
+      const me = ++n;
+      active++; peak = Math.max(peak, active);
+      await sleep(me === 1 ? 160 : 20);      // the first phrase is slow, the second is quick: it finishes first
+      active--;
+      return 'phrase ' + me;
+    },
+  };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, parallel: 2 });
+  const heard = [];
+  p.on('transcript', t => heard.push(t.text));
+  say(p, 1); say(p, 1);
+  await sleep(400);
+  assert.equal(peak, 2, 'both were converted at once');
+  assert.deepEqual(heard, ['phrase 1', 'phrase 2'], 'in the order they were spoken');
+});
+
+test('parallel: the status counts every phrase being converted', async () => {
+  const whisper = { async transcribe() { await sleep(120); return 'hello world'; } };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, parallel: 3 });
+  const queued = [];
+  p.on('status', s => queued.push(s.queued));
+  say(p, 1); say(p, 1); say(p, 1);
+  await sleep(500);
+  assert.ok(Math.max(...queued) >= 2, 'several phrases were reported as being converted');
+  assert.equal(queued[queued.length - 1], 0);
+});
+
+test('parallel: when the engine fails, the phrases behind it are not lost out of order and it restarts once', async () => {
+  let restarts = 0, calls = 0;
+  const whisper = {
+    async transcribe() { const me = ++calls; await sleep(30); if (me <= 2) throw new Error('stuck'); return 'ok ' + me; },
+    async restart() { restarts++; await sleep(20); },
+  };
+  const p = new Pipeline({ whisper, answerer: fakeAnswerer(), autoAnswer: false, parallel: 2 });
+  const heard = [], errors = [];
+  p.on('transcript', t => heard.push(t.text));
+  p.on('error', e => errors.push(e.code));
+  say(p, 1); say(p, 1); say(p, 1);
+  await sleep(600);
+  assert.equal(restarts, 1, 'one restart for two failures at the same time');
+  assert.deepEqual(errors, ['stt', 'stt']);
+  assert.deepEqual(heard, ['ok 3'], 'the phrase after the failures still arrived');
+});

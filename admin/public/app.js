@@ -1,4 +1,4 @@
-// ClassCue admin dashboard. Everything shown is inserted as text (never as HTML), so a customer's name or
+// ShortlistPrep admin dashboard. Everything shown is inserted as text (never as HTML), so a customer's name or
 // message can never run code in this page.
 (function () {
   'use strict';
@@ -7,6 +7,7 @@
   const root = document.getElementById('app');
   let me = null;
   let openCount = 0;
+  let newOppCount = 0;
   let view = 'overview';
 
   /** h('div', {class: 'x', onclick: fn}, 'text', childNode, ...) builds an element. */
@@ -20,7 +21,7 @@
       else if (v === true) e.setAttribute(k, '');
       else e.setAttribute(k, v);
     }
-    for (const c of children.flat()) {
+    for (const c of children.flat(Infinity)) {
       if (c === undefined || c === null || c === false) continue;
       e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
     }
@@ -53,18 +54,18 @@
   async function guard(fn) { try { return await fn(); } catch (err) { toast(err.message, true); return undefined; } }
 
   const money = (cents, cur) => {
-    try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: cur || 'USD' }).format((cents || 0) / 100); }
+    try { return new Intl.NumberFormat((cur || 'INR') === 'INR' ? 'en-IN' : undefined, { style: 'currency', currency: cur || 'INR' }).format((cents || 0) / 100); }
     catch (_) { return `${((cents || 0) / 100).toFixed(2)} ${cur || ''}`; }
   };
   const date = s => (s ? new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
   const dateTime = s => (s ? new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
-  const moneyList = list => (list && list.length ? list.map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'USD'));
+  const moneyList = list => (list && list.some(r => r.cents) ? list.filter(r => r.cents).map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'INR'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
-    'releases.write': ['owner', 'admin'], 'team': ['owner'],
+    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
 
-  const STATUS_PILL = { active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '' };
+  const STATUS_PILL = { default: 'good', approved: 'good', rejected: 'bad', pending: 'warn', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '' };
   const pill = text => h('span', { class: 'pill ' + (STATUS_PILL[text] || '') }, text);
 
   // ---------- dialogs and forms ----------
@@ -135,42 +136,179 @@
       error,
       h('button', { class: 'btn primary', type: 'submit', style: 'width:100%' }, 'Sign in'));
     root.replaceChildren(h('div', { class: 'login-wrap' }, h('div', { class: 'login' },
-      h('div', { class: 'logo' }, 'C'), h('h1', {}, 'ClassCue admin'), h('p', { class: 'muted' }, 'Sign in to manage customers, licences and releases.'), form)));
+      h('div', { class: 'logo' }, 'S'), h('h1', {}, 'ShortlistPrep admin'), h('p', { class: 'muted' }, 'Sign in to manage customers, licences and releases.'), form)));
     const first = form.querySelector('input'); if (first) first.focus();
   }
 
-  // ---------- shell ----------
-  const NAV = [
-    ['overview', 'Overview'], ['customers', 'Customers'], ['licences', 'Licences'], ['orders', 'Orders'],
-    ['releases', 'Releases'], ['messages', 'Support'], ['audit', 'Audit log'], ['team', 'Team'], ['account', 'My account'],
+  // ---------- shell: top header with grouped menus, a page header, and the page ----------
+  const ICONS = {
+    dashboard: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+    users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c.8-3.6 3.4-5.5 7-5.5s6.2 1.9 7 5.5M16 5a3.5 3.5 0 0 1 0 7M18 14.8c2 .6 3.4 2.4 4 5.2"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
+    key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
+    doc: '<path d="M6 3h8l4 4v14H6V3z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+    chat: '<path d="M4 5h16v11H9l-5 4V5z"/>',
+    bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="8" cy="8" r="1.5"/>',
+    box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4V7z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+    chevron: '<path d="M6 9l6 6 6-6"/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    logout: '<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>',
+  };
+  /** A small line icon (the markup is fixed above, never user text). */
+  function icon(name, cls) {
+    const s = document.createElement('span');
+    s.className = 'ico' + (cls ? ' ' + cls : '');
+    s.setAttribute('aria-hidden', 'true');
+    s.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[name] || '') + '</svg>';
+    return s;
+  }
+
+  // the menu: groups of pages, each with a one-line description (shown in the menu and in the page header)
+  const GROUPS = [
+    { id: 'overview', label: 'Overview', items: [['overview', 'Overview', 'Revenue, licences and website activity at a glance.', 'dashboard']] },
+    { id: 'growth', label: 'Growth', items: [
+      ['opportunities', 'Opportunities', 'Demo requests and enquiries that came from the website.', 'target'],
+      ['visitors', 'Website visits', 'Who visits the website and where they come from.', 'globe']] },
+    { id: 'customers', label: 'Customers', items: [
+      ['customers', 'Customers', 'Customer records, licences and website logins.', 'users'],
+      ['candidates', 'Candidates', 'Career toolkit progress, documents and AI activity.', 'briefcase'],
+      ['licences', 'Licences', 'Issue, extend or cancel licences and see the computers using them.', 'key']] },
+    { id: 'learning', label: 'Activity', items: [
+      ['conversations', 'Conversations', 'ShortlistPrep.AI sessions saved by the app.', 'chat'],
+      ['profiles', 'Topics and resume', 'The topics and resume that set the area of the AI answers.', 'doc']] },
+    { id: 'ai', label: 'AI and jobs', items: [
+      ['jobs', 'Jobs', 'AI Job search: the Master Prompt, companies and live openings.', 'briefcase'],
+      ['tokens', 'AI tokens', 'The daily AI allowance, token packs and requests for more.', 'bolt'],
+      ['aikeys', 'AI keys', 'AI service keys and which licence uses which.', 'lock']] },
+    { id: 'sales', label: 'Sales', items: [
+      ['orders', 'Orders', 'Payments, refunds and plan orders.', 'receipt'],
+      ['pricing', 'Pricing', 'Plans, prices, offers and payment settings.', 'tag']] },
+    { id: 'company', label: 'Company', items: [
+      ['messages', 'Support', 'Support messages from customers.', 'mail'],
+      ['releases', 'Releases', 'App versions and download links.', 'box'],
+      ['audit', 'Audit log', 'Everything the admins changed.', 'shield'],
+      ['team', 'Team', 'Admin accounts and their roles.', 'users']] },
   ];
+  const PAGES = {};
+  GROUPS.forEach(g => g.items.forEach(([id, label, desc, ico]) => { PAGES[id] = { id, label, desc, ico, group: g.label }; }));
+  PAGES.account = { id: 'account', label: 'My account', desc: 'Your sign-in details and password.', ico: 'user', group: 'You' };
+  const NAV = Object.keys(PAGES).map(id => [id, PAGES[id].label]);   // kept for anything that lists the pages
+
+  let menuOpen = null;   // the group, 'user' or 'mobile' that is open
+  function closeMenus() {
+    menuOpen = null;
+    document.querySelectorAll('.topbar .open').forEach(n => n.classList.remove('open'));
+    const bar = document.querySelector('.topbar'); if (bar) bar.classList.remove('nav-open');
+    document.querySelectorAll('.topbar [aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  }
+  function toggleMenu(key, node, btn) {
+    const was = menuOpen === key;
+    const bar = document.querySelector('.topbar');
+    const mobileOpen = bar.classList.contains('nav-open') && key !== 'user';   // a group opens inside the open phone menu
+    closeMenus();
+    if (mobileOpen) bar.classList.add('nav-open');
+    if (!was) { menuOpen = key; node.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+  }
+  if (!window.__adminMenus) {   // once: a click elsewhere or Escape closes the menus
+    window.__adminMenus = true;
+    document.addEventListener('click', e => { if (menuOpen && !e.target.closest('.topbar')) closeMenus(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && menuOpen) closeMenus(); });
+  }
+  const go = id => { closeMenus(); view = id; render(); window.scrollTo(0, 0); };
+  const badgeFor = id => (id === 'messages' ? openCount : id === 'opportunities' ? newOppCount : 0);
+
+  function header() {
+    const items = g => g.items.filter(([id]) => id !== 'team' || me.role === 'owner');
+    const groups = GROUPS.map(g => ({ ...g, items: items(g) })).filter(g => g.items.length);
+    const active = PAGES[view] || PAGES.overview;
+    const nav = h('nav', { class: 'topnav', id: 'topnav', 'aria-label': 'Main' }, groups.map(g => {
+      if (g.items.length === 1 && g.id === 'overview') {
+        const [id, label] = g.items[0];
+        return h('div', { class: 'ng' }, h('button', { class: 'ng-btn' + (view === id ? ' active' : ''), 'aria-current': view === id ? 'page' : null, onclick: () => go(id) }, label));
+      }
+      const here = g.items.some(([id]) => id === view);
+      const count = g.items.reduce((n, [id]) => n + badgeFor(id), 0);
+      const wrap = h('div', { class: 'ng' });
+      const btn = h('button', { class: 'ng-btn' + (here ? ' active' : ''), type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', onclick: e => { e.stopPropagation(); toggleMenu(g.id, wrap, btn); } },
+        g.label, count ? h('span', { class: 'badge-count' }, count) : null, icon('chevron', 'caret'));
+      wrap.append(btn, h('div', { class: 'ng-menu', role: 'menu' }, g.items.map(([id, label, desc, ico]) =>
+        h('button', { class: 'ng-item' + (view === id ? ' on' : ''), role: 'menuitem', onclick: () => go(id) },
+          icon(ico), h('span', { class: 'ng-text' }, h('b', {}, label), h('small', {}, desc)), badgeFor(id) ? h('span', { class: 'badge-count' }, badgeFor(id)) : null))));
+      return wrap;
+    }));
+    // you
+    const initials = String(me.email || '?').split('@')[0].split(/[._-]/).map(p => p[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+    const youWrap = h('div', { class: 'ng you' });
+    const youBtn = h('button', { class: 'you-btn', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-label': 'Your account', onclick: e => { e.stopPropagation(); toggleMenu('user', youWrap, youBtn); } },
+      h('span', { class: 'avatar' }, initials), h('span', { class: 'you-text' }, h('b', {}, String(me.email).split('@')[0]), h('small', {}, me.role)), icon('chevron', 'caret'));
+    youWrap.append(youBtn, h('div', { class: 'ng-menu right', role: 'menu' },
+      h('div', { class: 'you-card' }, h('b', {}, me.email), h('span', { class: 'pill' }, me.role)),
+      h('button', { class: 'ng-item', role: 'menuitem', onclick: () => go('account') }, icon('user'), h('span', { class: 'ng-text' }, h('b', {}, 'My account'), h('small', {}, 'Your sign-in details and password'))),
+      h('button', { class: 'ng-item danger', role: 'menuitem', onclick: async () => { await guard(() => post('/admin/api/logout')); me = null; closeMenus(); render(); } }, icon('logout'), h('span', { class: 'ng-text' }, h('b', {}, 'Sign out')))));
+    const burger = h('button', { class: 'menu-btn', type: 'button', 'aria-label': 'Menu', 'aria-controls': 'topnav', 'aria-expanded': 'false', onclick: e => {
+      e.stopPropagation();
+      const bar = document.querySelector('.topbar'), was = bar.classList.contains('nav-open');
+      closeMenus();
+      if (!was) { menuOpen = 'mobile'; bar.classList.add('nav-open'); burger.setAttribute('aria-expanded', 'true'); }
+    } }, icon('menu'));
+    const bar = h('header', { class: 'topbar' }, h('div', { class: 'topbar-in' },
+      burger,
+      h('a', { class: 'brand', href: '#', onclick: e => { e.preventDefault(); go('overview'); } }, h('span', { class: 'logo' }, 'S'), h('span', { class: 'brand-text' }, 'ShortlistPrep', h('small', {}, 'Admin'))),
+      nav, h('div', { class: 'top-right' }, youWrap)));
+    return bar;
+  }
+
+  /** The page header: where you are, the page title and what the page is for, with quick links to what needs attention. */
+  function banner() {
+    const p = PAGES[view] || PAGES.overview;
+    const chip = (label, n, id) => h('button', { class: 'chip' + (n ? ' hot' : ''), onclick: () => go(id) }, h('b', {}, String(n)), label);
+    return h('section', { class: 'banner' }, h('div', { class: 'banner-in' },
+      h('div', { class: 'banner-text' },
+        h('div', { class: 'crumbs' }, h('span', {}, 'Admin'), h('i', {}, '›'), h('span', {}, p.group), p.group !== p.label ? [h('i', {}, '›'), h('b', {}, p.label)] : null),
+        h('h1', { id: 'page-title' }, p.label),
+        h('p', {}, p.desc)),
+      h('div', { class: 'banner-chips' }, chip(' open support', openCount, 'messages'), chip(' new enquiries', newOppCount, 'opportunities'),
+        h('span', { class: 'today' }, new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })))));
+  }
 
   async function render() {
     if (!me) return renderLogin();
     const content = h('main', { class: 'main', id: 'content' });
-    const nav = NAV.filter(([id]) => id !== 'team' || me.role === 'owner').map(([id, label]) =>
-      h('button', { class: 'nav-item', 'aria-current': id === view ? 'page' : null, onclick: () => { view = id; render(); } },
-        label, id === 'messages' && openCount ? h('span', { class: 'badge-count' }, openCount) : null));
-    root.replaceChildren(h('div', { class: 'shell' },
-      h('nav', { class: 'side', 'aria-label': 'Main' }, h('div', { class: 'brand' }, h('span', { class: 'logo' }, 'C'), 'ClassCue admin'), nav,
-        h('div', { class: 'spacer' }), h('div', { class: 'who' }, `${me.email} (${me.role})`),
-        h('button', { class: 'nav-item', onclick: async () => { await guard(() => post('/admin/api/logout')); me = null; render(); } }, 'Sign out')),
-      content));
+    root.replaceChildren(h('div', { class: 'shell' }, header(), banner(), content));
+    document.title = (PAGES[view] || PAGES.overview).label + ' · ShortlistPrep admin';
+    const seen = openCount + ':' + newOppCount;
     await guard(() => VIEWS[view](content));
+    if (seen !== openCount + ':' + newOppCount && me) { const shellEl = root.firstChild; shellEl.replaceChild(header(), shellEl.children[0]); shellEl.replaceChild(banner(), shellEl.children[1]); }
+    // the page header already shows the title: a page's own heading is hidden when it says the same, leaving its tools
+    const title = (PAGES[view] || PAGES.overview).label;
+    const first = content.querySelector('.head > h1');
+    if (first && first.textContent.trim() === title) { first.classList.add('dup'); first.parentElement.classList.add('solo'); }
   }
 
+
+
   async function refreshOpenCount() {
-    try { openCount = (await get('/admin/api/messages?status=open')).messages.length; } catch (_) { /* ignore */ }
+    try { openCount = (await get('/admin/api/messages?status=open')).messages.length; newOppCount = (await get('/admin/api/opportunities?status=new')).counts.new; } catch (_) { /* ignore */ }
   }
 
   // ---------- overview ----------
   async function overview(el) {
     const o = await get('/admin/api/overview');
     openCount = o.openMessages;
+    newOppCount = o.website.newOpportunities;
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num), sub ? h('div', { class: 'sub' }, sub) : null);
     const max = Math.max(1, ...o.signupSeries.map(s => s.count));
     const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'New customers per day, last 30 days' },
-      o.signupSeries.map(s => { const i = h('i', { class: s.count ? '' : 'zero', title: `${s.date}: ${s.count}` }); i.style.height = Math.max(2, (s.count / max) * 100) + '%'; return i; }));
+      o.signupSeries.map(s => { const i = h('i', { class: s.count ? '' : 'zero', title: `${s.date}: ${s.count}` }); i.style.height = Math.max(2, (s.count / max) * 85) + '%'; return h('div', { class: 'bar' }, h('span', { class: s.count ? '' : 'z' }, s.count), i); }));
     el.replaceChildren(
       head('Overview'),
       h('div', { class: 'cards' },
@@ -181,7 +319,9 @@
         stat('Computers seen, 7 days', o.devicesActive7Days),
         stat('Trial to paid', o.trialConversion.percent + '%', `${o.trialConversion.converted} of ${o.trialConversion.trialCustomers} trial customers`),
         stat('Open support', o.openMessages),
-        stat('Refunded', moneyList(o.refundedTotal))),
+        stat('Refunded', moneyList(o.refundedTotal)),
+        stat('Website visitors today', o.website.today, `${o.website.visitors7Days} in 7 days · ${o.website.visitors30Days} in 30 days`),
+        stat('New opportunities', o.website.newOpportunities, `${o.website.demoRequests30Days} demo requests in 30 days`)),
       h('div', { class: 'grid2' },
         h('div', { class: 'card' }, h('h2', {}, 'New customers, last 30 days'), bars,
           h('div', { class: 'axis' }, h('span', {}, o.signupSeries[0].date), h('span', {}, o.signupSeries[29].date))),
@@ -192,13 +332,16 @@
   }
 
   // ---------- customers ----------
+  let sectorList = [];   // the candidate sectors (domains), from the server
+  const sectorLabel = id => (sectorList.find(s => s.id === id) || {}).label || '';
   async function customers(el, query = '') {
-    const { customers: rows } = await get('/admin/api/customers?q=' + encodeURIComponent(query));
+    const { customers: rows, sectors } = await get('/admin/api/customers?q=' + encodeURIComponent(query));
+    sectorList = sectors || sectorList;
     el.replaceChildren(
       head('Customers', searchBox(v => customers(el, v), 'Search name, email, organisation', query),
         can('customers.write') ? h('button', { class: 'btn primary', onclick: () => customerForm(null, () => customers(el, query)) }, '+ New customer') : null),
       table([
-        { label: 'Email', render: r => r.email }, { label: 'Name', render: r => r.name || '—' }, { label: 'Organisation', render: r => r.organisation || '—' },
+        { label: 'Email', render: r => r.email }, { label: 'Name', render: r => r.name || '—' }, { label: 'Organisation', render: r => r.organisation || '—' }, { label: 'Sector', render: r => sectorLabel(r.sector) || '—' },
         { label: 'Licences', render: r => r.licence_count }, { label: 'Paid', render: r => money(r.paid_cents) }, { label: 'Joined', render: r => date(r.created_at) },
       ], rows, r => customerDetail(r.id, () => customers(el, query)), query ? 'No customers match your search.' : 'No customers yet. Add one, or record an order.'));
   }
@@ -207,7 +350,8 @@
     const f = h('div', {},
       field('Email', { name: 'email', type: 'email', required: true, value: existing ? existing.email : '' }),
       h('div', { class: 'row2' }, field('Name', { name: 'name', value: existing ? existing.name : '' }), field('Organisation', { name: 'organisation', value: existing ? existing.organisation : '' })),
-      field('Country', { name: 'country', value: existing ? existing.country : '' }),
+      h('div', { class: 'row2' }, field('Country', { name: 'country', value: existing ? existing.country : '' }),
+        field('Sector (domain)', { name: 'sector', type: 'select', options: [{ value: '', label: 'Not chosen yet' }].concat(sectorList.map(s => ({ value: s.id, label: s.label }))), value: existing ? existing.sector || '' : '' }, 'Decides which employers AI Job search reads. The candidate can also set it in My account.')),
       field('Notes (private)', { name: 'notes', type: 'textarea', value: existing ? existing.notes : '', maxlength: 2000 }));
     dialog(existing ? 'Edit customer' : 'New customer', f, [{
       label: 'Save', kind: 'primary',
@@ -215,21 +359,77 @@
     }]);
   }
 
+  /** The customer's website login (My account page): status, plus create / new password / turn off. */
+  async function accountSection(c, reopen) {
+    const { account: a } = await get(`/admin/api/customers/${c.id}/account`);
+    const write = can('accounts.write');
+    const status = !a.exists ? 'No login yet. Create one to let the customer see their licences, computers and classes on the website.'
+      : a.disabled ? 'Login turned off: the customer cannot sign in.'
+        : `Login active${a.mustChange ? ', waiting for the customer to choose their own password' : ''}. Last sign-in: ${a.lastLogin ? dateTime(a.lastLogin) : 'never'}.`;
+    const act = action => guard(async () => {
+      if (action === 'reset' && a.exists && !confirm('Make a new password? The old one stops working and the customer is signed out.')) return;
+      const r = await post(`/admin/api/customers/${c.id}/account`, { action });
+      if (action === 'reset') showLogin(c, r); else { toast(action === 'disable' ? 'Login turned off' : 'Login turned on'); reopen(); }
+    });
+    return h('div', {}, h('h3', { style: 'margin-top:14px' }, 'Website login'), h('p', { class: 'small' }, status),
+      write ? h('div', { class: 'actions' },
+        h('button', { class: 'btn sm primary', onclick: () => act('reset') }, a.exists ? 'New password' : 'Create login'),
+        a.exists ? h('button', { class: 'btn sm' + (a.disabled ? '' : ' danger'), onclick: () => act(a.disabled ? 'enable' : 'disable') }, a.disabled ? 'Turn login on' : 'Turn login off') : null) : null);
+  }
+
+  /** The generated password, shown once, with a message ready to send to the customer. */
+  function showLogin(c, r) {
+    const where = r.siteUrl ? `${r.siteUrl}/login.html` : 'the website (Sign in, top right)';
+    const message = `Hello ${c.name || ''},\n\nYour ShortlistPrep account is ready.\nSign in at: ${where}\nEmail: ${r.email}\nPassword: ${r.password}\n\nYou will be asked to choose your own password when you first sign in.`.replace('Hello ,', 'Hello,');
+    dialog('Login created', h('div', {},
+      h('p', {}, 'Send these details to the customer. The password is shown only now; make a new one if it is lost.'),
+      h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', { class: 'mono' }, r.email), h('dt', {}, 'Password'), h('dd', { class: 'mono', style: 'font-size:18px;font-weight:700' }, r.password),
+        h('dt', {}, 'Sign in at'), h('dd', {}, where)),
+      h('div', { class: 'msg-body' }, message)), [
+      { label: 'Copy message', kind: 'primary', closes: false, run: async () => { try { await navigator.clipboard.writeText(message); toast('Copied'); } catch (_) { toast('Select the text and copy it', true); } return true; } },
+      { label: 'Done', run: () => {} }]);
+  }
+
+  /** The customer's personalised interview questions (made in the Virtual Interview app or on the website), with their model answers. */
+  async function interviewSection(customerId) {
+    const { sets, intros = [] } = await get(`/admin/api/customers/${customerId}/interview`);
+    const kinds = { personal: 'From the resume', scenario: 'Scenario' };
+    const statusText = { supported: 'in resume', partly: 'partly in resume', not_in_resume: 'NOT in resume' };
+    const introList = intros.length ? [h('h3', { style: 'margin-top:14px' }, `Tell me about yourself (${intros.length})`), ...intros.map(x => h('details', { class: 'list-item', style: 'display:block' },
+      h('summary', {}, h('b', {}, (x.kind === 'attempt' && x.review ? `Score ${x.review.score}/10` : 'Guide') + ' · ' + x.resumeLabel + (x.role ? ' · ' + x.role : '') + (x.company ? ' · ' + x.company : '')), ` · ${dateTime(x.createdAt)} · ${x.source === 'app' ? 'Virtual Interview app' : 'website'}`),
+      x.kind === 'attempt' && x.review ? h('div', { class: 'small' }, h('p', {}, x.review.verdict), h('p', { class: 'muted' }, 'Answer: ' + x.answer),
+        h('ul', {}, x.review.claims.map(c => h('li', {}, `${c.claim} (${statusText[c.status] || c.status})${c.note ? ': ' + c.note : ''}`))),
+        h('p', {}, h('b', {}, 'More impressive version: '), x.review.impressive))
+        : h('ul', { class: 'small' }, ((x.guide && x.guide.points) || []).map(p => h('li', {}, `${p.label}: ${p.bullet}`)))))] : [];
+    return h('div', {}, h('h3', { style: 'margin-top:14px' }, `Interview prep (${sets.length})`),
+      sets.length ? sets.map(set => h('details', { class: 'list-item', style: 'display:block' },
+        h('summary', {}, h('b', {}, set.resumeLabel + (set.role ? ' · ' + set.role : '')), ` · ${dateTime(set.createdAt)} · ${set.questions.length} questions · ${set.source === 'app' ? 'Virtual Interview app' : 'website'}`),
+        h('ol', { class: 'small' }, set.questions.map(q => h('li', {}, h('span', { class: 'muted' }, kinds[q.kind] + ': '), q.question,
+          q.resumeRef ? h('div', { class: 'muted' }, 'Resume: "' + q.resumeRef + '"') : null, h('div', { class: 'muted' }, 'Answer: ' + q.answer)))))) 
+        : h('p', { class: 'muted small' }, 'No personalised question sets yet. They are made in the Virtual Interview app or in My account → Interview prep.'), ...introList);
+  }
+
   async function customerDetail(id, done) {
     const d = await get(`/admin/api/customers/${id}`);
     const c = d.customer;
+    sectorList = d.sectors || sectorList;
+    let closeDetail = () => {};
+    const login = await accountSection(c, () => { closeDetail(); customerDetail(id, done); });
+    const interview = await interviewSection(c.id);
     const body = h('div', {},
       h('dl', { class: 'kv' }, h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Name'), h('dd', {}, c.name || '—'), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'),
-        h('dt', {}, 'Country'), h('dd', {}, c.country || '—'), h('dt', {}, 'Joined'), h('dd', {}, dateTime(c.created_at)), h('dt', {}, 'Notes'), h('dd', {}, c.notes || '—')),
+        h('dt', {}, 'Country'), h('dd', {}, c.country || '—'), h('dt', {}, 'Sector'), h('dd', {}, sectorLabel(c.sector) || 'Not chosen yet'), h('dt', {}, 'Joined'), h('dd', {}, dateTime(c.created_at)), h('dt', {}, 'Notes'), h('dd', {}, c.notes || '—')),
       h('h3', {}, 'Licences'),
       d.licences.length ? d.licences.map(l => h('div', { class: 'list-item' }, h('span', { class: 'mono' }, l.key), h('span', {}, `${l.plan} · `, pill(l.effective_status), ` · ${l.expires_at ? 'to ' + date(l.expires_at) : 'lifetime'}`))) : h('p', { class: 'muted' }, 'None.'),
       h('h3', { style: 'margin-top:14px' }, 'Orders'),
-      d.orders.length ? d.orders.map(o => h('div', { class: 'list-item' }, h('span', {}, `#${o.id} · ${o.plan} · ${date(o.created_at)}`), h('span', {}, money(o.amount_cents, o.currency), ' ', pill(o.status)))) : h('p', { class: 'muted' }, 'None.'));
+      d.orders.length ? d.orders.map(o => h('div', { class: 'list-item' }, h('span', {}, `#${o.id} · ${o.plan} · ${date(o.created_at)}`), h('span', {}, money(o.amount_cents, o.currency), ' ', pill(o.status)))) : h('p', { class: 'muted' }, 'None.'),
+      interview, login);
     const buttons = [];
     if (can('licence.major')) buttons.push({ label: 'Issue licence', run: (close) => { close(); licenceForm(c.id, done); return true; }, closes: false });
     if (can('customers.write')) buttons.push({ label: 'Edit', run: (close) => { close(); customerForm(c, done); return true; }, closes: false });
+    buttons.push({ label: 'Topics and resume', run: (close) => { close(); profileEditor(c.id, done); return true; }, closes: false });
     buttons.push({ label: 'Close', run: () => {} });
-    dialog(c.name || c.email, body, buttons);
+    closeDetail = dialog(c.name || c.email, body, buttons).close;
   }
 
   // ---------- licences ----------
@@ -277,6 +477,7 @@
   async function licenceDetail(id, done) {
     const d = await get(`/admin/api/licences/${id}`);
     const l = d.licence;
+    const aiSection = await licenceAiKeys(l, d.aiKeys);
     const act = (action, extra, message) => guard(async () => { await patch(`/admin/api/licences/${id}`, { action, ...extra }); toast(message || 'Done'); done(); });
     const body = h('div', {},
       h('dl', { class: 'kv' }, h('dt', {}, 'Key'), h('dd', { class: 'mono' }, l.key), h('dt', {}, 'Customer'), h('dd', {}, l.customer_email),
@@ -286,7 +487,8 @@
       h('h3', {}, `Activated computers (${d.devices.length})`),
       d.devices.length ? d.devices.map(dev => h('div', { class: 'list-item' },
         h('span', {}, `${dev.name || 'Computer'} · v${dev.app_version || '?'} · last seen ${dateTime(dev.last_seen)}`),
-        h('button', { class: 'btn sm', onclick: async () => { await act('removeDevice', { deviceId: dev.device_id }, 'Computer removed'); close(); } }, 'Remove'))) : h('p', { class: 'muted' }, 'Not activated on any computer yet.'));
+        h('button', { class: 'btn sm', onclick: async () => { await act('removeDevice', { deviceId: dev.device_id }, 'Computer removed'); close(); } }, 'Remove'))) : h('p', { class: 'muted' }, 'Not activated on any computer yet.'),
+      aiSection);
     const buttons = [];
     if (l.expires_at) buttons.push({ label: 'Extend…', run: () => extendPrompt(act), closes: false });
     buttons.push({ label: 'Reset computers', run: async () => { await act('resetDevices', {}, 'All computers removed'); } });
@@ -298,6 +500,82 @@
     }
     buttons.push({ label: 'Close', run: () => {} });
     const { close } = dialog('Licence', body, buttons);
+  }
+
+  /** Which AI key this licence uses for each service: its own, or the default. Changes save straight away. */
+  async function licenceAiKeys(l, aiKeys) {
+    const { keys, providers } = await get('/admin/api/ai-keys');
+    const describe = r => (r.source === 'none' ? 'no key: the app uses the computer\'s own key, if any'
+      : `${r.key.label} (${r.key.masked})${r.source === 'default' ? ', the default' : ''}${r.assignedDisabled ? '. Its own key is turned off, so the default is used' : ''}`);
+    const rows = providers.map(p => {
+      const r = aiKeys[p.id];
+      const now = h('span', { class: 'muted small' }, 'Uses ' + describe(r));
+      const def = keys.find(k => k.provider === p.id && k.is_default);
+      const select = h('select', { 'aria-label': p.label + ' key', disabled: !can('aikeys.write') },
+        h('option', { value: '' }, `Default${def ? ' · ' + def.label + ' ' + def.masked : ' (none set)'}`),
+        keys.filter(k => k.provider === p.id).map(k => h('option', { value: k.id }, `${k.label} ${k.masked}${k.disabled ? ' (off)' : ''}`)));
+      select.value = r.assignedId ? String(r.assignedId) : '';
+      select.addEventListener('change', () => guard(async () => {
+        const res = await post(`/admin/api/licences/${l.id}/ai-keys`, { provider: p.id, apiKeyId: select.value ? Number(select.value) : null });
+        now.textContent = 'Uses ' + describe(res.aiKeys[p.id]);
+        toast(`${p.label} key saved`);
+      }));
+      return h('div', { class: 'list-item' }, h('span', {}, h('b', {}, p.label), ` · ${p.use}`, h('br'), now), select);
+    });
+    return h('div', {}, h('h3', { style: 'margin-top:14px' }, 'AI keys'), rows,
+      h('p', { class: 'muted small' }, 'The app receives these keys at start-up and every 30 minutes while it runs.'));
+  }
+
+  // ---------- AI keys ----------
+  async function aikeys(el) {
+    const { keys, providers } = await get('/admin/api/ai-keys');
+    const write = can('aikeys.write');
+    const act = (k, action, extra, message) => guard(async () => { await patch(`/admin/api/ai-keys/${k.id}`, { action, ...extra }); toast(message); aikeys(el); });
+    const tools = k => (write ? h('span', { class: 'tools' },
+      !k.is_default && !k.disabled ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(k, 'default', {}, `${k.label} is now the default ${k.provider_label} key`); } }, 'Make default') : null,
+      h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); replaceKey(k, () => aikeys(el)); } }, 'Replace'),
+      h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(k, k.disabled ? 'enable' : 'disable', {}, k.disabled ? 'Key turned on' : 'Key turned off'); } }, k.disabled ? 'Turn on' : 'Turn off'),
+      h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Delete "${k.label}"? Licences using it go back to the default ${k.provider_label} key.`)) guard(async () => { await del(`/admin/api/ai-keys/${k.id}`); toast('Key deleted'); aikeys(el); }); } }, 'Delete')) : '');
+    const missing = providers.filter(p => !keys.some(k => k.provider === p.id && k.is_default && !k.disabled));
+    el.replaceChildren(
+      head('AI keys', write ? h('button', { class: 'btn primary', onclick: () => keyForm(providers, () => aikeys(el)) }, '+ Add key') : null),
+      h('p', { class: 'muted' }, 'Keys the app uses: Groq writes the answers, Gemini reads screenshots. Each licence uses the default key of each service unless you give it its own key (open the licence, then "AI keys").'),
+      missing.length ? h('div', { class: 'card', style: 'margin-bottom:14px' }, h('b', {}, 'No default key yet for: '), missing.map(p => p.label).join(', '),
+        h('span', { class: 'muted' }, '. Licences without their own key get no key for that service.')) : '',
+      table([
+        { label: 'Service', render: r => `${r.provider_label} · ${providers.find(p => p.id === r.provider).use}` },
+        { label: 'Name', render: r => r.label },
+        { label: 'Key', render: r => h('span', { class: 'mono' }, r.masked) },
+        { label: 'Default', render: r => (r.is_default ? pill('default') : '—') },
+        { label: 'Status', render: r => (r.disabled ? pill('off') : pill('on')) },
+        { label: 'Licences', render: r => r.licence_count },
+        { label: 'Last used', render: r => dateTime(r.last_used_at) },
+        { label: '', render: tools },
+      ], keys, null, 'No AI keys yet. Add a Groq key for answers and a Gemini key for screenshots.'),
+      h('p', { class: 'muted small' }, 'Keys are stored encrypted and only the last 4 characters are shown here.'));
+  }
+
+  function keyForm(providers, done) {
+    const f = h('div', {},
+      h('div', { class: 'row2' },
+        field('Service', { name: 'provider', type: 'select', options: providers.map(p => ({ value: p.id, label: `${p.label} · ${p.use}` })) }),
+        field('Name', { name: 'label', required: true, maxlength: 80, placeholder: 'e.g. Groq main account' })),
+      field('Key', { name: 'key', type: 'password', required: true, maxlength: 300 }, 'Shown only as the last 4 characters after saving.'),
+      h('label', { class: 'field' }, h('span', {}, h('input', { type: 'checkbox', name: 'makeDefault' }), ' Make this the default key for the service')));
+    dialog('Add AI key', f, [{ label: 'Save key', kind: 'primary', run: async () => {
+      const ok = await guard(async () => { await post('/admin/api/ai-keys', values(f)); return true; });
+      if (!ok) return true;
+      toast('Key saved'); done();
+    } }]);
+  }
+
+  function replaceKey(k, done) {
+    const f = field(`New ${k.provider_label} key`, { name: 'key', type: 'password', maxlength: 300 }, 'Licences using this key get the new one on their next check.');
+    dialog(`Replace "${k.label}"`, f, [{ label: 'Replace', kind: 'primary', run: async () => {
+      const ok = await guard(async () => { await patch(`/admin/api/ai-keys/${k.id}`, { action: 'replace', key: values(f).key }); return true; });
+      if (!ok) return true;
+      toast('Key replaced'); done();
+    } }]);
   }
 
   function extendPrompt(act) {
@@ -395,6 +673,735 @@
       [m.status === 'open' ? { label: 'Save and close ticket', kind: 'primary', run: () => save('closed') } : { label: 'Reopen', kind: 'primary', run: () => save('open') }, { label: 'Save note', run: () => save(m.status) }]);
   }
 
+  // ---------- opportunities (demo requests and interest from the website) ----------
+  const STAGES = ['new', 'contacted', 'qualified', 'won', 'lost'];
+  const KIND_LABEL = { demo: 'Demo request', interest: 'Interested', signup: 'Early access', contact: 'Contact form' };
+  async function opportunities(el, status = '', kind = '', query = '') {
+    const { opportunities: rows, counts } = await get('/admin/api/opportunities?status=' + status + '&kind=' + kind + '&q=' + encodeURIComponent(query));
+    newOppCount = counts.new;
+    const redo = (s, k, q) => opportunities(el, s, k, q);
+    const stageFilter = h('select', { 'aria-label': 'Stage', onchange: e => redo(e.target.value, kind, query) },
+      [['', 'All stages'], ...STAGES.map(s => [s, s[0].toUpperCase() + s.slice(1) + ' (' + counts[s] + ')'])].map(([v, l]) => h('option', { value: v }, l)));
+    stageFilter.value = status;
+    const kindFilter = h('select', { 'aria-label': 'Type', onchange: e => redo(status, e.target.value, query) },
+      [['', 'All types'], ...Object.entries(KIND_LABEL)].map(([v, l]) => h('option', { value: v }, l)));
+    kindFilter.value = kind;
+    el.replaceChildren(
+      head('Opportunities', searchBox(v => redo(status, kind, v), 'Search name, email, company', query), kindFilter, stageFilter),
+      h('div', { class: 'cards' }, STAGES.map(s => h('div', { class: 'card stat' }, h('div', { class: 'label' }, s), h('div', { class: 'num' }, counts[s])))),
+      table([
+        { label: 'Date', render: r => dateTime(r.created_at) }, { label: 'Who', render: r => (r.name ? r.name + ' <' + r.email + '>' : r.email) },
+        { label: 'Type', render: r => KIND_LABEL[r.kind] }, { label: 'Company / college', render: r => r.company || '—' },
+        { label: 'Stage', render: r => pill(r.status) }, { label: 'Follow up', render: r => r.follow_up || '—' },
+      ], rows, r => opportunityDetail(r.id, () => redo(status, kind, query)), 'No opportunities yet. They appear here when someone asks for a demo or shows interest on the website.'));
+  }
+
+  async function opportunityDetail(id, done) {
+    const { opportunity: o, notes, pages } = await get('/admin/api/opportunities/' + id);
+    const write = can('opportunities.write');
+    const stage = field('Stage', { name: 'status', type: 'select', value: o.status, options: STAGES.map(s => ({ value: s, label: s })) });
+    const owner = field('Owner', { name: 'owner', value: o.owner, maxlength: 100 });
+    const followUp = field('Follow up on', { name: 'followUp', type: 'date', value: o.follow_up });
+    const worth = field('Deal value (USD)', { name: 'value', type: 'number', min: 0, value: String(o.value_cents / 100) });
+    const note = field('Add a note', { name: 'note', type: 'textarea', maxlength: 2000 });
+    const detail = (label, text) => h('p', { class: 'small' }, h('b', {}, label + ': '), text || '—');
+    const body = h('div', {},
+      detail('Type', KIND_LABEL[o.kind]), detail('Email', o.email), detail('Phone', o.phone), detail('Company / college', o.company),
+      detail('Preparing for', o.role_interest), detail('Came from page', o.source_page), detail('First asked', dateTime(o.created_at)),
+      o.message ? h('div', { class: 'msg-body' }, o.message) : null,
+      write ? h('div', {}, stage, owner, followUp, worth, note) : null,
+      pages.length ? h('div', {}, h('h2', {}, 'Pages this visitor viewed'), pages.map(p => h('div', { class: 'list-item' }, h('span', {}, p.path), h('span', { class: 'muted small' }, dateTime(p.at))))) : null,
+      h('h2', {}, 'History'),
+      notes.length ? notes.map(n => h('div', { class: 'list-item' }, h('span', {}, n.body), h('span', { class: 'muted small' }, n.author + ' · ' + dateTime(n.created_at)))) : h('p', { class: 'muted' }, 'No notes yet.'),
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(o.email) + '?subject=' + encodeURIComponent('Your ShortlistPrep ' + (o.kind === 'demo' ? 'demo' : 'request')) }, 'Reply by email')));
+    const buttons = [];
+    if (write) buttons.push({ label: 'Save', kind: 'primary', run: () => guard(async () => {
+      const v = values(body);
+      await patch('/admin/api/opportunities/' + o.id, { status: v.status, owner: v.owner, followUp: v.followUp, valueCents: Math.round(Number(v.value || 0) * 100), note: v.note });
+      toast('Saved'); done();
+    }) });
+    if (can('customers.write') && !o.customer_id) buttons.push({ label: 'Make customer', run: () => guard(async () => { await post('/admin/api/opportunities/' + o.id + '/customer'); toast('Customer created'); done(); }) });
+    dialog((KIND_LABEL[o.kind] || 'Opportunity') + ' · ' + (o.name || o.email), body, buttons);
+  }
+
+  // ---------- website visits ----------
+  async function visitors(el, days = 30) {
+    const a = await get('/admin/api/analytics?days=' + days);
+    const range = h('select', { 'aria-label': 'Period', onchange: e => visitors(el, Number(e.target.value)) }, [[7, 'Last 7 days'], [30, 'Last 30 days'], [90, 'Last 90 days']].map(([v, l]) => h('option', { value: v }, l)));
+    range.value = String(days);
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num), sub ? h('div', { class: 'sub' }, sub) : null);
+    const max = Math.max(1, ...a.series.map(s => s.visitors));
+    const bars = h('div', { class: 'bars', role: 'img', 'aria-label': 'Visitors per day' },
+      a.series.map(s => { const i = h('i', { class: s.visitors ? '' : 'zero', title: s.date + ': ' + s.visitors + ' visitors, ' + s.views + ' page views' }); i.style.height = Math.max(2, (s.visitors / max) * 85) + '%'; return h('div', { class: 'bar' }, h('span', { class: s.visitors ? '' : 'z' }, s.visitors), i); }));
+    const list = (title, rows, empty) => h('div', { class: 'card' }, h('h2', {}, title),
+      rows.length ? rows.map(r => h('div', { class: 'list-item' }, h('span', {}, r.name || r.path), h('span', {}, r.visitors + (r.views !== undefined ? ' visitors · ' + r.views + ' views' : ' visitors')))) : h('p', { class: 'muted' }, empty));
+    el.replaceChildren(
+      head('Website visits', range),
+      h('div', { class: 'cards' },
+        stat('Visitors', a.visitors, 'people, not page loads'), stat('Page views', a.views), stat('Today', a.today.visitors, a.today.views + ' page views'),
+        stat('Returning visitors', a.returning, 'came on more than one day'), stat('Opportunities', a.opportunities, 'demo and interest requests'), stat('Visitor to opportunity', a.conversionPercent + '%')),
+      h('div', { class: 'card' }, h('h2', {}, 'Visitors per day'), bars, h('div', { class: 'axis' }, h('span', {}, a.series[0].date), h('span', {}, a.series[a.series.length - 1].date))),
+      h('div', { class: 'grid2' }, list('Top pages', a.topPages, 'No visits recorded yet.'), list('Where visitors come from', a.referrers, 'No visits recorded yet.')),
+      h('div', { class: 'grid2' }, list('Devices', a.devices, 'No visits recorded yet.'), list('Campaign sources (utm_source)', a.sources, 'None yet. Add ?utm_source=name to a link you share.')),
+      h('p', { class: 'muted small' }, 'Visits are counted without cookies or IP addresses: each browser keeps a random id. Search-engine bots and visitors who send "Do Not Track" are not counted.'));
+  }
+
+  // ---------- topics and resume per customer (ShortlistPrep.AI's AI uses them to choose the area of its answers) ----------
+  async function profiles(el, query = '') {
+    const { customers: all } = await get('/admin/api/profiles');
+    const term = query.trim().toLowerCase();
+    const rows = term ? all.filter(r => [r.email, r.name, r.organisation, ...r.topics].join(' ').toLowerCase().includes(term)) : all;
+    el.replaceChildren(
+      head('Topics and resume', searchBox(v => profiles(el, v), 'Search customer or topic', query)),
+      h('p', { class: 'muted' }, 'Set what each customer\'s questions are about. ShortlistPrep.AI receives the topics and the resume with its licence check (at start and every 30 minutes), and the AI uses them to decide the area of its answers.'),
+      table([
+        { label: 'Customer', render: r => (r.name ? `${r.name} <${r.email}>` : r.email) },
+        { label: 'Topics', wrap: true, render: r => (r.topics.length ? r.topics.join(', ') : h('span', { class: 'muted' }, 'none')) },
+        { label: 'Resume', render: r => (r.resume_chars ? (r.resume_name || 'pasted text') + ` · ${r.resume_chars.toLocaleString()} characters` : h('span', { class: 'muted' }, 'none')) },
+        { label: 'Updated', render: r => dateTime(r.updated_at) },
+      ], rows, r => profileEditor(r.id, () => profiles(el, query)), term ? 'No customers match.' : 'No customers yet. Add one on the Customers page.'));
+  }
+
+  /** Text from a resume file: .txt / .md read here, .docx unzipped here, .pdf read by the server (Gemini). */
+  async function resumeFromFile(file) {
+    const name = file.name.toLowerCase();
+    if (file.size > 5 * 1024 * 1024) throw new Error('The file is larger than 5 MB');
+    if (/\.(txt|md|text)$/.test(name)) return file.text();
+    if (name.endsWith('.docx')) return docxText(await file.arrayBuffer());
+    if (name.endsWith('.pdf')) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return (await post('/admin/api/resume-text', { data: btoa(bin) })).text;
+    }
+    throw new Error('Choose a .pdf, .docx or .txt file, or paste the text');
+  }
+
+  /** The text of a Word .docx file: word/document.xml from the zip, paragraphs as lines. */
+  async function docxText(buffer) {
+    const view = new DataView(buffer);
+    let end = buffer.byteLength - 22;
+    while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--;   // end of the zip's file list
+    if (end < 0) throw new Error('This is not a valid .docx file');
+    let at = view.getUint32(end + 16, true);
+    for (let n = view.getUint16(end + 10, true); n > 0; n--) {
+      const method = view.getUint16(at + 10, true), size = view.getUint32(at + 20, true);
+      const nameLen = view.getUint16(at + 28, true), extra = view.getUint16(at + 30, true), comment = view.getUint16(at + 32, true);
+      const local = view.getUint32(at + 42, true);
+      const fileName = new TextDecoder().decode(new Uint8Array(buffer, at + 46, nameLen));
+      if (fileName === 'word/document.xml') {
+        const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+        const raw = new Uint8Array(buffer, start, size);
+        const xml = method === 0 ? new TextDecoder().decode(raw)
+          : await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        return [...doc.getElementsByTagName('w:p')].map(p => [...p.getElementsByTagName('w:t')].map(t => t.textContent).join('')).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      }
+      at += 46 + nameLen + extra + comment;
+    }
+    throw new Error('No text was found in this .docx file');
+  }
+
+  async function profileEditor(customerId, done) {
+    const { customer: c, profile: p } = await get(`/admin/api/customers/${customerId}/profile`);
+    const write = can('profiles.write');
+    let resumeName = p.resumeName;
+    const topics = field('Topics', { name: 'topics', type: 'textarea', value: p.topics.join('\n'), maxlength: 3500 },
+      'One per line, for example: Power Apps, Dataverse security, React hooks. Questions are expected to be about these areas.');
+    const resume = h('textarea', { name: 'resume', maxlength: 20000, placeholder: 'Paste the resume text here, or choose a file above.', 'aria-label': 'Resume text' }, p.resume);
+    resume.style.minHeight = '260px';
+    const count = h('span', { class: 'hint' });
+    const fileNote = h('span', { class: 'hint' }, resumeName ? 'From ' + resumeName : '');
+    const showCount = () => { count.textContent = `${resume.value.length.toLocaleString()} / 20,000 characters. The AI reads the first 6,000.`; };
+    resume.addEventListener('input', showCount); showCount();
+    const picker = h('input', { type: 'file', accept: '.pdf,.docx,.txt,.md', 'aria-label': 'Resume file' });
+    picker.addEventListener('change', () => guard(async () => {
+      const file = picker.files[0];
+      if (!file) return;
+      fileNote.textContent = `Reading ${file.name}…`;
+      try {
+        resume.value = (await resumeFromFile(file)).slice(0, 20000);
+        resumeName = file.name;
+        fileNote.textContent = `From ${file.name}. Check the text, then press Save.`;
+        showCount();
+      } catch (err) { fileNote.textContent = ''; throw err; } finally { picker.value = ''; }
+    }));
+    const body = h('div', {},
+      h('p', { class: 'muted small' }, `${c.email}${p.updatedAt ? ` · last changed ${dateTime(p.updatedAt)} by ${p.updatedBy}` : ''}`),
+      topics,
+      h('label', { class: 'field' }, 'Resume', write ? picker : null, fileNote, resume, count),
+      h('p', { class: 'muted small' }, 'ShortlistPrep.AI gets the changes on its next licence check: when it starts, or within 30 minutes while it runs.'));
+    if (!write) body.querySelectorAll('textarea').forEach(t => { t.readOnly = true; });
+    const buttons = write ? [{ label: 'Save', kind: 'primary', run: async () => {
+      const ok = await guard(async () => {
+        const v = values(body);
+        await post(`/admin/api/customers/${c.id}/profile`, { topics: v.topics, resume: v.resume, resumeName: v.resume.trim() ? resumeName : '' });
+        return true;
+      });
+      if (!ok) return true;
+      toast('Saved'); done();
+    } }, { label: 'Clear resume', run: () => { resume.value = ''; resumeName = ''; fileNote.textContent = ''; showCount(); return true; }, closes: false }] : [];
+    buttons.push({ label: write ? 'Cancel' : 'Close', run: () => {} });
+    dialog(`Topics and resume · ${c.name || c.email}`, body, buttons).el.classList.add('wide');
+  }
+
+  // ---------- Candidates: progress, documents and activity in My account and the Career toolkit ----------
+  const STEP_NAMES = [['resume', 'Resume'], ['ats', 'ATS check'], ['versions', 'Role resumes'], ['matches', 'Job match'], ['searches', 'AI job search']];
+  const ACTION_LABEL = {
+    login: '🔑 Signed in', 'resume.uploaded': '📄 Uploaded resume', 'resume.pdf_read': '📄 PDF read', 'ats.checked': '✅ ATS check',
+    'version.created': '🧩 Role resume created', 'version.deleted': '🗑 Role resume deleted', 'match.created': '✉️ Job match & cover letter',
+    'match.deleted': '🗑 Job match deleted', 'jobsearch.started': '🎯 AI job search started', 'jobsearch.done': '🎯 AI job search finished',
+    'jobsearch.failed': '⚠️ AI job search failed', 'jobprep.created': '💡 Opened Insight for a job', 'tokens.claimed': '⚡ Asked for more AI tokens', 'tokens.granted': '⚡ Got AI tokens', download: '⬇️ Downloaded',
+  };
+  const scorePill = n => (n == null ? '—' : h('span', { class: 'pill ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)));
+  const progressDots = steps => h('span', { class: 'cand-dots', title: STEP_NAMES.map(([k, l]) => `${steps[k] ? '✓' : '·'} ${l}`).join('\n') },
+    STEP_NAMES.map(([k, l]) => h('i', { class: steps[k] ? 'on' : '', 'aria-label': `${l}: ${steps[k] ? 'done' : 'not yet'}` })));
+  const ago = s => {
+    if (!s) return '—';
+    const m = Math.floor((Date.now() - Date.parse(s)) / 60000);
+    return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : m < 43200 ? `${Math.floor(m / 1440)} days ago` : date(s);
+  };
+  const dlLink = (id, kind, docId, label) => h('a', { class: 'btn sm', href: `/admin/api/candidates/${id}/download?kind=${kind}${docId ? '&id=' + docId : ''}`, download: '' }, '⬇ ' + label);
+
+  async function candidates(el, state = { q: '', filter: '' }) {
+    const d = await get(`/admin/api/candidates?q=${encodeURIComponent(state.q)}&filter=${state.filter}`);
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const redo = change => candidates(el, { ...state, ...change });
+    const filter = h('select', { 'aria-label': 'Show', onchange: e => redo({ filter: e.target.value }) },
+      [['', 'All candidates'], ['resume', 'Uploaded a resume'], ['noresume', 'No resume yet'], ['searching', 'Ran an AI job search'], ['active', 'Active in the last 7 days']]
+        .map(([v, l]) => h('option', { value: v }, l)));
+    filter.value = state.filter;
+    el.replaceChildren(
+      head('Candidates', filter, searchBox(v => redo({ q: v }), 'Search name, email, organisation', state.q)),
+      h('p', { class: 'muted' }, 'Customers using My account and the Career toolkit on the website: how far they got, their documents, job searches and what they did. Click a candidate for the details.'),
+      h('div', { class: 'cards' }, stat('Candidates', d.stats.total), stat('Uploaded a resume', d.stats.withResume, `${d.stats.atsDone} ran the ATS check`),
+        stat('Active in 7 days', d.stats.activeWeek), stat('AI job searches (7 days)', d.stats.searchesWeek)),
+      table([
+        { label: 'Candidate', render: r => h('span', {}, h('b', {}, r.name || r.email), h('br'), h('span', { class: 'small muted' }, r.name ? r.email : (r.organisation || ''))) },
+        { label: 'Progress', render: r => h('span', { class: 'cand-progress' }, progressDots(r.steps), h('span', { class: 'small muted' }, `${r.done}/5`)) },
+        { label: 'Resume', render: r => (r.resume ? h('span', {}, '✓ ', h('span', { class: 'small' }, r.resume.fileName || 'Pasted')) : h('span', { class: 'muted' }, 'Not yet')) },
+        { label: 'ATS', render: r => scorePill(r.resume && r.resume.atsScore) },
+        { label: 'Role resumes', render: r => String(r.versions) },
+        { label: 'Job matches', render: r => String(r.matches) },
+        { label: 'Job searches', render: r => String(r.searches) },
+        { label: 'AI actions', render: r => String(r.aiActions) },
+        { label: 'Login', render: r => (!r.login.exists ? pill('none') : r.login.disabled ? pill('off') : h('span', { class: 'small' }, r.login.lastLogin ? ago(r.login.lastLogin) : 'never')) },
+        { label: 'Last active', render: r => h('span', { title: dateTime(r.lastActive) }, ago(r.lastActive)) },
+      ], d.candidates, r => candidateDetail(el, r.id, () => candidates(el, state)),
+      state.q || state.filter ? 'No candidates match.' : 'No candidates yet. They appear here once a customer has a website login or uses the Career toolkit.'));
+  }
+
+  async function candidateDetail(el, id, back) {
+    const d = await get(`/admin/api/candidates/${id}`);
+    const c = d.candidate;
+    const section = (title, ...body) => h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, title), ...body);
+    const tracker = h('ol', { class: 'cand-track' }, STEP_NAMES.map(([k, l], i) => h('li', { class: c.steps[k] ? 'on' : '' }, h('b', {}, c.steps[k] ? '✓' : String(i + 1)), l)));
+    const r = d.resume;
+    const results = h('div', {});
+
+    const showSearch = async s => {
+      const { search } = await get(`/admin/api/candidates/${id}/searches/${s.id}`);
+      const res = search.result;
+      if (!res) { results.replaceChildren(h('p', { class: 'muted' }, search.error || 'No results.')); return; }
+      const groups = [['high', 'High probability: apply first'], ['medium', 'Medium probability'], ['stretch', 'Low probability: stretch']];
+      results.replaceChildren(h('div', { class: 'cand-results' },
+        h('h3', {}, `Results of ${dateTime(search.createdAt)}`),
+        h('p', { class: 'small' }, h('b', {}, 'AI profile: '), [res.profile.level, res.profile.summary].filter(Boolean).join(' · ')),
+        res.profile.targetRoles.length ? h('p', { class: 'small' }, h('b', {}, 'Best-fit roles: '), res.profile.targetRoles.join(', ')) : null,
+        h('p', { class: 'small muted' }, `${res.jobs.length} matches from ${res.coverage.live} live jobs at ${res.coverage.companies} companies` +
+          (res.coverage.notFound.length ? ` · not found: ${res.coverage.notFound.join(', ')}` : '')),
+        groups.map(([b, label]) => {
+          const list = res.jobs.filter(j => j.bucket === b);
+          return list.length ? [h('h4', {}, `${label} (${list.length})`), table([
+            { label: 'Fit', render: j => scorePill(j.score) },
+            { label: 'Role', render: j => h('b', {}, j.title), wrap: true }, { label: 'Company', render: j => j.company },
+            { label: 'Location', render: j => j.location || j.country || '—', wrap: true },
+            { label: 'Why / gap', render: j => h('span', { class: 'small' }, j.why, j.gap && !/^none\.?$/i.test(j.gap) ? h('span', { class: 'muted' }, ` · Gap: ${j.gap}`) : null), wrap: true },
+            { label: '', render: j => h('a', { href: j.url, target: '_blank', rel: 'noopener noreferrer', class: 'small' }, 'Open ↗') },
+          ], list)] : null;
+        }),
+        res.profile.resumeFixes.length ? [h('h4', {}, 'Resume fixes suggested'), h('ul', { class: 'small' }, res.profile.resumeFixes.map(f => h('li', {}, f)))] : null));
+      results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    const maxUse = Math.max(1, ...d.usage.map(u => u.count));
+
+    // Prepare-for-this-job plans the candidate made (saved in career_job_preps)
+    const prepBox = h('div', {});
+    const MX = { match: ['✓ Match', 'good'], partial: ['◐ Partial', 'warn'], missing: ['✕ Missing', 'bad'] };
+    const showPrep = async x => {
+      const { prep } = await get(`/admin/api/candidates/${id}/preps/${x.id}`);
+      const p = prep.plan || {};
+      const linkList = links => h('span', { class: 'cand-links' }, (links || []).map(l => h('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer', class: 'small' }, l.label)));
+      prepBox.replaceChildren(h('div', { class: 'cand-results' },
+        h('h3', {}, `${prep.jobTitle} at ${prep.company}`, ' ', h('span', { class: 'small muted' }, `fit ${prep.fit} · prepared ${dateTime(prep.createdAt)}`)),
+        p.summary ? h('p', { class: 'small' }, p.summary) : null,
+        p.matrix ? [h('h4', {}, `Skill matrix · weighted skill score ${p.matrix.score}/100`), table([
+          { label: 'Required', render: r => h('b', {}, r.skill) },
+          { label: 'Type', render: r => (r.type ? `${r.type === 'functional' ? 'Functional' : 'Technical'}${r.priority === 'nice' ? ' · nice to have' : ''}` : '—') },
+          { label: 'Weight', render: r => `${r.weight}%` },
+          { label: 'Candidate', render: r => h('span', { class: 'pill ' + MX[r.status][1] }, MX[r.status][0]) },
+          { label: 'Evidence', render: r => h('span', { class: 'small' }, r.evidence || '—'), wrap: true },
+          { label: 'Score', render: r => `${r.earned} / ${r.weight}` }, { label: 'Gap', render: r => (r.missing ? `−${r.missing}` : '—') },
+        ], p.matrix.rows)] : null,
+        (p.gaps || []).length ? [h('h4', {}, `Gaps to close (+${p.gapPoints} fit)`), table([
+          { label: 'Skill', render: g => h('b', {}, g.skill) }, { label: 'Points', render: g => `+${g.points}` },
+          { label: 'Importance', render: g => pill(g.importance === 'high' ? 'failed' : g.importance === 'low' ? 'active' : 'expired') },
+          { label: 'How to close it', render: g => h('span', { class: 'small' }, g.howToClose || g.why || '—', g.hours ? h('span', { class: 'muted' }, ` · ~${g.hours} h`) : null), wrap: true },
+          { label: 'Learning links', render: g => linkList(g.links.concat(g.certification ? [{ label: g.certification.name, url: g.certification.url }] : [])), wrap: true },
+        ], p.gaps)] : null,
+        (p.plan || []).length ? [h('h4', {}, 'Plan to a full fit'), h('ol', { class: 'small' }, p.plan.map(x => h('li', {}, x)))] : null,
+        (p.interviewQuestions || []).length ? [h('h4', {}, 'Interview questions'), h('ol', { class: 'small' }, p.interviewQuestions.map(x => typeof x === 'string' ? h('li', {}, x)
+          : h('li', {}, h('span', { class: 'muted' }, ({ mcq: 'MCQ', short: 'Short', scenario: 'Scenario' })[x.type] + ': '), x.question,
+            x.options ? h('div', {}, x.options.map((o, i) => h('div', {}, 'ABCD'[i] + '. ' + o + (i === x.correct ? '  ✓' : '')))) : null,
+            h('div', { class: 'muted' }, 'Answer: ' + x.answer))))] : null,
+        (p.tips || []).length ? [h('h4', {}, 'Tips'), h('ul', { class: 'small' }, p.tips.map(x => h('li', {}, x)))] : null));
+      prepBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    el.replaceChildren(
+      head(c.name || c.email, h('button', { class: 'btn', onclick: back }, '← All candidates')),
+      h('div', { class: 'card' },
+        h('dl', { class: 'kv' },
+          h('dt', {}, 'Email'), h('dd', {}, c.email), h('dt', {}, 'Organisation'), h('dd', {}, c.organisation || '—'), h('dt', {}, 'Sector'), h('dd', {}, c.sectorLabel || 'Not chosen yet'),
+          h('dt', {}, 'Website login'), h('dd', {}, !c.login.exists ? 'No login yet' : c.login.disabled ? 'Turned off' : `Active · last sign-in ${c.login.lastLogin ? dateTime(c.login.lastLogin) : 'never'}`),
+          h('dt', {}, 'Last active'), h('dd', {}, c.lastActive ? `${dateTime(c.lastActive)} (${ago(c.lastActive)})` : '—'),
+          h('dt', {}, 'AI actions'), h('dd', {}, `${c.aiActions || 0} in total`)),
+        h('div', { class: 'small muted', style: 'margin-bottom:6px' }, `Career toolkit progress: ${c.done} of 5 steps`), tracker),
+
+      section('Plan and usage', (() => {
+        const e = d.entitlements, wrap = h('div', {});
+        const rows = e.limits.map(l => h('div', { class: 'list-item' }, h('span', {}, l.label),
+          h('span', {}, l.limit == null ? String(l.used) : l.used + ' of ' + l.limit, l.limit != null && l.pct >= 100 ? h('span', { class: 'pill bad', style: 'margin-left:8px' }, 'limit reached') : null)));
+        const now = h('p', {}, h('b', {}, e.plan.name), ' ', e.plan.free ? h('span', { class: 'pill' }, 'no paid plan') : h('span', { class: 'pill good' }, 'until ' + date(e.plan.endsAt)),
+          h('span', { class: 'muted small' }, e.plan.dailyTokens ? '  · ' + e.plan.dailyTokens.toLocaleString('en-IN') + ' AI tokens a day' : ''));
+        const reload = () => candidateDetail(el, id, back);
+        const tools = can('pricing.write') ? h('div', { class: 'actions' },
+          h('button', { class: 'btn sm', onclick: () => guard(async () => {
+            const p = await get('/admin/api/pricing');
+            const f = h('div', {}, field('Plan', { name: 'planId', type: 'select', options: p.plans.filter(x => !x.archived).map(x => ({ value: x.id, label: x.name + ' · ₹' + x.price })) }),
+              field('Days (optional)', { name: 'days', type: 'number', min: 1, max: 3650 }, 'Leave empty for the length of the plan.'));
+            dialog('Give a plan to ' + (c.name || c.email), f, [{ label: 'Give plan', kind: 'primary', run: () => guard(async () => {
+              const v = values(f); await post('/admin/api/candidates/' + id + '/plan', { planId: Number(v.planId), days: v.days ? Number(v.days) : undefined }); toast('Plan given'); reload(); }) }]);
+          }) }, 'Give a plan'),
+          !e.plan.free ? h('button', { class: 'btn sm danger', onclick: () => guard(async () => { await post('/admin/api/candidates/' + id + '/plan', { action: 'end' }); toast('Plan ended'); reload(); }) }, 'End plan') : null) : null;
+        wrap.append(now, ...rows, tools);
+        if (d.planOrders.length) wrap.append(h('h3', { style: 'margin-top:12px' }, 'Plan orders'), table([
+          { label: 'Order', render: o => o.number || '#' + o.id }, { label: 'Plan', render: o => o.plan_name }, { label: 'Amount', render: o => money(o.amount_paise, 'INR') },
+          { label: 'Status', render: o => pill(o.status) }, { label: 'Date', render: o => date(o.created_at) }], d.planOrders));
+        return wrap;
+      })()),
+
+      section('Resume',
+        !r ? h('p', { class: 'muted' }, 'No resume uploaded yet.') : h('div', {},
+          h('p', {}, h('b', {}, r.fileName || 'Pasted resume'), h('span', { class: 'muted' }, ` · ${r.chars.toLocaleString()} characters · uploaded ${dateTime(r.uploadedAt)}`)),
+          h('div', { class: 'actions' }, dlLink(id, 'original', null, 'Uploaded resume (.txt)'), r.ats ? dlLink(id, 'ats', null, 'ATS-friendly resume (.docx)') : null),
+          h('details', {}, h('summary', { class: 'small' }, 'Preview the uploaded text'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, r.preview + (r.chars > r.preview.length ? '\n…' : ''))),
+          r.ats ? h('div', { class: 'cand-ats' },
+            h('h3', {}, 'ATS check ', scorePill(r.ats.score), h('span', { class: 'small muted' }, `  ${dateTime(r.ats.checkedAt)}`)),
+            h('p', { class: 'small' }, r.ats.verdict),
+            r.ats.checks.length ? h('ul', { class: 'small cand-checks' }, r.ats.checks.map(k => h('li', { class: k.status }, h('b', {}, k.name + ': '), k.detail))) : null,
+            r.ats.keywords.missing.length ? h('p', { class: 'small' }, h('b', {}, 'Missing keywords: '), r.ats.keywords.missing.join(', ')) : null,
+            r.ats.suggestedRoles.length ? h('p', { class: 'small' }, h('b', {}, 'Suggested roles: '), r.ats.suggestedRoles.join(', ')) : null)
+            : h('p', { class: 'small muted' }, 'ATS check not run yet.'))),
+
+      section(`Role-based resumes (${d.versions.length})`, table([
+        { label: 'Role', render: v => h('b', {}, v.role) }, { label: 'Fit', render: v => scorePill(v.fitScore) },
+        { label: 'Note', render: v => h('span', { class: 'small' }, v.fitNote || '—'), wrap: true }, { label: 'Created', render: v => dateTime(v.createdAt) },
+        { label: '', render: v => dlLink(id, 'version', v.id, '.docx') },
+      ], d.versions, null, 'No role-based resumes yet.')),
+
+      section(`Job matches & cover letters (${d.matches.length})`, table([
+        { label: 'Job', render: m => h('b', {}, [m.jobTitle, m.company].filter(Boolean).join(' at ') || 'Job') }, { label: 'Score', render: m => scorePill(m.score) },
+        { label: 'Verdict', render: m => h('span', { class: 'small' }, m.verdict || '—'), wrap: true }, { label: 'Created', render: m => dateTime(m.createdAt) },
+        { label: '', render: m => (m.hasLetter ? dlLink(id, 'letter', m.id, 'Cover letter') : '—') },
+      ], d.matches, null, 'No job matches yet.')),
+
+      section(`AI job searches (${d.searches.length})`,
+        table([
+          { label: 'When', render: s => dateTime(s.createdAt) },
+          { label: 'Search', render: s => h('span', { class: 'small' }, [s.params.role || 'Roles from resume', [s.params.city, s.params.country].filter(Boolean).join(', ') || 'Any location',
+            s.params.level, s.params.companies ? `Companies: ${s.params.companies}` : 'Well-known companies', s.params.resumeLabel].filter(Boolean).join(' · ')), wrap: true },
+          { label: 'Result', render: s => (s.status === 'done' ? h('span', { class: 'cand-counts' }, h('span', { class: 'pill good' }, `${s.counts.high} high`), h('span', { class: 'pill warn' }, `${s.counts.medium} med`), h('span', { class: 'pill bad' }, `${s.counts.stretch} low`))
+            : s.status === 'running' ? pill('open') : h('span', { class: 'small', style: 'color:var(--bad)' }, s.error || 'Failed')), wrap: true },
+          { label: '', render: s => (s.status === 'done' ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showSearch(s)); } }, 'View results') : '') },
+        ], d.searches, null, 'No AI job searches yet.'),
+        results),
+
+      section(`Job preparation plans (${d.preps.length})`,
+        table([
+          { label: 'Job', render: x => h('span', {}, h('b', {}, x.jobTitle), h('br'), h('span', { class: 'small muted' }, [x.company, x.location].filter(Boolean).join(' · '))), wrap: true },
+          { label: 'Fit', render: x => scorePill(x.fit) }, { label: 'Skill score', render: x => scorePill(x.skillScore) },
+          { label: 'Gaps', render: x => `${x.gaps} (+${x.gapPoints})` }, { label: 'Prepared', render: x => dateTime(x.createdAt) },
+          { label: '', render: x => h('span', { class: 'tools' }, h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showPrep(x)); } }, 'View plan'),
+            x.url ? h('a', { class: 'btn sm', href: x.url, target: '_blank', rel: 'noopener noreferrer', onclick: e => e.stopPropagation() }, 'Job ↗') : null) },
+        ], d.preps, null, 'No preparation plans yet. They appear when the candidate presses "Insight" on a job.'),
+        prepBox),
+
+      h('div', { class: 'grid2', style: 'margin-top:14px' },
+        h('div', { class: 'card' }, h('h2', {}, 'Activity'),
+          d.activity.length ? h('ol', { class: 'cand-timeline' }, d.activity.map(a => h('li', {},
+            h('span', { class: 'small muted', title: dateTime(a.at) }, ago(a.at)), h('b', {}, ACTION_LABEL[a.action] || a.action), a.detail ? h('span', { class: 'small' }, a.detail) : null)))
+            : h('p', { class: 'muted small' }, 'No activity recorded yet. Sign-ins, uploads, AI actions and downloads are recorded from now on.')),
+        h('div', { class: 'card' }, h('h2', {}, 'AI actions per day (30 days)'),
+          d.usage.length ? h('div', { class: 'cand-bars' }, d.usage.map(u => h('div', { class: 'cand-bar', title: `${date(u.day)}: ${u.count}` },
+            h('i', { style: `height:${Math.max(6, u.count / maxUse * 100)}%` }), h('span', {}, String(u.count)), h('small', {}, u.day.slice(5)))))
+            : h('p', { class: 'muted small' }, 'No AI actions in the last 30 days.'))));
+  }
+
+  // ---------- AI tokens: daily allowance per customer, token packs, requests for more ----------
+  const tok = n => { n = Number(n) || 0; return n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n); };
+  const priceText = (p, cur) => (p ? `${cur === 'INR' ? '₹' : cur + ' '}${Number(p).toLocaleString('en-IN')}` : 'Free / to quote');
+  const kindText = (kind, tokens, days) => (kind === 'daily' ? `${tok(tokens)} a day for ${days} days` : `${tok(tokens)} extra tokens`);
+  const LEVEL_PILL = { ok: 'good', warn: 'warn', out: 'bad' };
+
+  async function tokens(el) {
+    const d = await get('/admin/api/tokens');
+    const write = can('tokens.write');
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const reload = () => tokens(el);
+
+    const daily = h('input', { type: 'number', min: 0, step: 1000, value: d.settings.dailyDefault, 'aria-label': 'Daily tokens per customer' });
+    const warn = h('input', { type: 'number', min: 10, max: 99, value: d.settings.warnPct, 'aria-label': 'Warn at per cent' });
+    const settingsCard = h('div', { class: 'card', style: 'margin-top:14px' },
+      h('h2', {}, 'Daily allowance'),
+      h('p', { class: 'muted small' }, `Every customer gets this many AI tokens a day (the day changes at midnight India time), unless you give them more. Customers see their tokens at the bottom of the website and are warned from the level below. Today is ${d.day}.`),
+      h('div', { class: 'row2' },
+        h('label', { class: 'field' }, 'Tokens per customer per day', daily, h('span', { class: 'hint' }, 'An ATS check uses about 8,000 tokens; an AI job search 20,000 to 30,000.')),
+        h('label', { class: 'field' }, 'Warn customers at (% of the day used)', warn)),
+      write ? h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => guard(async () => { await post('/admin/api/tokens/settings', { dailyDefault: daily.value, warnPct: warn.value }); toast('Saved'); reload(); }) }, 'Save')) : null);
+
+    const decide = (k, action) => {
+      if (action === 'reject') {
+        const note = h('textarea', { maxlength: 500, placeholder: 'Reason (optional, for your records)' });
+        dialog(`Reject request from ${k.customer.email}?`, h('div', {}, note), [{ label: 'Reject', kind: 'danger', run: async () => {
+          const ok = await guard(async () => { await post(`/admin/api/tokens/claims/${k.id}`, { action: 'reject', note: note.value }); return true; });
+          if (!ok) return true; toast('Rejected'); reload();
+        } }]);
+        return;
+      }
+      const f = h('div', {},
+        h('p', { class: 'small' }, h('b', {}, k.customer.name || k.customer.email), ` asked for ${k.packName}: ${kindText(k.kind, k.tokens, k.days)}${k.price ? `, ${priceText(k.price, k.currency)}` : ''}.`, k.message ? h('span', { class: 'muted' }, ` "${k.message}"`) : null),
+        field('Give', { name: 'kind', type: 'select', value: k.kind, options: [{ value: 'topup', label: 'Extra tokens (used after the daily allowance)' }, { value: 'daily', label: 'A bigger daily allowance for some days' }] }),
+        h('div', { class: 'row2' }, field('Tokens', { name: 'tokens', type: 'number', value: k.tokens, min: 1000 }), field('Days (daily allowance only)', { name: 'days', type: 'number', value: k.days || 30, min: 1 })),
+        field('Price agreed', { name: 'price', type: 'number', value: k.price, min: 0 }, `In ${k.currency}. Record what the customer paid or will pay.`),
+        field('Note (optional)', { name: 'note', type: 'textarea', maxlength: 500 }));
+      dialog('Approve token request', f, [{ label: 'Approve and give tokens', kind: 'primary', run: async () => {
+        const ok = await guard(async () => { await post(`/admin/api/tokens/claims/${k.id}`, { action: 'approve', ...values(f) }); return true; });
+        if (!ok) return true; toast('Approved: tokens given'); reload();
+      } }]);
+    };
+
+    const packForm = existing => {
+      const p = existing || { kind: 'topup', tokens: 200000, days: 30, price: 0, currency: 'INR', active: true, sort: 0 };
+      const f = h('div', {},
+        field('Name', { name: 'name', required: true, value: p.name || '', maxlength: 80, placeholder: 'e.g. Job hunt booster' }),
+        field('Type', { name: 'kind', type: 'select', value: p.kind, options: [{ value: 'topup', label: 'Extra tokens (one time)' }, { value: 'daily', label: 'Bigger daily allowance for some days' }] }),
+        h('div', { class: 'row2' }, field('Tokens', { name: 'tokens', type: 'number', value: p.tokens, min: 1000 }), field('Days (daily type only)', { name: 'days', type: 'number', value: p.days || 30, min: 1 })),
+        h('div', { class: 'row2' }, field('Price', { name: 'price', type: 'number', value: p.price, min: 0 }), field('Currency', { name: 'currency', value: p.currency, maxlength: 8 })),
+        field('Description (shown to customers)', { name: 'description', value: p.description || '', maxlength: 300 }),
+        h('div', { class: 'row2' }, field('Order', { name: 'sort', type: 'number', value: p.sort || 0, min: 0 }),
+          field('Offered to customers', { name: 'active', type: 'select', value: p.active ? 'yes' : 'no', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No (hidden)' }] })));
+      dialog(existing ? 'Edit token pack' : 'New token pack', f, [{ label: 'Save', kind: 'primary', run: async () => {
+        const v = values(f);
+        const ok = await guard(async () => { await post('/admin/api/tokens/packs', { ...v, id: existing && existing.id, active: v.active === 'yes' }); return true; });
+        if (!ok) return true; toast('Saved'); reload();
+      } }]);
+    };
+
+    const grantForm = c => {
+      const f = h('div', {},
+        h('p', { class: 'small' }, `${c.name || c.email} has used ${tok(c.used)} of ${tok(c.daily)} today and has ${tok(c.bonus)} extra tokens.`),
+        field('Give', { name: 'kind', type: 'select', options: [{ value: 'topup', label: 'Extra tokens' }, { value: 'daily', label: 'A bigger daily allowance' }] }),
+        h('div', { class: 'row2' }, field('Tokens', { name: 'tokens', type: 'number', value: 100000, min: 1000 }), field('Days (daily allowance only)', { name: 'days', type: 'number', value: 30, min: 1 })));
+      dialog(`Give tokens to ${c.email}`, f, [
+        { label: 'Give tokens', kind: 'primary', run: async () => { const ok = await guard(async () => { await post(`/admin/api/tokens/customers/${c.id}`, values(f)); return true; }); if (!ok) return true; toast('Tokens given'); reload(); } },
+        c.dailyUntil ? { label: 'Back to the default daily allowance', run: async () => { await guard(() => post(`/admin/api/tokens/customers/${c.id}`, { action: 'reset-daily' })); reload(); } } : null,
+      ].filter(Boolean));
+    };
+
+    const pending = d.claims.filter(k => k.status === 'pending');
+    el.replaceChildren(
+      head('AI tokens', write ? h('button', { class: 'btn', onclick: () => packForm(null) }, '+ New token pack') : null),
+      h('p', { class: 'muted' }, 'AI tokens used by website customers (Career toolkit, AI Job search, Insight). Set the daily allowance, offer token packs, and answer requests for more.'),
+      h('div', { class: 'cards' },
+        stat('Tokens used today', tok(d.totals.today.t), `${d.totals.today.c} AI calls by ${d.totals.today.n} customers`),
+        stat('Tokens in 7 days', tok(d.totals.week.t), `${d.totals.week.c} AI calls`),
+        stat('Requests waiting', d.totals.pending),
+        stat('Daily allowance', tok(d.settings.dailyDefault), `warn at ${d.settings.warnPct}%`)),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, `Requests for more tokens${pending.length ? ` (${pending.length} waiting)` : ''}`),
+        table([
+          { label: 'Customer', render: k => h('span', {}, h('b', {}, k.customer.name || k.customer.email), h('br'), h('span', { class: 'small muted' }, k.customer.email)) },
+          { label: 'Asked for', render: k => h('span', {}, h('b', {}, k.packName), h('br'), h('span', { class: 'small' }, kindText(k.kind, k.tokens, k.days))) },
+          { label: 'Price', render: k => priceText(k.price, k.currency) },
+          { label: 'Message', render: k => h('span', { class: 'small' }, k.message || '—'), wrap: true },
+          { label: 'When', render: k => dateTime(k.createdAt) },
+          { label: 'Status', render: k => h('span', {}, pill(k.status), k.decidedBy ? h('div', { class: 'small muted' }, `${k.decidedBy}${k.adminNote ? ': ' + k.adminNote : ''}`) : null) },
+          { label: '', render: k => (write && k.status === 'pending' ? h('span', { class: 'tools' },
+            h('button', { class: 'btn sm primary', onclick: e => { e.stopPropagation(); decide(k, 'approve'); } }, 'Approve'),
+            h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); decide(k, 'reject'); } }, 'Reject')) : '') },
+        ], d.claims, null, 'No requests yet. Customers ask for more tokens from the bottom of the website.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Token packs offered to customers'),
+        table([
+          { label: 'Pack', render: p => h('span', {}, h('b', {}, p.name), p.description ? h('div', { class: 'small muted' }, p.description) : null), wrap: true },
+          { label: 'Gives', render: p => kindText(p.kind, p.tokens, p.days) },
+          { label: 'Price', render: p => priceText(p.price, p.currency) },
+          { label: 'Shown', render: p => pill(p.active ? 'on' : 'off') },
+          { label: '', render: p => (write ? h('span', { class: 'tools' },
+            h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); packForm(p); } }, 'Edit'),
+            h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Delete the pack "${p.name}"?`)) guard(async () => { await del(`/admin/api/tokens/packs/${p.id}`); reload(); }); } }, 'Delete')) : '') },
+        ], d.packs, null, 'No packs yet. Add one (for example 2 lakh extra tokens for ₹99). Customers can always send a custom request too.')),
+
+      settingsCard,
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Customers'),
+        table([
+          { label: 'Customer', render: c => h('span', {}, h('b', {}, c.name || c.email), h('br'), h('span', { class: 'small muted' }, c.email)) },
+          { label: 'Today', render: c => h('span', {}, `${tok(c.used)} / ${tok(c.daily)}`, h('div', { class: 'tok-bar' }, h('i', { class: c.level, style: `width:${c.pct}%` }))) },
+          { label: 'Extra tokens', render: c => tok(c.bonus) },
+          { label: 'Left today', render: c => h('span', { class: 'tok-left ' + c.level }, tok(c.left), c.level !== 'ok' ? h('span', { class: 'small' }, c.level === 'out' ? ' · used up' : ' · running low') : null) },
+          { label: 'Daily allowance', render: c => (c.dailyUntil ? h('span', { class: 'small' }, `${tok(c.daily)} until ${date(c.dailyUntil)}`) : h('span', { class: 'small muted' }, 'default')) },
+          { label: '7 days', render: c => tok(c.week) },
+          { label: '', render: c => (write ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); grantForm(c); } }, 'Give tokens') : '') },
+        ], d.customers, null, 'No AI use yet.')));
+  }
+
+  // ---------- Pricing: plans master, active pricing (the website), payment settings, plan orders ----------
+  const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const ORDER_PILL = { created: '', pending: 'warn', paid: 'good', failed: 'bad', cancelled: '', refunded: 'warn' };
+  const LIMIT_LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
+
+  async function pricingPage(el) {
+    const d = await get('/admin/api/pricing');
+    const write = can('pricing.write');
+    const reload = () => pricingPage(el);
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    const act = (p, action, msg) => guard(async () => { await post(`/admin/api/pricing/plans/${p.id}/action`, { action }); if (msg) toast(msg); reload(); });
+
+    // --- plan form (master) ---
+    const planForm = existing => {
+      const p = existing || { name: '', code: '', tagline: '', description: '', price: 0, mrp: 0, durationDays: 30, billing: 'one_time', features: [], limits: { dailyTokens: 100000 }, badge: '', cta: '', sort: 100 };
+      const f = h('div', {},
+        h('div', { class: 'row2' }, field('Plan name', { name: 'name', required: true, value: p.name, maxlength: 60, placeholder: 'e.g. Interview Pass' }),
+          field('Code (stays the same; used in orders)', { name: 'code', value: p.code, maxlength: 40, placeholder: 'interview-30' })),
+        field('Tagline (under the name)', { name: 'tagline', value: p.tagline, maxlength: 120 }),
+        h('div', { class: 'row2' }, field('Price (₹, including GST unless set otherwise)', { name: 'price', type: 'number', value: p.price, min: 0 }),
+          field('Strike-through price (₹, 0 = none)', { name: 'mrp', type: 'number', value: p.mrp, min: 0 })),
+        h('div', { class: 'row2' }, field('Length (days)', { name: 'durationDays', type: 'number', value: p.durationDays, min: 1 }),
+          field('Billing', { name: 'billing', type: 'select', value: p.billing, options: [{ value: 'one_time', label: 'One-time pass (does not renew)' }, { value: 'subscription', label: 'Subscription (renews, needs an online gateway)' }] })),
+        field('What is included (one line each)', { name: 'features', type: 'textarea', value: (p.features || []).join('\n'), maxlength: 2000 }),
+        h('h3', { style: 'margin:10px 0 4px' }, 'Limits'),
+        h('p', { class: 'small muted' }, 'AI tokens a day is enforced now (the token meter). The other limits are shown and kept for later enforcement.'),
+        h('div', { class: 'row2' }, ...Object.keys(LIMIT_LABELS).map(k => field(LIMIT_LABELS[k], { name: 'limit_' + k, type: 'number', value: p.limits && p.limits[k] != null ? p.limits[k] : '', min: 0 }))),
+        h('div', { class: 'row2' }, field('Badge (e.g. Most popular)', { name: 'badge', value: p.badge, maxlength: 30 }), field('Button text', { name: 'cta', value: p.cta, maxlength: 40, placeholder: 'Get this plan' })),
+        field('Order on the page (smaller first)', { name: 'sort', type: 'number', value: p.sort, min: 0 }));
+      dialog(existing ? `Edit plan: ${p.name}` : 'New plan', f, [{ label: 'Save plan', kind: 'primary', run: async () => {
+        const v = values(f);
+        const limits = {}; Object.keys(LIMIT_LABELS).forEach(k => { limits[k] = v['limit_' + k]; });
+        const ok = await guard(async () => { await post('/admin/api/pricing/plans', { ...v, id: existing && existing.id, limits, features: v.features }); return true; });
+        if (!ok) return true; toast(existing ? 'Plan saved' : 'Plan added (not shown on the website until you activate it)'); reload();
+      } }]).el.classList.add('wide');
+    };
+
+    // --- active pricing: what the website shows, in order ---
+    const active = d.plans.filter(p => p.active && !p.archived);
+    const preview = h('div', { class: 'price-preview' }, active.length ? active.map(p => h('div', { class: 'price-card' + (p.featured ? ' featured' : '') },
+      p.badge ? h('span', { class: 'price-badge' }, p.badge) : null,
+      h('b', {}, p.name), h('div', { class: 'small muted' }, p.tagline || ''),
+      h('div', { class: 'price-amount' }, p.price ? inr(p.price) : 'Free', p.mrp ? h('s', { class: 'muted small' }, ' ' + inr(p.mrp)) : null,
+        h('span', { class: 'small muted' }, p.price ? ` / ${p.durationDays} days` : '')),
+      h('ul', { class: 'small' }, (p.features || []).slice(0, 4).map(x => h('li', {}, x))))) : h('p', { class: 'muted' }, 'No active plans: the website shows a "plans coming soon" message.'));
+
+    // --- payment settings ---
+    const c = d.config;
+    const pay = h('div', {},
+      h('div', { class: 'row2' },
+        field('Payment gateway', { name: 'provider', type: 'select', value: c.provider, options: d.gateways.map(g => ({ value: g.id, label: g.name + (g.online && !c.adapterReady.includes(g.id) ? ' (not connected yet)' : '') })) }),
+        field('Mode', { name: 'mode', type: 'select', value: c.mode, options: [{ value: 'test', label: 'Test (sandbox)' }, { value: 'live', label: 'Live (real money)' }] })),
+      h('div', { class: 'field' }, 'Payment methods offered', h('div', { class: 'pay-methods' }, d.methods.map(m => h('label', { class: 'check' },
+        Object.assign(h('input', { type: 'checkbox', name: 'm_' + m }), { checked: !!c.methods[m] }), ' ' + c.methodNames[m])))),
+      h('div', { class: 'row2' },
+        field('GST rate (%)', { name: 'gstRate', type: 'select', value: String(c.gstRate), options: [0, 5, 12, 18, 28].map(r => ({ value: String(r), label: r + '%' })) }),
+        field('Prices on the website', { name: 'pricesIncludeGst', type: 'select', value: c.pricesIncludeGst ? 'yes' : 'no', options: [{ value: 'yes', label: 'Include GST (recommended for consumers)' }, { value: 'no', label: 'GST added at checkout' }] })),
+      h('div', { class: 'row2' }, field('GSTIN (optional)', { name: 'gstin', value: c.gstin, maxlength: 15, placeholder: '09ABCDE1234F1Z5' }), field('Order number prefix', { name: 'invoicePrefix', value: c.invoicePrefix, maxlength: 8 })),
+      h('h3', { style: 'margin:12px 0 4px' }, 'UPI and bank transfer (used until a gateway is connected)'),
+      h('div', { class: 'row2' }, field('UPI ID', { name: 'upiId', value: c.manual.upiId, maxlength: 60, placeholder: 'yourname@bank' }), field('Payee name', { name: 'payeeName', value: c.manual.payeeName, maxlength: 80 })),
+      h('div', { class: 'row2' }, field('Bank name', { name: 'bankName', value: c.manual.bankName, maxlength: 80 }), field('Account name', { name: 'accountName', value: c.manual.accountName, maxlength: 80 })),
+      h('div', { class: 'row2' }, field('Account number', { name: 'accountNumber', value: c.manual.accountNumber, maxlength: 30 }), field('IFSC', { name: 'ifsc', value: c.manual.ifsc, maxlength: 11 })),
+      field('Instructions shown to the customer', { name: 'instructions', type: 'textarea', value: c.manual.instructions, maxlength: 500 }),
+      h('h3', { style: 'margin:12px 0 4px' }, 'Gateway keys (for later)'),
+      h('p', { class: 'small muted' }, c.connected ? 'Online payments are connected.' : 'Online payments are not connected yet: save the keys now; the gateway goes live when its connector is added.'),
+      h('div', { class: 'row2' }, field('Key ID / App ID (public)', { name: 'keyId', value: c.keyId, maxlength: 120 }),
+        field(`Key secret ${c.secrets.keySecret ? '(saved ✓, leave empty to keep)' : ''}`, { name: 'keySecret', type: 'password', maxlength: 300 })),
+      field(`Webhook secret ${c.secrets.webhookSecret ? '(saved ✓, leave empty to keep)' : ''}`, { name: 'webhookSecret', type: 'password', maxlength: 300 }, 'Gateway webhook address: https://<your API address>/api/payments/webhook/' + c.provider),
+      write ? h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => guard(async () => {
+        const v = values(pay);
+        const methods = {}; d.methods.forEach(m => { methods[m] = v['m_' + m]; });
+        await post('/admin/api/pricing/config', { provider: v.provider, mode: v.mode, methods, gstRate: Number(v.gstRate), pricesIncludeGst: v.pricesIncludeGst === 'yes', gstin: v.gstin, invoicePrefix: v.invoicePrefix,
+          keyId: v.keyId, keySecret: v.keySecret, webhookSecret: v.webhookSecret,
+          manual: { upiId: v.upiId, payeeName: v.payeeName, bankName: v.bankName, accountName: v.accountName, accountNumber: v.accountNumber, ifsc: v.ifsc, instructions: v.instructions } });
+        toast('Payment settings saved'); reload();
+      }) }, 'Save payment settings')) : null);
+
+    // --- orders ---
+    const decide = (o, action) => {
+      if (action === 'mark-paid') {
+        const f = h('div', {}, h('p', { class: 'small' }, `${o.customer.name || o.customer.email} · ${o.planName} · ${inr(o.amount)} · ${o.number}`),
+          o.reference ? h('p', { class: 'small' }, h('b', {}, 'Customer reference: '), `${(o.paymentMode || '').toUpperCase()} ${o.reference}`) : h('p', { class: 'small muted' }, 'The customer has not entered a reference yet.'),
+          h('p', { class: 'small' }, 'Check the money arrived in your bank or UPI app before confirming. Confirming starts the plan now.'),
+          field('Payment method', { name: 'method', type: 'select', value: o.paymentMode || 'upi', options: d.methods.map(m => ({ value: m, label: c.methodNames[m] })) }),
+          field('Reference (UTR), if different', { name: 'reference', maxlength: 80 }), field('Note (optional)', { name: 'note', maxlength: 300 }));
+        dialog('Confirm payment and start the plan', f, [{ label: 'Payment received: start plan', kind: 'primary', run: async () => {
+          const ok = await guard(async () => { await post(`/admin/api/pricing/orders/${o.id}`, { action, ...values(f) }); return true; }); if (!ok) return true; toast('Plan started'); reload();
+        } }]);
+        return;
+      }
+      const note = prompt(action === 'refund' ? 'Refund note (e.g. refunded by UPI on ...)' : 'Reason (optional)') ;
+      if (note === null) return;
+      guard(async () => { await post(`/admin/api/pricing/orders/${o.id}`, { action, note }); toast('Done'); reload(); });
+    };
+
+    el.replaceChildren(
+      head('Pricing', write ? h('button', { class: 'btn primary', onclick: () => planForm(null) }, '+ New plan') : null),
+      h('p', { class: 'muted' }, 'All prices are in INR. The plans master holds every plan; active plans are shown on the website\'s pricing page in this order. Payments are by UPI or bank transfer, confirmed by you, until an online gateway is connected.'),
+      h('div', { class: 'cards' }, stat('Plans on the website', d.stats.activePlans), stat('Payments to confirm', d.stats.pending),
+        stat('Paid this month', inr(d.stats.paidMonth.t / 100), `${d.stats.paidMonth.n} orders`), stat('Customers on a plan', d.stats.subscribers)),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Active pricing (what the website shows)'), preview,
+        h('p', { class: 'small muted', style: 'margin-top:8px' }, 'Show or hide plans, change the order and the featured plan in the plans master below. Changes appear on the website at once.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, `Payments to confirm and orders (${d.orders.length})`),
+        table([
+          { label: 'Order', render: o => h('span', {}, h('b', {}, o.number), h('br'), h('span', { class: 'small muted' }, dateTime(o.createdAt))) },
+          { label: 'Customer', render: o => h('span', {}, o.customer.name || o.customer.email, h('br'), h('span', { class: 'small muted' }, o.customer.email)) },
+          { label: 'Plan', render: o => o.planName },
+          { label: 'Amount', render: o => h('span', {}, h('b', {}, inr(o.amount)), o.gst ? h('div', { class: 'small muted' }, `incl. GST ${inr(o.gst)}`) : null) },
+          { label: 'Paid by', render: o => (o.reference ? h('span', { class: 'small' }, `${(o.paymentMode || '').toUpperCase()} · ${o.reference}`) : h('span', { class: 'small muted' }, '—')) },
+          { label: 'Status', render: o => h('span', {}, h('span', { class: 'pill ' + (ORDER_PILL[o.status] || '') }, o.status === 'pending' ? 'to confirm' : o.status),
+            o.endsAt && o.status === 'paid' ? h('div', { class: 'small muted' }, 'until ' + date(o.endsAt)) : null, o.note ? h('div', { class: 'small muted' }, o.note) : null) },
+          { label: '', render: o => (write ? h('span', { class: 'tools' },
+            ['created', 'pending', 'failed'].includes(o.status) ? h('button', { class: 'btn sm primary', onclick: e => { e.stopPropagation(); decide(o, 'mark-paid'); } }, 'Confirm payment') : null,
+            ['created', 'pending'].includes(o.status) ? h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); decide(o, 'reject'); } }, 'Not received') : null,
+            o.status === 'paid' ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); decide(o, 'refund'); } }, 'Mark refunded') : null) : '') },
+        ], d.orders, null, 'No orders yet. They appear when a customer buys a plan on the pricing page.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Plans master'),
+        table([
+          { label: '', render: p => (write && !p.archived ? h('span', { class: 'tools' }, h('button', { class: 'btn sm', title: 'Move up', onclick: e => { e.stopPropagation(); act(p, 'up'); } }, '↑'),
+            h('button', { class: 'btn sm', title: 'Move down', onclick: e => { e.stopPropagation(); act(p, 'down'); } }, '↓')) : '') },
+          { label: 'Plan', render: p => h('span', {}, h('b', {}, p.name), p.featured ? h('span', { class: 'pill good', style: 'margin-left:6px' }, '★ featured') : null, h('br'), h('span', { class: 'small muted' }, `${p.code} · ${p.tagline || ''}`)), wrap: true },
+          { label: 'Price', render: p => h('span', {}, h('b', {}, p.price ? inr(p.price) : 'Free'), p.mrp ? h('s', { class: 'small muted' }, ' ' + inr(p.mrp)) : null) },
+          { label: 'Length', render: p => `${p.durationDays} days${p.billing === 'subscription' ? ' · renews' : ''}` },
+          { label: 'AI tokens a day', render: p => (p.limits.dailyTokens ? Number(p.limits.dailyTokens).toLocaleString('en-IN') : 'default') },
+          { label: 'On website', render: p => (p.archived ? pill('archived') : p.active ? pill('on') : pill('off')) },
+          { label: '', render: p => (write ? h('span', { class: 'tools' },
+            h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); planForm(p); } }, 'Edit'),
+            !p.archived ? h('button', { class: 'btn sm' + (p.active ? '' : ' primary'), onclick: e => { e.stopPropagation(); act(p, p.active ? 'deactivate' : 'activate', p.active ? 'Hidden from the website' : 'Shown on the website'); } }, p.active ? 'Hide' : 'Show on website') : null,
+            !p.archived && p.active && !p.featured ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(p, 'feature', 'Featured'); } }, '★ Feature') : null,
+            p.featured ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(p, 'unfeature'); } }, 'Unfeature') : null,
+            p.archived ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); act(p, 'restore', 'Restored'); } }, 'Restore')
+              : h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Archive "${p.name}"? It is hidden from the website; past orders keep it.`)) act(p, 'archive', 'Archived'); } }, 'Archive')) : '') },
+        ], d.plans, null, 'No plans yet.')),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Payment settings'), pay),
+
+      h('div', { class: 'card', style: 'margin-top:14px' }, h('h2', {}, 'Price history'),
+        table([
+          { label: 'When', render: x => dateTime(x.at) }, { label: 'Plan', render: x => x.planName },
+          { label: 'Price', render: x => `${inr(x.oldPrice)} → ${inr(x.newPrice)}` },
+          { label: 'Strike-through', render: x => (x.oldMrp || x.newMrp ? `${inr(x.oldMrp)} → ${inr(x.newMrp)}` : '—') }, { label: 'By', render: x => x.by },
+        ], d.history, null, 'No price changes yet.')));
+  }
+
+  // ---------- AI Job search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
+  async function jobs(el) {
+    const d = await get('/admin/api/jobs');
+    const write = can('jobs.write');
+    const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
+    el.replaceChildren(
+      head('Jobs'),
+      h('p', { class: 'muted' }, 'Candidates run AI Job search in Career toolkit: they pick a resume (or all of them) and type the country, city, role and companies they want. ' +
+        'The server reads those companies\' live openings from their own career sites, and the AI scores them with the Master Prompt below into high, medium and low-probability jobs.'),
+      h('div', { class: 'cards' }, stat('Searches (7 days)', d.stats.searches), stat('Candidates searching (7 days)', d.stats.candidates), stat('Failed searches (7 days)', d.stats.failed),
+        stat('Live jobs cached', d.stats.jobs, `from ${d.stats.companies} career sites`)),
+      promptCard(d, write, () => jobs(el)),
+      h('details', { class: 'card', style: 'margin-top:18px' }, h('summary', {}, `Companies searched when a candidate leaves "Companies" empty (${d.builtInCompanies.length})`),
+        h('p', { class: 'muted small' }, d.builtInCompanies.join(', '))));
+  }
+
+  function promptCard(d, write, done) {
+    const box = h('textarea', { name: 'prompt', maxlength: 8000, readonly: !write }, d.prompt.prompt);
+    box.style.minHeight = '320px';
+    return h('div', { class: 'card', style: 'margin-top:18px' },
+      h('h2', {}, 'Master Prompt'),
+      h('p', { class: 'muted small' }, 'Runs on every AI Job search: first the AI analyses the candidate\'s resume(s), then it scores the live jobs found for their search. ' +
+        (d.prompt.isDefault ? 'Using the default prompt.' : `Last changed ${dateTime(d.prompt.updatedAt)} by ${d.prompt.updatedBy}.`)),
+      box,
+      h('details', {}, h('summary', { class: 'small' }, 'Rules always added after your prompt (keep the AI from inventing jobs, and the answer readable)'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, d.outputRules)),
+      write ? h('div', { class: 'actions' },
+        h('button', { class: 'btn primary', onclick: () => guard(async () => { await post('/admin/api/jobs/prompt', { prompt: box.value }); toast('Master prompt saved'); done(); }) }, 'Save prompt'),
+        h('button', { class: 'btn', onclick: () => { if (confirm('Go back to the default prompt?')) guard(async () => { await post('/admin/api/jobs/prompt', { reset: true }); toast('Default prompt restored'); done(); }); } }, 'Reset to default')) : null);
+  }
+
+  // ---------- ShortlistPrep.AI conversations (saved by the app when the class ends) ----------
+  const duration = sec => { const m = Math.round((sec || 0) / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+  const clock = s => new Date(s).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  async function conversations(el, filters = { q: '', from: '', to: '' }) {
+    const { q, from, to } = filters;
+    const { conversations: rows } = await get(`/admin/api/conversations?q=${encodeURIComponent(q)}&from=${from}&to=${to}`);
+    const redo = change => conversations(el, { ...filters, ...change });
+    const day = (label, key) => { const i = h('input', { type: 'date', 'aria-label': label, title: label, onchange: e => redo({ [key]: e.target.value }) }); i.value = filters[key]; return i; };
+    el.replaceChildren(
+      head('Conversations', searchBox(v => redo({ q: v }), 'Search questions, answers, customer', q), day('From', 'from'), day('To', 'to'),
+        from || to ? h('button', { class: 'btn sm', onclick: () => redo({ from: '', to: '' }) }, 'All dates') : null),
+      h('p', { class: 'muted' }, 'Every ShortlistPrep.AI session is saved here when the teacher presses End: what was heard, and each question with its answer.'),
+      table([
+        { label: 'Date and time', render: r => dateTime(r.started_at) }, { label: 'Length', render: r => duration(r.duration_sec) },
+        { label: 'Customer', render: r => r.customer_name || r.customer_email }, { label: 'Computer', render: r => r.device_name || '—' },
+        { label: 'Questions', render: r => r.question_count },
+        { label: 'First question', wrap: true, render: r => (r.first_question ? (r.first_question.length > 80 ? r.first_question.slice(0, 80) + '…' : r.first_question) : '—') },
+      ], rows, r => conversationDetail(r.id, () => conversations(el, filters)), q || from || to ? 'No conversations match.' : 'No conversations yet. They appear here when a ShortlistPrep.AI session ends.'));
+  }
+
+  async function conversationDetail(id, done) {
+    const { conversation: v, items } = await get('/admin/api/conversations/' + id);
+    const body = h('div', {},
+      h('dl', { class: 'kv' },
+        h('dt', {}, 'Started'), h('dd', {}, dateTime(v.started_at)), h('dt', {}, 'Ended'), h('dd', {}, `${dateTime(v.ended_at)} (${duration(v.duration_sec)})`),
+        h('dt', {}, 'Customer'), h('dd', {}, v.customer_name ? `${v.customer_name} <${v.customer_email}>` : v.customer_email),
+        h('dt', {}, 'Licence'), h('dd', { class: 'mono' }, v.licence_key), h('dt', {}, 'Computer'), h('dd', {}, v.device_name || '—'),
+        h('dt', {}, 'Subject'), h('dd', {}, v.subject || '—')),
+      h('h3', {}, `Questions and answers (${items.length})`),
+      items.length ? items.map(it => h('div', { class: 'qa' },
+        h('div', { class: 'meta' }, `${it.position}. ${clock(it.asked_at)}${it.source ? ' · ' + it.source : ''}${it.vote === 1 ? ' · 👍' : it.vote === -1 ? ' · 👎' : ''}`),
+        h('div', { class: 'q' }, it.question),
+        it.status === 'done' ? h('div', { class: 'a' }, it.answer)
+          : h('div', { class: 'a muted' }, it.status === 'error' ? 'No answer: ' + (it.error || 'the AI could not answer') : 'Not answered before the class ended'))) : h('p', { class: 'muted' }, 'No questions were asked.'),
+      h('details', { open: !items.length }, h('summary', {}, `Everything that was heard (${v.transcript.length} phrases)`),
+        v.transcript.length ? h('div', { class: 'transcript' }, v.transcript.map(p => h('div', {}, h('span', { class: 't' }, clock(p.at)), p.text)))
+          : h('p', { class: 'muted' }, 'Nothing was heard (the microphone was off).')));
+    const buttons = [{ label: 'Download as text', run: () => { downloadConversation(v, items); return true; }, closes: false }];
+    if (can('conversations.delete')) buttons.push({ label: 'Delete', kind: 'danger', run: async () => {
+      if (!confirm('Delete this conversation? This cannot be undone.')) return true;
+      const ok = await guard(async () => { await del('/admin/api/conversations/' + v.id); return true; });
+      if (!ok) return true;
+      toast('Conversation deleted'); done();
+    } });
+    buttons.push({ label: 'Close', run: () => {} });
+    dialog(`ShortlistPrep.AI · ${dateTime(v.started_at)}`, body, buttons).el.classList.add('wide');
+  }
+
+  function downloadConversation(v, items) {
+    const lines = [`ShortlistPrep.AI conversation`, `Started: ${dateTime(v.started_at)}`, `Ended: ${dateTime(v.ended_at)} (${duration(v.duration_sec)})`,
+      `Customer: ${v.customer_email}`, `Computer: ${v.device_name || '-'}`, v.subject ? `Subject: ${v.subject}` : '', '', 'QUESTIONS AND ANSWERS', ''];
+    for (const it of items) lines.push(`${it.position}. [${clock(it.asked_at)}] ${it.question}`, it.status === 'done' ? it.answer : '(no answer)', '');
+    lines.push('', 'EVERYTHING THAT WAS HEARD', '', ...v.transcript.map(p => `[${clock(p.at)}] ${p.text}`));
+    const a = h('a', { href: URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/plain' })), download: `shortlistprep-ai-${v.started_at.slice(0, 16).replace(/[T:]/g, '-')}.txt` });
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
   // ---------- audit ----------
   async function audit(el, query = '') {
     const { entries } = await get('/admin/api/audit?q=' + encodeURIComponent(query));
@@ -437,7 +1444,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, customers, licences, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

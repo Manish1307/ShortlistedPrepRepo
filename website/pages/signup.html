@@ -1,39 +1,33 @@
-<!-- title: Get early access | description: Join the early-access list and practise your first mock interview free (demo page: accounts are not connected yet). -->
+<!-- title: Create your free account | description: Create a free ShortlistPrep account: a free licence, your ATS score and skill gaps, and the Windows apps. -->
+<link rel="stylesheet" href="assets/account.css?v=12">
 <section class="auth">
   <div class="wrap">
     <div class="split" style="align-items:center">
       <div>
-        <span class="eyebrow">Early access</span>
-        <h1>Practise your first interview free</h1>
-        <p class="lead">Join the list and we will email you the day {{name}} opens. No card needed.</p>
+        <span class="eyebrow">Free account</span>
+        <h1>Create your free account</h1>
+        <p class="lead">One free account gives you your ATS score, your skill gaps, and a free licence for the {{name}} Windows apps. No card needed.</p>
         <ul class="check-list">
-          <li>First AI mock interview free</li>
-          <li>Kind, clear feedback on every answer</li>
-          <li>Your recordings stay private, and you can delete them any time</li>
+          <li>1 free ATS check and an improved resume</li>
+          <li>Skill Gap Matrix on every job</li>
+          <li>Free licence for Interview Assistant and Mock Interview</li>
+          <li>Your resume and recordings stay private, and you can delete them any time</li>
         </ul>
       </div>
       <div class="card auth-card">
-        <h2 style="font-size:28px">Create your account</h2>
-        <div class="note">Demo page. Accounts are not connected yet, so nothing you type here is sent or saved.</div>
-        <form class="stack demo-form" data-demo-message="This is a design preview, so sign-up is not connected yet. Nothing was sent." style="margin-top:18px">
+        <h2 style="font-size:28px">Sign up free</h2>
+        <form class="stack" id="account-signup" novalidate style="margin-top:18px">
+          <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
           <label>Your name<input type="text" name="name" autocomplete="name" required></label>
           <label>Email<input type="email" name="email" autocomplete="email" required></label>
-          <label>Which role are you preparing for?
-            <select name="role">
-              <option>Software or data</option>
-              <option>Product or design</option>
-              <option>Sales or marketing</option>
-              <option>Healthcare</option>
-              <option>Graduate or first job</option>
-              <option>Other</option>
-            </select>
-          </label>
+          <label>Password<input type="password" name="password" autocomplete="new-password" minlength="10" required><span class="muted small">At least 10 characters.</span></label>
           <label class="check"><input type="checkbox" name="terms" required> <span>I agree to the <a href="terms.html">Terms of use</a> and the <a href="privacy.html">Privacy policy</a>.</span></label>
-          <button class="btn btn-primary" type="submit">Get early access</button>
-          <p class="demo-result" role="status" aria-live="polite"></p>
+          <button class="btn btn-primary" type="submit">Create free account</button>
+          <p class="form-result" role="status" aria-live="polite"></p>
         </form>
-        <p class="muted small">Already have an account? <a href="login.html">Sign in</a></p>
+        <p class="muted small">Already have an account? <a id="signup-signin" href="login.html">Sign in</a></p>
       </div>
     </div>
   </div>
 </section>
+<script src="assets/account.js?v=7"></script>

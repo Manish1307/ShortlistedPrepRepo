@@ -1,17 +1,20 @@
-<!-- title: Sign in | description: Sign in to your account (demo page: accounts are not connected yet). -->
-<section class="auth">
+<!-- title: Sign in | description: Sign in to your account to see your licence, your computers and your classes. | noindex -->
+<link rel="stylesheet" href="assets/account.css?v=12">
+<section class="ac-login">
   <div class="wrap">
-    <div class="card auth-card">
-      <h1 style="font-size:32px">Welcome back</h1>
-      <p class="muted">Sign in to continue practising.</p>
-      <div class="note">Demo page. Accounts are not connected yet, so nothing you type here is sent or saved.</div>
-      <form class="stack demo-form" data-demo-message="This is a design preview, so sign-in is not connected yet. Nothing was sent." style="margin-top:18px">
+    <div class="ac-login-card">
+      <span class="ac-ico purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+      <h1>Welcome back</h1>
+      <p class="muted" style="margin:0 0 22px">Sign in with the email and password we sent you.</p>
+      <form class="ac-form" id="account-login" novalidate style="max-width:none">
         <label>Email<input type="email" name="email" autocomplete="username" required></label>
         <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+        <label class="check"><input type="checkbox" name="remember" checked> Keep me signed in on this computer</label>
         <button class="btn btn-primary" type="submit">Sign in</button>
-        <p class="demo-result" role="status" aria-live="polite"></p>
+        <p class="form-result" role="status" aria-live="polite"></p>
       </form>
-      <p class="muted small">New here? <a href="signup.html">Get early access</a></p>
+      <p class="ac-login-foot">No login yet, or forgot your password? <a href="contact.html">Contact us</a> and we will send you one.</p>
     </div>
   </div>
 </section>
+<script src="assets/account.js?v=3"></script>

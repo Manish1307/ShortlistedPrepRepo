@@ -1,0 +1,140 @@
+=====================================================================
+ SHORTLISTPREP - COMMAND LIST AND QUICK GUIDE
+ Two desktop apps (ShortlistPrep.AI and Mock Interview), the website
+ and the admin server.
+=====================================================================
+
+PROJECT FOLDER
+  C:\Personal\Projects\shortlistprep-app\Shortlistprep-app
+
+Open a terminal in that folder before running any command below.
+
+
+---------------------------------------------------------------------
+ 1. ONE-TIME SETUP
+---------------------------------------------------------------------
+
+  npm install
+  npm run setup:whisper
+      Downloads the offline speech engine and model (about 190 MB).
+  npm run admin:create -- you@example.com owner "Your Name"
+      Creates YOUR admin login. It prints a password ONE time: copy it now.
+
+
+---------------------------------------------------------------------
+ 2. RUN
+---------------------------------------------------------------------
+
+  Terminal 1 (website + admin server):
+      npm run web
+          Website          http://localhost:4173
+          Admin dashboard  http://localhost:4180
+
+  Terminal 2 (pick one):
+      npm run shortlistprep-ai     ShortlistPrep.AI: the live interview assistant
+      npm run interview            Mock Interview: practise with an AI interviewer
+
+  Developing without a licence: set SP_LICENCE=off before the command
+  (works only when the app is not installed). PowerShell:
+      $env:SP_LICENCE="off"; npm run shortlistprep-ai
+
+  Both apps check the licence with the admin server (address in
+  src\licence\settings.js), so keep npm run web running.
+
+
+---------------------------------------------------------------------
+ 3. BUILD THE TWO INSTALLERS (what end users download)
+---------------------------------------------------------------------
+
+  npm run dist:ai
+      -> dist\ai\ShortlistPrep-AI-Setup-<version>.exe
+
+  npm run dist:interview
+      -> dist\interview\ShortlistPrep-Interview-Setup-<version>.exe
+
+  npm run dist
+      Builds both, one after the other.
+
+  Needs the speech engine first (npm run setup:whisper). Each installer
+  carries its own speech model: ShortlistPrep.AI the small base.en model,
+  Mock Interview the small.en model. Configs: installer\ai.json and
+  installer\interview.json. Icons: build\ai\icon.ico and
+  build\interview\icon.ico (build\icon.* stays the ShortlistPrep brand logo).
+
+
+---------------------------------------------------------------------
+ 4. PUBLISH THE INSTALLERS ON GITHUB
+---------------------------------------------------------------------
+
+  git tag v1.1.0
+  git push origin v1.1.0
+  gh release create v1.1.0 "dist\ai\ShortlistPrep-AI-Setup-1.1.0.exe" "dist\interview\ShortlistPrep-Interview-Setup-1.1.0.exe" --title "ShortlistPrep 1.1.0" --notes "ShortlistPrep.AI and Mock Interview for Windows"
+
+  Direct links look like
+  https://github.com/Manish1307/ShortlistedPrepRepo/releases/download/v1.1.0/ShortlistPrep-AI-Setup-1.1.0.exe
+
+  Then tell the website where each file is (the Download page counts every
+  download and asks for a free account first). Sign in to the admin
+  dashboard, then send once per tool and version:
+      POST /admin/api/downloads/shortlistprep-ai  {"version":"1.1.0","url":"<link>","sizeMb":150}
+      POST /admin/api/downloads/mock-interview    {"version":"1.1.0","url":"<link>","sizeMb":250}
+  Counts: GET /admin/api/downloads
+  Or set DOWNLOAD_URL_SHORTLISTPREP_AI and DOWNLOAD_URL_MOCK_INTERVIEW on the server.
+
+
+---------------------------------------------------------------------
+ 5. SERVER AND WEBSITE
+---------------------------------------------------------------------
+
+  npm run site:build
+      Builds website\site (upload it, or let Cloudflare Pages build it).
+
+  npm run server:package
+      Creates dist\shortlistprep-server.tgz. Then follow deploy\README.md:
+        tar -xzf shortlistprep-server.tgz
+        sudo bash deploy/setup.sh api.yourdomain.com admin.yourdomain.com
+      Server paths: /opt/shortlistprep   service: shortlistprep-admin
+      A server set up under the old ClassCue name needs the one-time move
+      in deploy\README.md.
+
+  On the server:
+      sudo systemctl status shortlistprep-admin
+      sudo journalctl -u shortlistprep-admin -n 100
+      sudo systemctl restart shortlistprep-admin
+      sudo -u shortlistprep /opt/shortlistprep/backup.sh
+
+
+---------------------------------------------------------------------
+ 6. CHECKS
+---------------------------------------------------------------------
+
+  npm test                  all automated tests
+  npm run test:stt          speech accuracy test with built-in Windows voices
+  npm run admin:create -- you@example.com --reset    new admin password
+
+
+---------------------------------------------------------------------
+ 7. WHERE THINGS ARE
+---------------------------------------------------------------------
+
+  ShortlistPrep.AI ... shortlistprep-ai-main.js, shortlistprep-ai-window.html,
+                       renderer\shortlistprep-ai-ui.js
+                       (how it works: docs\ShortlistPrep-AI-How-It-Works.md)
+  Mock Interview ..... interview-main.js, interview-window.html,
+                       renderer\interview-ui.js
+  Shared code ........ src\ (AI, speech, licence), renderer\brand.*
+  Website ............ website\   (website\site.config.json, website\pages\)
+  Admin server ....... admin\     (admin\data\ = database + signing key: BACK IT UP)
+  Installers ......... installer\ (configs), dist\ (output)
+  App settings, keys, licence, log: %APPDATA%\ShortlistPrep
+
+
+---------------------------------------------------------------------
+ 8. PORTS
+---------------------------------------------------------------------
+
+  4173  website preview
+  4180  admin dashboard
+  If a port is busy, close the other program using it and try again.
+
+=====================================================================

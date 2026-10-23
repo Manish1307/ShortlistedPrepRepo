@@ -7,7 +7,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, 'site');
 const PORT = Number(process.env.PORT) || 4173;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 
 http.createServer((req, res) => {
   const url = decodeURIComponent((req.url || '/').split('?')[0]);

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hero options · ShortlistPrep</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --ink: #0e1318; --body: #4b5361; --muted: #6b7385; --bd: #e7e1f5; --line: #eee9f8; --tint: #f7f4ff;
+    --purple: #7d2ae8; --purple-d: #6720cc; --purple-l: #f0e7ff; --teal: #00c4cc;
+    --grad: linear-gradient(120deg, #00c4cc 0%, #7d2ae8 70%);
+    --good: #0a8a5c; --good-l: #dcf5ea;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Plus Jakarta Sans", system-ui, sans-serif; color: var(--ink); background: #fff; -webkit-font-smoothing: antialiased; }
+  h1 { font-weight: 800; letter-spacing: -.04em; line-height: 1.06; margin: 0 0 18px; }
+  p { margin: 0; }
+  .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; }
+  .label { position: sticky; top: 0; z-index: 50; background: #0e1318; color: #fff; padding: 12px 0; font-size: 14px; }
+  .label .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .label b { font-size: 16px; } .label span { color: #c9c3dc; }
+  section.opt { padding: 64px 0; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 14px; padding: 15px 24px; font: 700 16px/1 inherit; font-family: inherit; text-decoration: none; border: 1px solid var(--bd); color: var(--ink); background: #fff; }
+  .btn.primary { background: var(--purple); color: #fff; border-color: transparent; box-shadow: 0 14px 30px -14px rgba(125, 42, 232, .8); }
+  .btn.ghost { background: transparent; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .trust { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 26px; color: var(--body); font-size: 14px; font-weight: 600; }
+  .trust span::before { content: "✓"; color: var(--good); font-weight: 800; margin-right: 7px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--purple-d); background: var(--purple-l); border-radius: 999px; padding: 7px 14px; margin-bottom: 22px; }
+  .lead { font-size: 19px; line-height: 1.65; color: var(--body); margin-bottom: 30px; max-width: 540px; }
+  .accent { color: var(--purple); }
+  img { display: block; max-width: 100%; }
+
+  /* ===== A · Clean split ===== */
+  .a { background: linear-gradient(180deg, #fbfaff, #fff); }
+  .a-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+  .a h1 { font-size: clamp(40px, 5vw, 62px); }
+  .a-photo { position: relative; justify-self: end; width: min(100%, 420px); }
+  .a-photo img { width: 100%; aspect-ratio: 5 / 6; object-fit: cover; object-position: 50% 30%; border-radius: 32px; }
+  .a-photo::before { content: ""; position: absolute; inset: 22px -22px -22px 22px; border-radius: 32px; background: var(--purple-l); z-index: -1; }
+  .a-card { position: absolute; left: -48px; bottom: 36px; width: 290px; background: #fff; border-radius: 20px; padding: 18px; box-shadow: 0 30px 60px -24px rgba(30, 16, 80, .35); }
+  .a-card small { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  .a-steps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 9px; font-size: 14px; font-weight: 600; }
+  .a-steps li { display: flex; align-items: center; gap: 10px; }
+  .a-steps i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; font-weight: 800; background: var(--good-l); color: var(--good); }
+  .a-steps li.now i { background: var(--purple); color: #fff; }
+  .a-steps li.next { color: var(--muted); } .a-steps li.next i { background: #f1eff6; color: var(--muted); }
+
+  /* ===== B · Arch portrait ===== */
+  .b { background: radial-gradient(800px 500px at 90% 10%, #efe6ff, transparent 65%), radial-gradient(700px 400px at 0% 100%, #e3f7f8, transparent 60%), #fff; }
+  .b-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  .b h1 { font-size: clamp(40px, 5vw, 64px); }
+  .b h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .b-art { position: relative; display: flex; justify-content: center; align-items: flex-end; gap: 18px; }
+  .b-arch { width: min(78%, 400px); aspect-ratio: 3 / 4; border-radius: 999px 999px 32px 32px; overflow: hidden; background: linear-gradient(180deg, #e9ddff, #d7f3f5); box-shadow: 0 40px 80px -40px rgba(80, 40, 160, .55); }
+  .b-arch img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+  .b-chips { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: grid; gap: 12px; }
+  .b-chip { display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, .92); backdrop-filter: blur(6px); border: 1px solid #fff; border-radius: 16px; padding: 11px 15px; box-shadow: 0 18px 40px -20px rgba(30, 16, 80, .4); font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .b-chip b { font-size: 18px; }
+  .b-chip small { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .b-chip:nth-child(2) { margin-left: 34px; }
+
+  /* ===== C · Editorial, full-height photo ===== */
+  .c { padding: 0 !important; }
+  .c-grid { display: grid; grid-template-columns: 1fr 1fr; min-height: 640px; }
+  .c-text { display: flex; flex-direction: column; justify-content: center; padding: 64px 56px 64px max(16px, calc((100vw - 1200px) / 2)); }
+  .c h1 { font-size: clamp(40px, 4.6vw, 60px); }
+  .c-num { display: flex; gap: 34px; margin-top: 34px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .c-num b { display: block; font-size: 28px; letter-spacing: -.03em; }
+  .c-num span { color: var(--muted); font-size: 13.5px; font-weight: 600; }
+  .c-photo { position: relative; background: #ece9f3; }
+  .c-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+  .c-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #fff 0%, rgba(255, 255, 255, 0) 22%), linear-gradient(0deg, rgba(14, 10, 40, .35), transparent 40%); }
+  .c-glass { position: absolute; z-index: 2; left: 40px; right: 40px; bottom: 36px; display: flex; align-items: center; gap: 16px; background: rgba(255, 255, 255, .86); backdrop-filter: blur(12px); border-radius: 20px; padding: 16px 20px; box-shadow: 0 24px 50px -24px rgba(0, 0, 0, .45); }
+  .c-glass .ring { flex: none; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--good) 0 92%, #e5e7eb 92% 100%); }
+  .c-glass .ring span { width: 42px; height: 42px; border-radius: 50%; background: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  .c-glass b { display: block; font-size: 15.5px; } .c-glass small { color: var(--body); font-weight: 600; font-size: 13px; }
+  .c-glass .tag { margin-left: auto; background: var(--purple); color: #fff; border-radius: 999px; padding: 7px 13px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+
+  /* ===== D · Centered with a product panel ===== */
+  .d { background: linear-gradient(180deg, #f7f3ff 0%, #fff 70%); text-align: center; }
+  .d h1 { font-size: clamp(40px, 5.2vw, 66px); max-width: 900px; margin: 0 auto 18px; }
+  .d .lead { margin: 0 auto 30px; max-width: 680px; }
+  .d .row, .d .trust { justify-content: center; }
+  .d-panel { margin: 46px auto 0; max-width: 1040px; display: grid; grid-template-columns: 340px 1fr; text-align: left; background: #fff; border: 1px solid var(--bd); border-radius: 30px; overflow: hidden; box-shadow: 0 40px 90px -50px rgba(80, 40, 160, .55); }
+  .d-panel img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; min-height: 360px; }
+  .d-flow { padding: 28px 30px; display: grid; gap: 14px; align-content: center; }
+  .d-flow h3 { margin: 0; font-size: 15px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+  .d-step { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; }
+  .d-step .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 19px; background: var(--tint); }
+  .d-step b { display: block; font-size: 15.5px; } .d-step small { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .d-step em { font-style: normal; font-size: 12.5px; font-weight: 800; border-radius: 999px; padding: 5px 11px; }
+  .d-step em.ok { background: var(--good-l); color: var(--good); }
+  .d-step em.now { background: var(--purple); color: #fff; }
+  .d-step em.soon { background: #f1eff6; color: var(--muted); }
+  .d-step.active { border-color: #c9a9ff; background: linear-gradient(90deg, #faf6ff, #fff); }
+
+  @media (max-width: 920px) {
+    .a-grid, .b-grid, .c-grid { grid-template-columns: 1fr; }
+    .a-photo { justify-self: center; } .a-card { left: 12px; bottom: 16px; width: 250px; }
+    .b-chips { position: static; transform: none; } .b-art { flex-direction: column; align-items: center; } .b-chip:nth-child(2) { margin-left: 0; }
+    .c-text { padding: 48px 16px; } .c-photo { min-height: 460px; } .c-photo::after { background: linear-gradient(0deg, rgba(14, 10, 40, .35), transparent 40%); }
+    .d-panel { grid-template-columns: 1fr; } .d-panel img { max-height: 360px; }
+  }
+  @media (max-width: 560px) {
+    .c-glass { left: 14px; right: 14px; flex-wrap: wrap; } .c-glass .tag { margin-left: 0; }
+    .c-num { gap: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ A ============ -->
+<div class="label"><div class="wrap"><b>Option A · Clean split</b><span>White, calm, one portrait and one journey card. Most "corporate".</span></div></div>
+<section class="opt a">
+  <div class="wrap a-grid">
+    <div>
+      <span class="eyebrow">✦ AI career co-pilot for job seekers in India</span>
+      <h1>From resume to <span class="accent">offer letter</span>, guided at every step.</h1>
+      <p class="lead">Fix your resume for ATS, find jobs you can actually win, and walk into every interview prepared, with coaching before it and live support during it.</p>
+      <div class="row"><a class="btn primary" href="#">Start my journey free →</a><a class="btn" href="#">See how it works</a></div>
+      <div class="trust"><span>Free to start</span><span>Real jobs from company sites</span><span>Private &amp; secure</span></div>
+    </div>
+    <div class="a-photo">
+      <img src="../assets/hero-woman-smile.jpg" width="1050" height="1400" alt="Smiling young Indian professional woman in a modern office">
+      <div class="a-card">
+        <small>Priya's journey</small>
+        <ul class="a-steps">
+          <li><i>✓</i>Resume ATS score 92</li>
+          <li><i>✓</i>12 jobs matched · 4 high fit</li>
+          <li class="now"><i>●</i>Interview coaching today</li>
+          <li class="next"><i>4</i>Live support on interview day</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ B ============ -->
+<div class="label"><div class="wrap"><b>Option B · Arch portrait</b><span>Soft gradient, elegant arch frame, three small result chips. Most "premium".</span></div></div>
+<section class="opt b">
+  <div class="wrap b-grid">
+    <div>
+      <span class="eyebrow">✦ Resume · Jobs · Interview, in one place</span>
+      <h1>Get <em>shortlisted</em>.<br>Get <em>hired</em>.</h1>
+      <p class="lead">One AI co-pilot for your whole job hunt: an ATS-ready resume, jobs matched to your profile, interview coaching and live help when it matters.</p>
+      <div class="row"><a class="btn primary" href="#">Start free →</a><a class="btn ghost" href="#">▶ Watch 1-min demo</a></div>
+      <div class="trust"><span>No credit card</span><span>Built for Indian job seekers</span></div>
+    </div>
+    <div class="b-art">
+      <div class="b-arch"><img src="../assets/hero-woman-smile.jpg" width="1050" height="1400" alt="Smiling young Indian professional woman"></div>
+      <div class="b-chips">
+        <div class="b-chip"><b>📄</b><div>ATS score 92<small>was 58</small></div></div>
+        <div class="b-chip"><b>🎯</b><div>Fit 86 · Apply first<small>Lead PM, Pune</small></div></div>
+        <div class="b-chip"><b>🎧</b><div>Interview ready<small>Live support on</small></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ C ============ -->
+<div class="label"><div class="wrap"><b>Option C · Editorial</b><span>Full-height photo bleeding to the edge, one glass card, key numbers. Most "modern magazine".</span></div></div>
+<section class="opt c">
+  <div class="c-grid">
+    <div class="c-text">
+      <span class="eyebrow" style="align-self:flex-start">✦ Your AI co-pilot for the whole job hunt</span>
+      <h1>Your next job, <span class="accent">found and won</span> with AI.</h1>
+      <p class="lead">Upload your resume once. We fix it for ATS, match you to live openings at real companies, and coach you until you get the offer.</p>
+      <div class="row"><a class="btn primary" href="#">Upload my resume →</a><a class="btn" href="#">How it works</a></div>
+      <div class="c-num">
+        <div><b>7 steps</b><span>resume to offer</span></div>
+        <div><b>60+</b><span>company career sites</span></div>
+        <div><b>Live</b><span>interview support</span></div>
+      </div>
+    </div>
+    <div class="c-photo">
+      <img src="../assets/hero-woman-laptop.jpg" width="933" height="1400" alt="Indian professional woman working on a laptop in a bright office">
+      <div class="c-glass">
+        <div class="ring"><span>92</span></div>
+        <div><b>You're interview-ready</b><small>Senior Product Analyst · interview Thursday</small></div>
+        <span class="tag">Practise now</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D ============ -->
+<div class="label"><div class="wrap"><b>Option D · Centered + product panel</b><span>Big centred message, then a panel that shows the journey like the real product. Most "SaaS".</span></div></div>
+<section class="opt d">
+  <div class="wrap">
+    <span class="eyebrow">✦ Trusted AI co-pilot for your career</span>
+    <h1>The smarter way to go from <span class="accent">resume</span> to <span class="accent">offer letter</span></h1>
+    <p class="lead">ATS-ready resumes, AI job matching with fit scores, interview coaching and live interview support, all in one simple journey.</p>
+    <div class="row"><a class="btn primary" href="#">Start my journey free →</a><a class="btn" href="#">See how it works</a></div>
+    <div class="trust"><span>Free to start</span><span>Real company jobs</span><span>Private &amp; secure</span></div>
+    <div class="d-panel">
+      <img src="../assets/hero-woman-smile.jpg" width="1050" height="1400" alt="Smiling young Indian professional woman">
+      <div class="d-flow">
+        <h3>Ananya's journey this week</h3>
+        <div class="d-step"><span class="ic">📄</span><div><b>Resume fixed for ATS</b><small>Score 58 → 92</small></div><em class="ok">Done</em></div>
+        <div class="d-step"><span class="ic">🎯</span><div><b>18 jobs matched</b><small>6 high probability · apply first</small></div><em class="ok">Done</em></div>
+        <div class="d-step active"><span class="ic">🎓</span><div><b>Interview coaching</b><small>Power BI + "Tell me about yourself"</small></div><em class="now">Today</em></div>
+        <div class="d-step"><span class="ic">🎧</span><div><b>Live interview support</b><small>Thursday, 11:00 AM</small></div><em class="soon">Next</em></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

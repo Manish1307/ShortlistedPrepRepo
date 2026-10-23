@@ -46,7 +46,7 @@
     <div class="split">
       <div class="card"><h3>Your progress, at a glance</h3>
         <table class="simple"><tr><th>Week</th><th>Average score</th><th>Filler words</th></tr><tr><td>1</td><td>61</td><td>9</td></tr><tr><td>2</td><td>72</td><td>6</td></tr><tr><td>3</td><td>81</td><td>4</td></tr><tr><td>4</td><td>88</td><td>2</td></tr></table>
-        <p class="muted small" style="margin-top:10px">{{sampleTag}} Example numbers.</p>
+        <p class="muted small" style="margin-top:10px">An example of the progress view.</p>
       </div>
       <div>
         <span class="eyebrow">Measure</span>
@@ -55,6 +55,264 @@
         <ul class="check-list"><li>Weekly summaries</li><li>Strongest and weakest question types</li><li>Practice streaks to keep you going</li></ul>
         <div class="btn-row" style="margin-top:24px"><a class="btn btn-primary" href="signup.html">Get early access</a><a class="btn" href="pricing.html">See pricing</a></div>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="home-journey" id="journey">
+  <div class="wrap">
+    <div class="home-sec-head">
+      <span class="home-pill small"><i aria-hidden="true">●</i> YOUR JOURNEY</span>
+      <h2>Every step from application to offer,<br>guided by AI</h2>
+      <p class="lead">Most tools stop at the resume. {{name}} stays with you until you are hired. Pick a step to see what you get.</p>
+    </div>
+
+    <div class="jr" data-tabs>
+      <nav class="jr-crumbs" aria-label="Breadcrumb">
+        <a href="#journey">Your journey</a><span aria-hidden="true">›</span><span class="jr-phase" data-crumb-phase>Get shortlisted</span><span aria-hidden="true">›</span><b data-crumb-step>1. Resume &amp; ATS</b>
+      </nav>
+      <div class="jr-phases" aria-hidden="true">
+        <span class="p1">Get shortlisted</span><span class="p2">Get interview-ready</span><span class="p3">Get hired</span>
+      </div>
+      <div class="jr-tabs" role="tablist" aria-label="Journey steps">
+        <button role="tab" id="jt-1" aria-controls="jp-1" data-phase="Get shortlisted" class="ph1"><b>1</b>Resume &amp; ATS</button>
+        <button role="tab" id="jt-2" aria-controls="jp-2" data-phase="Get shortlisted" class="ph1"><b>2</b>Role-based resumes</button>
+        <button role="tab" id="jt-3" aria-controls="jp-3" data-phase="Get shortlisted" class="ph1"><b>3</b>AI job search</button>
+        <button role="tab" id="jt-4" aria-controls="jp-4" data-phase="Get shortlisted" class="ph1"><b>4</b>Apply</button>
+        <button role="tab" id="jt-5" aria-controls="jp-5" data-phase="Get interview-ready" class="ph2"><b>5</b>Interview coaching</button>
+        <button role="tab" id="jt-6" aria-controls="jp-6" data-phase="Get interview-ready" class="ph2"><b>6</b>Question bank</button>
+        <button role="tab" id="jt-7" aria-controls="jp-7" data-phase="Get hired" class="ph3"><b>7</b>Live practice (soon)</button>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-1" aria-labelledby="jt-1">
+        <div class="jr-text">
+          <span class="jr-step">Step 1 · Get shortlisted</span>
+          <h3>Beat the ATS before a human ever reads your resume</h3>
+          <p>Upload your resume as PDF or Word. The AI reads it the way applicant tracking systems do, gives you an ATS score with every check explained, and rewrites it in a clean, ATS-friendly format, using only experience you really have.</p>
+          <ul class="jr-list"><li>ATS score out of 100, with pass, warn and fail checks</li><li>Missing keywords for the roles you want</li><li>A rewritten resume to download as Word (.docx)</li></ul>
+          <a class="btn btn-primary" href="signup.html" data-member-href="career.html?step=cr-ats" data-member-text="Check my resume →">Get free early access →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini">
+            <div class="mini-head"><b>ATS check</b><small>resume.pdf</small></div>
+            <div class="mini-score"><div class="ring" style="--p:92%"><span>92</span></div><div><b>Great: ready for ATS</b><small>Was 58 before the rewrite</small></div></div>
+            <ul class="mini-checks"><li class="ok">Standard section headings</li><li class="ok">Simple single-column layout</li><li class="ok">Numbers in your achievements</li><li class="warn">Add: Azure DevOps, CI/CD</li></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-2" aria-labelledby="jt-2">
+        <div class="jr-text">
+          <span class="jr-step">Step 2 · Get shortlisted</span>
+          <h3>One resume per role, so every application fits</h3>
+          <p>Applying for a Java Developer role and a Web Developer role? Create a separate resume for each kind of job. Each one puts your most relevant experience first and tells you how well you fit that role.</p>
+          <ul class="jr-list"><li>Role-based resumes from your real experience</li><li>A fit score and an honest note for each role</li><li>Job match with a cover letter written for that job</li></ul>
+          <a class="btn btn-primary" href="signup.html" data-member-href="career.html?step=cr-versions" data-member-text="Create role resumes →">Create my resumes →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini">
+            <div class="mini-head"><b>Your resumes</b><small>3 versions</small></div>
+            <div class="mini-row"><span>Java Developer</span><em class="good">Fit 86</em></div>
+            <div class="mini-row"><span>Web Developer</span><em class="good">Fit 81</em></div>
+            <div class="mini-row"><span>Data Analyst</span><em class="warn">Fit 68</em></div>
+            <div class="mini-foot">✉️ Cover letter ready for <b>an IT company in Pune</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-3" aria-labelledby="jt-3">
+        <div class="jr-text">
+          <span class="jr-step">Step 3 · Get shortlisted</span>
+          <h3>Stop scrolling job boards. Let AI find the jobs you can win</h3>
+          <p>Tell us the country, city, role and companies you like. We read live openings straight from the companies' own career sites, and the AI scores every job against your resume, sorted into high, medium and low probability.</p>
+          <ul class="jr-list"><li>Real, open jobs with the company's own apply link</li><li>A fit score out of 100 with the reason and the gap</li><li>Which of your resumes to send for each job</li></ul>
+          <a class="btn btn-primary" href="signup.html" data-member-href="career.html?step=cr-jobs" data-member-text="Find my jobs →">Find my best jobs →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini">
+            <div class="mini-head"><b>AI Job search</b><small>India · 60 matches</small></div>
+            <div class="mini-group good">🟢 High probability: apply first</div>
+            <div class="mini-row"><span>Junior Java Developer · Pune</span><em class="good">86</em></div>
+            <div class="mini-row"><span>Software Trainee · Noida</span><em class="good">82</em></div>
+            <div class="mini-group warn">🟡 Medium probability</div>
+            <div class="mini-row"><span>QA Analyst · Gurgaon</span><em class="warn">74</em></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-4" aria-labelledby="jt-4">
+        <div class="jr-text">
+          <span class="jr-step">Step 4 · Get shortlisted</span>
+          <h3>Apply with confidence, on the company's own site</h3>
+          <p>Open each job on the company's careers page, send the resume the AI recommends, and add the cover letter written for that job. Start with the high-probability jobs: openings close fast.</p>
+          <ul class="jr-list"><li>The right resume for every application</li><li>A tailored cover letter in one click</li><li>Fix-before-you-apply tips for your resume</li></ul>
+          <a class="btn btn-primary" href="signup.html" data-member-href="career.html?step=cr-match" data-member-text="Write a cover letter →">Get started →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini">
+            <div class="mini-head"><b>Ready to apply</b><small>IT company · Pune</small></div>
+            <div class="mini-row"><span>Resume to send</span><em class="plain">Java Developer</em></div>
+            <div class="mini-row"><span>Cover letter</span><em class="good">Ready ✓</em></div>
+            <div class="mini-row"><span>Fix before applying</span><em class="warn">2 tips</em></div>
+            <div class="mini-btn">Apply on company site ↗</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-5" aria-labelledby="jt-5">
+        <div class="jr-text">
+          <span class="jr-step hot">Step 5 · Get interview-ready</span>
+          <h3>Got the call? Virtual coaching for that exact interview</h3>
+          <p>Practise with an AI interviewer for the role and technology you applied for. Build a strong "Tell me about yourself" introduction that is checked against your resume, sharpen your weak topics and get feedback on every answer: structure, examples and confidence.</p>
+          <ul class="jr-list"><li>Mock interviews by role and technology</li><li>Your personal introduction, polished</li><li>Detailed feedback and what to improve</li></ul>
+          <a class="btn btn-primary" href="signup.html" data-member-href="account.html" data-member-text="Start practising →">Start practising →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini">
+            <div class="mini-head"><b>Mock interview</b><small>Java · 00:45</small></div>
+            <div class="mini-q">What is the difference between an interface and an abstract class?</div>
+            <div class="mini-score"><div class="ring" style="--p:85%"><span>85</span></div><div><b>Strong answer</b><small>Add one real example from a project</small></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-6" aria-labelledby="jt-6">
+        <div class="jr-text">
+          <span class="jr-step hot">Step 6 · Get interview-ready</span>
+          <h3>A question bank built around your role</h3>
+          <p>Thousands of real technical, behavioural and HR questions with model answers. Filter by role and technology, practise out loud, and walk in knowing what is coming.</p>
+          <ul class="jr-list"><li>Role and technology-based questions</li><li>Model answers and STAR examples</li><li>Practise in English and other languages</li></ul>
+          <a class="btn btn-primary" href="signup.html" data-member-href="account.html" data-member-text="Open the question bank →">Explore questions →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini">
+            <div class="mini-head"><b>Question bank</b><small>Java developer</small></div>
+            <div class="mini-row"><span>Tell me about a project you built</span><em class="plain">Behavioural</em></div>
+            <div class="mini-row"><span>Explain the four OOP principles</span><em class="plain">Technical</em></div>
+            <div class="mini-row"><span>Why are you leaving your job?</span><em class="plain">HR</em></div>
+            <div class="mini-foot">📚 Questions for this role</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-panel" role="tabpanel" id="jp-7" aria-labelledby="jt-7">
+        <div class="jr-text">
+          <span class="jr-step win">Step 7 · Coming soon with the Windows app</span>
+          <h3>Rehearse it live, then review how you did</h3>
+          <p>{{name}} Live runs a realistic practice session on your computer. It writes down each question as it is asked, shows key points from your own resume, and gives you a review afterwards, so the real interview feels familiar.</p>
+          <ul class="jr-list"><li>Live speech-to-text of every practice question</li><li>Talking points based on your resume</li><li>A review of each session to improve next time</li></ul>
+          <a class="btn btn-primary" href="download.html">Tell me when it is ready →</a>
+        </div>
+        <div class="jr-art">
+          <div class="mini mini-dark">
+            <div class="mini-head"><b>● Live</b><small>Practice session</small></div>
+            <div class="mini-q">"Walk me through a project you built."</div>
+            <div class="mini-tip"><b>Suggested points</b>REST API in Java · MySQL database · pushed to GitHub with tests</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="jr-nav">
+        <button class="btn" type="button" data-tab-prev>← Previous step</button>
+        <div class="jr-progress" aria-hidden="true"><i data-progress></i></div>
+        <button class="btn btn-primary" type="button" data-tab-next>Next step →</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="home-moments">
+  <div class="wrap">
+    <div class="home-sec-head">
+      <span class="home-pill small"><i aria-hidden="true">●</i> PREPARE, THEN REHEARSE</span>
+      <h2>Practised before. Rehearsed live.</h2>
+    </div>
+    <div class="moments">
+      <div class="moment m-before">
+        <span class="moment-tag">Prepare</span>
+        <h3>🎓 Virtual interview coaching</h3>
+        <p>An AI interviewer that knows the job you applied for. Practise the technology, perfect your introduction and fix weak answers until you feel ready.</p>
+        <ul class="jr-list"><li>Technology deep-dives for your role</li><li>"Tell me about yourself", checked against your resume</li><li>Question bank and model answers</li></ul>
+      </div>
+      <div class="moment m-during">
+        <span class="moment-tag">Rehearse · coming soon</span>
+        <h3>🎧 Live practice sessions</h3>
+        <p>Run a realistic mock interview with {{name}} Live. It follows the conversation, shows the question and key points from your own resume, and reviews your answers afterwards, so you never freeze on the day.</p>
+        <ul class="jr-list"><li>Questions captured as they are asked</li><li>Talking points from your resume and topics</li><li>A review after every session</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="home-gap" id="skill-gap-plan">
+  <div class="wrap">
+    <div class="home-sec-head">
+      <span class="home-pill gap-pill"><i aria-hidden="true">★</i> ONLY ON {{name}}</span>
+      <h2>From skill gap to a plan,<br><span class="gap-grad">to a 100% fit</span></h2>
+      <p class="lead">Every gap in your Skill Gap Matrix becomes a plan with the videos, courses and official docs to close it.</p>
+    </div>
+    <!-- 2. Insight for this job -->
+    <div class="gap-feature flip">
+      <div class="gap-text">
+        <span class="gap-num">2</span>
+        <h3>💡 Insight for this job</h3>
+        <p>One click builds a personal preparation plan for that exact job: what you already match, a step-by-step plan, topics to revise and the questions this interview is likely to ask.</p>
+        <ul class="jr-list"><li>A week-by-week plan to a full fit</li><li>Revision topics with videos and articles</li><li>Likely interview questions and tips for this company</li></ul>
+        <div class="gap-case"><b>Use case</b> Neha presses Insight. In 20 seconds she has a 3-week plan, 6 likely interview questions and the 3 topics to revise before Thursday's interview.</div>
+      </div>
+      <div class="gap-art">
+        <div class="mini gap-prep" aria-label="Example preparation plan">
+          <div class="mini-head"><b>📘 Your plan for this job</b><small>Prepared in 20 s</small></div>
+          <div class="gap-meter"><i class="now" style="width:68%"></i><i class="gain" style="left:68%;width:32%"></i></div>
+          <div class="gap-scores"><span>Fit now <b>68</b></span><span>After the plan <b class="up">100</b></span></div>
+          <div class="gap-block"><b>🗓 Your plan</b><ol><li>Week 1: Spring Boot basics; build one REST API with a database</li><li>Week 2: push it to GitHub with JUnit tests and a clear README</li><li>Week 3: mock interviews on Java and SQL</li></ol></div>
+          <div class="gap-block"><b>🎤 Likely questions</b><ul><li>What is the difference between an interface and an abstract class?</li><li>Walk me through a project you built.</li></ul></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Close the gaps to reach 100/100 -->
+    <div class="gap-feature">
+      <div class="gap-text">
+        <span class="gap-num">3</span>
+        <h3>🎯 Close the gaps to reach 100/100</h3>
+        <p>Every gap shows how many fit points it is worth, how long it takes to learn, and where to learn it: YouTube, Udemy (free and paid), Coursera, Microsoft Learn and other official docs, articles and certifications.</p>
+        <ul class="jr-list"><li>Biggest gaps first, with fit points and study hours</li><li>Learning links that always open current material</li><li>The certification that proves the skill</li></ul>
+        <div class="gap-case"><b>Use case</b> Neha clicks "Spring Boot" in the matrix and lands on the gap: +8 fit, about 25 hours, the official Spring guides and free courses. Two weeks later she applies with a stronger resume and a project on GitHub.</div>
+      </div>
+      <div class="gap-art">
+        <div class="mini gap-close" aria-label="Example gap with learning links">
+          <div class="mini-head"><b>🎯 Close the gaps to reach 100/100</b></div>
+          <div class="gap-card hi">
+            <div class="gap-card-head"><b>Spring Boot</b><span class="pts">+8 fit</span><small>~25 h study</small></div>
+            <p>How: build a small REST API with a database and put it on GitHub.</p>
+            <div class="gap-links"><span class="yt">▶ YouTube</span><span>🎓 Udemy free</span><span>🎓 Udemy paid</span><span>📘 Coursera</span><span class="ms">🏛 Spring guides</span></div>
+          </div>
+          <div class="gap-card">
+            <div class="gap-card-head"><b>JUnit testing</b><span class="pts">+5 fit</span><small>~12 h study</small></div>
+            <div class="gap-links"><span class="yt">▶ YouTube</span><span>🎓 Udemy</span><span>📰 Articles</span><span class="ms">🏛 JUnit guide</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- how it fits together -->
+    <div class="gap-flow" aria-label="How it works together">
+      <div><span>🎯</span><b>Find a job</b><small>AI job search</small></div>
+      <i aria-hidden="true">→</i>
+      <div><span>📊</span><b>See the gaps</b><small>Skill Gap Matrix</small></div>
+      <i aria-hidden="true">→</i>
+      <div><span>📘</span><b>Get the plan</b><small>Insight</small></div>
+      <i aria-hidden="true">→</i>
+      <div><span>🚀</span><b>Close the gaps</b><small>Learning links</small></div>
+      <i aria-hidden="true">→</i>
+      <div class="win"><span>🏆</span><b>Apply at 100%</b><small>Get the call</small></div>
+    </div>
+
+    <div class="gap-cta">
+      <a class="btn btn-primary btn-lg" href="signup.html" data-member-href="career.html?step=cr-jobs" data-member-text="See my skill gaps →">Get free early access →</a>
+      <span class="muted small">Example screens. Your matrix and plan come from your own resume and real jobs.</span>
     </div>
   </div>
 </section>

@@ -128,3 +128,7 @@ section.dc-row { padding: 64px 0; } section.dc-row.alt { background: var(--tint)
 /* ---------- touch targets ---------- */
 .menu a:not(.btn) { padding: 10px 4px; }
 .footer-grid a:not(.brand) { padding: 10px 0; }
+
+/* ---------- sign in and sign up ---------- */
+.ac-login, .auth { background: var(--tint); }
+.ac-login-card { border-radius: 10px; box-shadow: none; }

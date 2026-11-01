@@ -13,6 +13,7 @@ const { now, transaction } = require('./db');
 const { text, email } = require('./http');
 const { logActivity } = require('./activity');
 const { SECTORS } = require('./jobcatalogue');
+const { makeVerifier } = require('./googleauth');
 
 const SESSION_DAYS = 7;
 const DUMMY_HASH = auth.hashPassword('not-a-real-password');
@@ -142,6 +143,51 @@ function addRoutes(ctx) {
     logActivity(db, customerId, 'signup', 'Created a free account on the website');
     const session = startSession(customerId);
     return { status: 201, body: { ok: true, ...session, customer: { email: mail, name } } };
+  });
+
+  // ===================== Sign in with Google =====================
+  // The browser gets an ID token from Google and sends it here. We check it ourselves (googleauth.js); a verified email
+  // proves the person owns the address, so it can create a login, or sign in to the login for that email.
+  const googleClientId = String(ctx.googleClientId || process.env.GOOGLE_CLIENT_ID || '').trim();
+  const googleVerify = ctx.googleVerify || makeVerifier({ clientId: googleClientId });
+
+  add('GET', '/api/account/google/config', { public: true }, () => ({ enabled: !!googleClientId, clientId: googleClientId }));
+
+  add('POST', '/api/account/google', { public: true }, async (req, res, { body, ip }) => {
+    if (!googleClientId) throw new ApiError(503, 'Google sign-in is not set up yet.');
+    if (ipLimiter.blocked(ip)) throw new ApiError(429, 'Too many attempts. Please try again in 15 minutes.');
+    let g;
+    try { g = await googleVerify(body.credential); } catch (err) { ipLimiter.hit(ip); throw err; }
+
+    const row = one(`SELECT c.id, c.name, a.customer_id AS has_account, a.disabled, a.must_change FROM customers c
+                     LEFT JOIN customer_accounts a ON a.customer_id = c.id WHERE c.email = ?`, g.email);
+    if (row && row.has_account && row.disabled) throw new ApiError(403, 'This account is turned off. Please contact us.');
+
+    let customerId = row ? row.id : null;
+    let created = false;
+    if (!row || !row.has_account) {
+      if (body.terms !== true) throw new ApiError(400, 'Please accept the Terms of use and the Privacy policy.', 'terms');
+      if (signupLimiter.blocked(ip)) throw new ApiError(429, 'Too many sign-ups from here. Please try again later.');
+      signupLimiter.hit(ip);
+      const t = now();
+      customerId = transaction(db, () => {
+        const id = row ? row.id : db.prepare('INSERT INTO customers (email, name, created_at) VALUES (?,?,?)').run(g.email, g.name || g.email.split('@')[0], t).lastInsertRowid;
+        // nobody knows this password: the person signs in with Google
+        db.prepare('INSERT INTO customer_accounts (customer_id, pass_hash, must_change, disabled, created_at, created_by, password_set_at) VALUES (?,?,0,0,?,?,?)')
+          .run(id, auth.hashPassword(crypto.randomBytes(32).toString('hex')), t, 'google', t);
+        if (!row) licences.createLicence(db, { customerId: id, plan: 'trial', days: null, maxDevices: 2, note: 'Free licence from Google sign-up' });
+        return id;
+      });
+      created = true;
+    } else if (row.must_change) {
+      // a login we generated and emailed, never used: signing in with Google replaces that password
+      db.prepare('UPDATE customer_accounts SET pass_hash = ?, must_change = 0, password_set_at = ? WHERE customer_id = ?')
+        .run(auth.hashPassword(crypto.randomBytes(32).toString('hex')), now(), customerId);
+      db.prepare('DELETE FROM customer_sessions WHERE customer_id = ?').run(customerId);
+    }
+    logActivity(db, customerId, created ? 'signup' : 'login', created ? 'Created a free account with Google' : 'Signed in with Google');
+    const session = startSession(customerId);
+    return { status: created ? 201 : 200, body: { ok: true, created, ...session, mustChange: false, customer: { email: g.email, name: row ? row.name : (g.name || g.email.split('@')[0]) } } };
   });
 
   add('POST', '/api/account/logout', { public: true }, req => {

@@ -110,11 +110,39 @@
   }
   window.SPAccount = { saved: saved, call: call, startDownload: startDownload, h: h };
 
+  // ---------- Sign in with Google (the button appears only when the server has it turned on) ----------
+  function setupGoogle(next, isSignup) {
+    var slot = document.getElementById('google-slot'), button = document.getElementById('google-button'), out = document.getElementById('google-result');
+    if (!slot || !button || !API) return;
+    fetch(API + '/api/account/google/config').then(function (r) { return r.json(); }).then(function (cfg) {
+      if (!cfg || !cfg.enabled || !cfg.clientId) return;
+      var script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client'; script.async = true;
+      script.onload = function () {
+        if (!window.google || !google.accounts || !google.accounts.id) return;
+        google.accounts.id.initialize({
+          client_id: cfg.clientId,
+          callback: function (resp) {
+            out.className = 'form-result'; out.textContent = 'Signing you in…';
+            call('POST', '/api/account/google', { credential: resp.credential, terms: true }).then(function (r) {
+              save({ token: r.token, expiresAt: r.expiresAt }, true);
+              location.replace(next || 'account.html');
+            }).catch(function (err) { out.className = 'form-result bad'; out.textContent = err.message; });
+          },
+        });
+        google.accounts.id.renderButton(button, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: isSignup ? 'signup_with' : 'signin_with', width: 340 });
+        slot.hidden = false;
+      };
+      document.head.appendChild(script);
+    }).catch(function () { /* no Google button: the email form still works */ });
+  }
+
   // ===================== signup.html =====================
   var signupForm = document.getElementById('account-signup');
   if (signupForm) {
     var signupNext = nextPage();
     if (saved()) { location.replace(signupNext || 'account.html'); return; }
+    setupGoogle(signupNext, true);
     if (signupNext) { var signin = document.getElementById('signup-signin'); if (signin) signin.href = 'login.html?next=' + encodeURIComponent(signupNext); }
     signupForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -143,6 +171,7 @@
   var loginForm = document.getElementById('account-login');
   if (loginForm) {
     if (saved()) { location.replace(nextPage() || 'account.html'); return; }
+    setupGoogle(nextPage(), false);
     loginForm.addEventListener('submit', function (e) {
       e.preventDefault();
       var out = loginForm.querySelector('.form-result');

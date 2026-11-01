@@ -142,3 +142,11 @@ body .ac-login, body .auth { background: var(--tint); }
 @media (max-width: 760px) {
   .dc-hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 28px; }
 }
+
+/* ---------- Sign in with Google ---------- */
+.google-slot { margin: 0 0 18px; }
+.google-slot > div:first-child { display: flex; justify-content: center; min-height: 44px; }
+.google-slot .small { margin: 10px 0 0; text-align: center; }
+.google-slot .form-result { text-align: center; }
+.or-line { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+.or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--bd); }

@@ -115,3 +115,28 @@ installs the new service, backup job and Caddy settings.
 - `signing-key.pem` is the most important file: if it is lost, every installed app needs a rebuilt installer.
   Keep a copy offline (for example an encrypted USB stick), never in Git, email or chat.
 - Never open port 4180 in the Google Cloud firewall; only Caddy (80/443) is public.
+
+## Sign in with Google (optional)
+
+The sign-up and sign-in pages show a "Sign in with Google" button once the server knows your Google client ID. Until then the button stays hidden and the email form works as before.
+
+1. Open <https://console.cloud.google.com/apis/credentials> in a Google Cloud project, and choose **Create credentials, OAuth client ID, Web application**. (If asked, set up the OAuth consent screen first: app name ShortlistPrep, your support email, your site address.)
+2. Under **Authorised JavaScript origins**, add your website address exactly, for example `https://shortlistprep.com`. Add `http://localhost:4173` too if you want to test on your own computer. No redirect URI is needed.
+3. Copy the client ID (it ends in `.apps.googleusercontent.com`). It is not a secret.
+4. On the server, add it to the admin service and restart:
+
+   ```bash
+   sudo systemctl edit shortlistprep-admin
+   ```
+
+   ```ini
+   [Service]
+   Environment=GOOGLE_CLIENT_ID=123456789-abc.apps.googleusercontent.com
+   ```
+
+   ```bash
+   sudo systemctl restart shortlistprep-admin
+   curl https://YOUR-API-HOST/api/account/google/config    # should say "enabled":true
+   ```
+
+How it behaves: the server checks Google's signed token itself and only trusts a verified email. A new email gets a free account and licence, with the Terms and Privacy notice shown under the button. An email that already has a login signs in to it (its password keeps working). A login that was generated for a customer and never used stops working once they sign in with Google. A turned-off account stays turned off.

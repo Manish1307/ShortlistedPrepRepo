@@ -5,7 +5,13 @@
     <div class="ac-login-card">
       <span class="ac-ico purple" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
       <h1>Welcome back</h1>
-      <p class="muted" style="margin:0 0 22px">Sign in with the email and password we sent you.</p>
+      <p class="muted" style="margin:0 0 22px">Sign in with Google, or with your email and password.</p>
+      <div class="google-slot" id="google-slot" hidden>
+          <div id="google-button"></div>
+          <p class="muted small">By continuing with Google you agree to the <a href="terms.html">Terms of use</a> and the <a href="privacy.html">Privacy policy</a>.</p>
+          <p class="form-result" id="google-result" role="status" aria-live="polite"></p>
+          <p class="or-line"><span>or use your email</span></p>
+        </div>
       <form class="ac-form" id="account-login" novalidate style="max-width:none">
         <label>Email<input type="email" name="email" autocomplete="username" required></label>
         <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
@@ -17,4 +23,4 @@
     </div>
   </div>
 </section>
-<script src="assets/account.js?v=3"></script>
+<script src="assets/account.js?v=8"></script>

@@ -132,3 +132,13 @@ section.dc-row { padding: 64px 0; } section.dc-row.alt { background: var(--tint)
 /* ---------- sign in and sign up ---------- */
 body .ac-login, body .auth { background: var(--tint); }
 .ac-login-card { border-radius: 10px; box-shadow: none; }
+
+/* ---------- hero: copy on the left, readiness report on the right ---------- */
+.dc-hero { padding-bottom: 52px; }
+.dc-hero .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+.dc-hero h1 { font-size: clamp(30px, 4.2vw, 52px); }
+.dc-report { margin-top: 0; border: 1px solid var(--bd); border-radius: 10px; padding: 16px 20px 6px; }
+.dc-report-body { grid-template-columns: 1fr; gap: 18px; padding: 16px 0 14px; }
+@media (max-width: 760px) {
+  .dc-hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+}

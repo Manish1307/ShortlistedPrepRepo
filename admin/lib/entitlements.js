@@ -9,6 +9,7 @@ const DAY = 86400000;
 const parse = (s, d) => { try { return JSON.parse(s); } catch (_) { return d; } };
 
 const LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
+const SINGULAR = { jobSearches: 'AI job search', preps: 'Insight plan', roleResumes: 'Role-based resume' };   // for "includes 1 Insight plan"
 // the limits counted here (dailyTokens is enforced by tokens.js; liveSessions by the desktop app's licence)
 const COUNTED = ['jobSearches', 'preps', 'roleResumes'];
 
@@ -46,6 +47,13 @@ function forCustomer(db, customerId) {
   return { plan: { code: plan.code, name: plan.name, free: plan.free, startsAt: plan.startsAt, endsAt: plan.endsAt, dailyTokens: Number(plan.limits.dailyTokens) || null }, limits };
 }
 
+/** What a candidate reads when an action is past the plan's limit. The website turns the trailing sentence into an upgrade popup. */
+function limitMessage(plan, key, limit, used) {
+  const when = plan.free ? 'in the last 30 days' : 'in your plan period';
+  const noun = (limit === 1 && SINGULAR[key] ? SINGULAR[key] : LABELS[key]).replace(/^(?!AI\b)\w/, c => c.toLowerCase());   // "1 insight plan", "30 AI job searches"
+  return `Your ${plan.name} plan includes ${limit} ${noun} ${key === 'roleResumes' ? '' : when}`.trim() + `. You have used ${used}. Upgrade your plan at pricing.html to continue.`;
+}
+
 /** Stop an action that is past the plan's limit, with a message that says what to do. */
 function check(db, customerId, key) {
   if (!COUNTED.includes(key)) return;
@@ -55,9 +63,8 @@ function check(db, customerId, key) {
   if (!Number.isFinite(limit)) return;
   const used = usageOf(db, customerId, plan)[key];
   if (used >= limit) {
-    const when = plan.free ? 'in the last 30 days' : 'in your plan period';
-    throw new ApiError(402, `Your ${plan.name} plan includes ${limit} ${LABELS[key].toLowerCase()} ${key === 'roleResumes' ? '' : when}`.trim() + `. You have used ${used}. Upgrade your plan at pricing.html to continue.`, 'plan-limit');
+    throw new ApiError(402, limitMessage(plan, key, limit, used), 'plan-limit');
   }
 }
 
-module.exports = { forCustomer, check, planOf, LABELS };
+module.exports = { forCustomer, check, planOf, LABELS, limitMessage };

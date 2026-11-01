@@ -160,3 +160,14 @@ body .ac-login, body .auth { background: var(--tint); }
 .js-live-note { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
 @media (prefers-reduced-motion: no-preference) { .js-live { animation: js-live-in .25s ease-out; } }
 @keyframes js-live-in { from { opacity: .4; } to { opacity: 1; } }
+
+/* ---------- upgrade popup (plan limit reached) ---------- */
+.pr-upgrade { width: min(760px, calc(100vw - 28px)); }
+.pr-up-why { margin: 0; padding: 10px 14px; background: #fff8f3; border: 1px solid #f3c9ad; border-radius: 8px; color: var(--ink); font-weight: 500; }
+.pr-up-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pr-up-card { display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid var(--bd); border-radius: 10px; background: #fff; }
+.pr-up-card.featured { border: 2px solid var(--action); background: #fff8f3; }
+.pr-up-card h3 { margin: 0; font-size: 19px; }
+.pr-up-card .price { font: 600 26px/1.2 "Source Serif 4", Georgia, serif; } .pr-up-card .price small { font: 400 13px "Public Sans", sans-serif; color: var(--muted); }
+.pr-up-card .check-list { margin: 6px 0 12px; flex: 1; } .pr-up-card .btn { width: 100%; }
+.pr-up-card .tag { align-self: flex-start; }

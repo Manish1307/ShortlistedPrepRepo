@@ -4,8 +4,7 @@
   'use strict';
   var meta = document.querySelector('meta[name="api-url"]');
   var API = meta ? meta.getAttribute('content').replace(/\/+$/, '') : '';
-  var box = document.getElementById('pr-plans');
-  if (!box) return;
+  var box = document.getElementById('pr-plans');   // on the pricing page; other pages only use window.SPPricing.openUpgrade
 
   function session() {
     for (var i = 0; i < 2; i++) {
@@ -104,6 +103,52 @@
     dlg.showModal();
   }
 
+  var upgradeOpen = false;
+  /**
+   * A popup that asks the candidate to take a paid plan, for when a plan limit is reached. why: the limit message
+   * from the server. Choosing a plan goes straight to the payment step, as on the pricing page.
+   */
+  function openUpgrade(why) {
+    if (upgradeOpen) return;
+    upgradeOpen = true;
+    var intro = String(why || '').replace(/\s*Upgrade your plan at pricing\.html to continue\.?\s*$/i, '').trim();
+    var list = h('div', { class: 'pr-up-grid' }, h('p', { class: 'muted' }, 'Loading the plans…'));
+    var dlg = h('dialog', { class: 'modal pr-dialog pr-upgrade', 'aria-labelledby': 'pr-up-title' });
+    dlg.append(h('div', { class: 'stack' },
+      h('div', { class: 'modal-head' }, h('h2', { id: 'pr-up-title' }, 'Upgrade to keep going'), h('button', { type: 'button', class: 'modal-x', 'aria-label': 'Close', onclick: function () { dlg.close(); } }, '×')),
+      intro ? h('p', { class: 'pr-up-why' }, intro) : null,
+      h('p', { class: 'muted small', style: 'margin:0' }, 'Choose a paid plan to continue. Nothing renews on its own.'),
+      list,
+      h('p', { class: 'small', style: 'margin:0' }, h('a', { href: 'pricing.html' }, 'Compare all plans'))));
+    dlg.addEventListener('close', function () { upgradeOpen = false; dlg.remove(); });
+    document.body.appendChild(dlg);
+    dlg.showModal();
+    call('GET', '/api/pricing').then(function (d) {
+      var paid = (d.plans || []).filter(function (p) { return p.price > 0; });
+      if (!paid.length) { list.replaceChildren(h('p', {}, 'Paid plans are not open yet. ', h('a', { href: 'contact.html' }, 'Contact us'), ' and we will help.')); return; }
+      list.replaceChildren.apply(list, paid.map(function (p) {
+        var btn = h('button', { class: 'btn btn-primary', type: 'button' }, p.cta || 'Get ' + p.name);
+        btn.addEventListener('click', function () {
+          if (!session()) { location.href = 'login.html'; return; }
+          btn.disabled = true;
+          call('POST', '/api/account/plans/checkout', { planId: p.id }).then(function (r) {
+            dlg.close();
+            payDialog(r.order, r.payment);
+          }).catch(function (e) { btn.disabled = false; alert(e.message); });
+        });
+        return h('div', { class: 'pr-up-card' + (p.featured ? ' featured' : '') },
+          p.badge ? h('span', { class: 'tag' }, p.badge) : null,
+          h('h3', {}, p.name),
+          p.tagline ? h('p', { class: 'muted small', style: 'margin:0 0 6px' }, p.tagline) : null,
+          h('div', { class: 'price' }, inr(p.price), p.durationDays ? h('small', {}, ' / ' + p.durationDays + ' days') : null),
+          h('ul', { class: 'check-list' }, (p.features || []).slice(0, 4).map(function (f) { return h('li', {}, f); })),
+          btn);
+      }));
+    }).catch(function (e) { list.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', h('a', { href: 'pricing.html' }, 'See the plans'))); });
+  }
+  window.SPPricing = { openUpgrade: openUpgrade };
+
+  if (!box) return;
   call('GET', '/api/pricing').then(function (d) {
     info = d; render();
     if (signedIn) call('GET', '/api/account/plan').then(function (p) { showCurrent(p.plan); }).catch(function () { /* not signed in any more */ });

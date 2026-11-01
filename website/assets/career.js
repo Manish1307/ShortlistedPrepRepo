@@ -34,7 +34,12 @@
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (r.status === 401) { goSignIn(); throw new Error('Please sign in again.'); }
           if (r.status === 403 && j.code === 'password_change') { location.replace('account.html'); throw new Error(j.error); }
-          if (!r.ok) { var err = new Error(j.error || 'Something went wrong (' + r.status + ')'); err.code = j.code; throw err; }
+          if (!r.ok) {
+            var err = new Error(j.error || 'Something went wrong (' + r.status + ')'); err.code = j.code;
+            // a plan limit: ask for a paid plan in a popup, wherever it happened
+            if (r.status === 402 && j.code === 'plan-limit') { err.upgrade = true; if (window.SPPricing) setTimeout(function () { window.SPPricing.openUpgrade(err.message); }, 0); }
+            throw err;
+          }
           return j;
         });
       });
@@ -595,7 +600,9 @@
         job.insightData = d.prep; job.insight = true; setUsage(d.usage); show(d.prep, tab);
       }).catch(function (e) {
         if (e.code === 'no-description') { cell.replaceChildren(pasteBox(e.message)); return; }
-        var retry = h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, tab, description); } }, 'Try again');
+        var retry = e.upgrade
+          ? h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { if (window.SPPricing) window.SPPricing.openUpgrade(e.message); else location.href = 'pricing.html'; } }, 'See paid plans')
+          : h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { load(refresh, tab, description); } }, 'Try again');
         cell.replaceChildren(h('p', { class: 'form-result bad' }, e.message, ' ', retry));
       });
     }

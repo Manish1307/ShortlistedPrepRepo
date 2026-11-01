@@ -21,18 +21,19 @@
   <meta name="twitter:title" content="{{title}} · {{name}}">
   <meta name="twitter:description" content="{{description}}">
   <meta name="twitter:image" content="{{siteUrl}}/assets/og-image.png">
-  <meta name="theme-color" content="#7d2ae8">
+  <meta name="theme-color" content="#0f2742">
 {{jsonLd}}
   <meta name="api-url" content="{{apiUrl}}">
-  <link rel="icon" href="assets/favicon.png" type="image/png">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="icon" href="assets/favicon.png?v=2" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"></noscript>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap" media="print" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap"></noscript>
   <link rel="stylesheet" href="assets/styles.css?v=4">
   <link rel="stylesheet" href="assets/home.css?v=16">
+  <link rel="stylesheet" href="assets/design-c.css?v=4">
   <script>
     // signed in? (the token kept by account.js) — set before the page draws, so the menu never flashes "Sign in"
     (function () {
@@ -50,7 +51,7 @@
   {{demoBar}}
   <header class="nav">
     <div class="wrap nav-inner">
-      <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="" width="36" height="36">{{name}}</a>
+      <a class="brand" href="index.html"><img class="logo" src="assets/logo.png?v=2" alt="" width="36" height="36">{{name}}</a>
       <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
       <nav id="menu" class="menu">
         <a href="index.html" data-page="index">Home</a>
@@ -69,7 +70,7 @@
           </div>
         </details>
         <a class="btn btn-sm" href="login.html" data-page="login" data-guest>Sign in</a>
-        <a class="btn btn-primary btn-sm" href="signup.html" data-guest>Get Started Free →</a>
+        <a class="btn btn-primary btn-sm" href="signup.html" data-guest>Get started free</a>
         <a class="btn btn-sm" href="career.html" data-page="career" data-member>Career toolkit</a>
         <a class="btn btn-primary btn-sm" href="account.html" data-page="account" data-member>My account</a>
       </nav>
@@ -83,9 +84,9 @@
   <footer class="footer">
     <div class="wrap footer-grid">
       <div>
-        <a class="brand" href="index.html"><img class="logo" src="assets/logo.png" alt="" width="36" height="36">{{name}}</a>
+        <a class="brand" href="index.html"><img class="logo" src="assets/logo.png?v=2" alt="" width="36" height="36">{{name}}</a>
         <p class="muted small">{{tagline}}.</p>
-        <p class="social small"><a href="#" aria-label="X (Twitter), not connected yet">X</a> · <a href="#" aria-label="LinkedIn, not connected yet">LinkedIn</a> · <a href="#" aria-label="YouTube, not connected yet">YouTube</a></p>
+        <p class="social small">X, LinkedIn and YouTube pages are coming soon.</p>
       </div>
       <div>
         <h4>Product</h4>
@@ -135,6 +136,6 @@
       <p class="form-result" role="status" aria-live="polite"></p>
     </form>
   </dialog>
-  <script src="assets/site.js?v=3"></script>
+  <script src="assets/site.js?v=4"></script>
 </body>
 </html>

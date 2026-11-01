@@ -17,7 +17,7 @@
   // highlight the current page in the menu
   var page = (location.pathname.split('/').pop() || 'index.html').replace('.html', '') || 'index';
   document.querySelectorAll('.menu a[data-page]').forEach(function (a) {
-    if (a.getAttribute('data-page') === page) a.classList.add('current');
+    if (a.getAttribute('data-page') === page) { a.classList.add('current'); a.setAttribute('aria-current', 'page'); }
   });
 
   // signed in (see the script in <head>): calls to action go straight into the toolkit

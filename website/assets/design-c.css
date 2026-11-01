@@ -104,3 +104,9 @@ section.dc-row { padding: 64px 0; } section.dc-row.alt { background: var(--tint)
   .hp-plan { border-right: 0; border-bottom: 1px solid var(--bd); } .hp-plan:last-child { border-bottom: 0; }
   .dc-app { grid-template-columns: 56px 1fr; } .dc-app .btn { grid-column: 2; justify-self: start; }
 }
+
+/* ---------- pricing: featured plan ---------- */
+.plan.featured { background: #fff8f3; color: var(--ink); border: 2px solid var(--action); box-shadow: none; transform: none; }
+.plan.featured h3, .plan.featured .price, .plan.featured .check-list li { color: var(--ink); }
+.plan.featured .check-list li::before { color: var(--good); }
+.plan.featured .muted, .plan.featured p { color: var(--body); }

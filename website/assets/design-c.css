@@ -110,3 +110,17 @@ section.dc-row { padding: 64px 0; } section.dc-row.alt { background: var(--tint)
 .plan.featured h3, .plan.featured .price, .plan.featured .check-list li { color: var(--ink); }
 .plan.featured .check-list li::before { color: var(--good); }
 .plan.featured .muted, .plan.featured p { color: var(--body); }
+
+/* ---------- features page: journey and skill-gap widgets ---------- */
+.home-journey { background: var(--tint); }
+.jr-art { background: var(--purple-l); }
+.jr-tabs button[aria-selected="true"] { background: var(--ink); box-shadow: none; }
+.jr-progress i, .gap-num, .mini-btn { background: var(--action); }
+.ph1 { background: var(--ink); }
+.mini.mini-dark, .mini-tip { background: var(--ink); }
+.moment.m-before { background: var(--tint); border-color: var(--bd); }
+.moment.m-during { background: #fff; border-color: var(--bd); }
+.home-gap { background: var(--tint); }
+.gap-art { background: var(--purple-l); box-shadow: none; }
+.gap-grad { background: none; color: var(--action-d); }
+.gain, .win { background: var(--action); }

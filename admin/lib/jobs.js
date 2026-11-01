@@ -24,6 +24,7 @@ const RETRY_FAILED = HOUR;        // a career site that failed is tried again af
 const FETCH_BUDGET = 90000;       // a search waits at most this long for career sites (the rest keep loading)
 const PARALLEL = 6;               // career sites fetched at the same time
 const AI_BATCH = 60;              // jobs the AI scores per search
+const SCORE_GROUP = 30;           // scored in groups this size, so the first jobs appear while the rest are still being scored
 const MAX_COMPANIES = 30;         // typed by the candidate
 const KEEP_SEARCHES = 20;         // per candidate
 const BUCKETS = ['high', 'medium', 'stretch'];
@@ -298,7 +299,7 @@ function addRoutes(ctx) {
     const result = parse(row.result_json);
     const counts = Object.fromEntries(BUCKETS.map(b => [b, result ? result.jobs.filter(j => j.bucket === b).length : 0]));
     if (result && company && !result.jobs.some(j => j.company === company)) company = '';   // not in this search: all companies
-    const shown = result && { profile: result.profile, coverage: result.coverage, total: result.jobs.length, companies: companiesOf(result), company,
+    const shown = result && { partial: !!result.partial, employers: result.employers || [], profile: result.profile, coverage: result.coverage, total: result.jobs.length, companies: companiesOf(result), company,
       groups: Object.fromEntries(BUCKETS.map(b => [b, jobPage(result, b, 1, size, company)])) };
     return { id: row.id, params: parse(row.params_json) || {}, status: row.status, progress: row.progress, error: row.error,
       createdAt: row.created_at, finishedAt: row.finished_at, counts, ...(full ? { result: shown } : {}) };
@@ -324,10 +325,18 @@ function addRoutes(ctx) {
 
   /** The whole search, in the background. Errors are saved on the search; nothing is counted unless it succeeds. */
   async function runSearch(id, customerId, p, resumes) {
-    const step = progress => db.prepare('UPDATE career_job_searches SET progress = ? WHERE id = ?').run(progress, id);
+    const TOTAL_STEPS = 5;
+    const step = (n, text) => db.prepare('UPDATE career_job_searches SET progress = ? WHERE id = ?').run(`Step ${n} of ${TOTAL_STEPS} · ${text}`, id);
+    // how long each step took (seconds): kept with the result and in the activity log
+    const startedAt = Date.now(), timings = {};
+    let lapAt = startedAt;
+    const lap = name => { timings[name] = Math.round((Date.now() - lapAt) / 100) / 10; lapAt = Date.now(); };
+    // what is known so far, saved as each step finishes: the page draws it while the search is still running
+    const partial = { partial: true, profile: null, employers: [], jobs: [], coverage: { companies: 0, loading: 0, live: 0, considered: 0, scored: 0, notFound: [], notSupported: [], failed: [] } };
+    const savePartial = () => db.prepare("UPDATE career_job_searches SET result_json = ? WHERE id = ? AND status = 'running'").run(JSON.stringify(partial), id);
     try {
       // 1. the candidate's profile first: the AI decides the field, the employers, the country and the job titles to look for
-      step('Analysing your resume…');
+      step(1, 'Analysing your resume…');
       const typed = companyList(p.companies);
       const prompt = masterPrompt(db).prompt;
       const resumeBlock = resumes.map(r => `=== RESUME: ${r.label} ===\n${r.text.slice(0, resumes.length > 1 ? 8000 : 20000)}`).join('\n\n').slice(0, 40000);
@@ -336,10 +345,13 @@ function addRoutes(ctx) {
       const a = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, { system: prompt + '\n\n' + ANALYSIS_RULES, user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE RESUME(S):\n${resumeBlock}`, maxTokens: 3000 });
       const profile = { level: String(a.level || '').slice(0, 100), summary: String(a.summary || '').slice(0, 400), strengths: strings(a.strengths, 6, 120),
         targetRoles: strings(a.targetRoles, 6, 80), resumeFixes: strings(a.resumeFixes, 6, 300), field: String(a.field || '').slice(0, 100) };
+      lap('resume');
+      partial.profile = profile;
+      savePartial();
 
       // 2. the companies' career sites: the ones typed; else the employers the AI names for the candidate's field
       // (the built-in list of IT and consulting firms only when the field fits it)
-      step(typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : `Finding employers${profile.field ? ' in ' + profile.field : ''}…`);
+      step(2, typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : `Finding employers${profile.field ? ' in ' + profile.field : ''}…`);
       const builtIn = () => catalogue.map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url), builtIn: true }));
       let resolved;
       if (typed.length) resolved = await Promise.all(typed.map(resolve));
@@ -355,7 +367,12 @@ function addRoutes(ctx) {
       const rows = [...new Map(resolved.filter(r => r.row).map(r => [r.row.id, r.row])).values()];
       if (!rows.length) throw new ApiError(400, typed.length ? 'None of those companies could be found. Check the names, or paste the link of their careers page.'
         : `We could not read the career sites of employers in ${profile.field || 'your field'}. In "Companies", type the names or paste the careers-page links of companies you want to apply to (for example Syngenta, Bayer, Corteva, UPL, or a university or institute).`);
-      const { loading } = await gather(db, rows, fetchOpts, (done, total) => step(`Reading live openings from career sites: ${done} of ${total}…`), budget);
+      lap('employers');
+      partial.employers = [...new Set(resolved.filter(r => r.row).map(r => r.name))].slice(0, 30);
+      partial.coverage.companies = rows.length;
+      savePartial();
+      const { loading } = await gather(db, rows, fetchOpts, (done, total) => step(3, `Reading live openings from career sites: ${done} of ${total}…`), budget);
+      lap('sites');
 
       // 3. the jobs within the filters; the country the AI chose is dropped if it leaves nothing
       const poolFor = country => {
@@ -403,9 +420,14 @@ function addRoutes(ctx) {
       const picked = new Set(first);
       const batch = first.concat(order.filter(j => !picked.has(j)).slice(0, AI_BATCH - first.length));
 
+      partial.coverage.live = pool.length;
+      partial.coverage.considered = batch.length;
+      partial.coverage.loading = loading;
+      savePartial();
+
       // 5. their descriptions: some careers sites list jobs without one (SuccessFactors, Workday, Oracle), and a fit
       // score from the title alone is a guess. Read those from the job pages (kept a week), within a time limit.
-      step(`Reading the descriptions of the ${batch.length} most relevant jobs…`);
+      step(4, `Reading the descriptions of the ${batch.length} most relevant jobs…`);
       const thin = batch.filter(j => String(j.description || '').length < jobprep.MIN_DESCRIPTION);
       const reading = (async () => {
         for (let i = 0; i < thin.length; i += PARALLEL) {
@@ -413,39 +435,58 @@ function addRoutes(ctx) {
         }
       })();
       await Promise.race([reading, sleep(DESCRIPTION_BUDGET)]);
+      lap('descriptions');
 
-      // 6. score them with the Master Prompt
-      step(`Scoring the ${batch.length} most relevant of ${pool.length.toLocaleString('en-IN')} live jobs against your resume…`);
-      const lines = batch.map(j => JSON.stringify({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country,
-        posted: (j.posted_at || '').slice(0, 10), description: keyPart(j.description, 700) || '(none given: score from the title only, and say so in "why")' }));
+      // 6. score them with the Master Prompt, SCORE_GROUP at a time: each group is saved as soon as it is scored, so the page can show it
       const labels = resumes.map(r => r.label);
-      const out = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, {
-        system: prompt + '\n\n' + SCORING_RULES,
-        user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE PROFILE: ${profile.level}. ${profile.summary}\n\nCANDIDATE RESUME(S) (labels: ${labels.join(' | ')}):\n${resumeBlock}\n\nJOB POSTINGS (one JSON object per line):\n${lines.join('\n')}`,
-        maxTokens: 24000,
-      });
-      const byId = new Map(batch.map(j => [j.id, j]));
-      const seen = new Set();
-      const jobs = (Array.isArray(out.matches) ? out.matches : []).filter(m => m && byId.has(Number(m.id)) && !seen.has(Number(m.id)) && seen.add(Number(m.id))).map(m => {
-        const j = byId.get(Number(m.id));
-        const score = Math.max(0, Math.min(100, Math.round(Number(m.score) || 0)));
-        return { id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.posted_at, url: j.url, score,
-          bucket: BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch',
-          why: String(m.why || m.reason || '').slice(0, 300), gap: String(m.gap || '').slice(0, 160),
-          resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '', domain: companyDomain(j.company, j.careers_url) };
-      }).filter(j => j.score >= MIN_SCORE).sort((x, y) => y.score - x.score);
+      const jobLine = j => JSON.stringify({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country,
+        posted: (j.posted_at || '').slice(0, 10), description: keyPart(j.description, 700) || '(none given: score from the title only, and say so in "why")' });
+      const scoreGroup = async group => {
+        const out = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, {
+          system: prompt + '\n\n' + SCORING_RULES,
+          user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE PROFILE: ${profile.level}. ${profile.summary}\n\nCANDIDATE RESUME(S) (labels: ${labels.join(' | ')}):\n${resumeBlock}\n\nJOB POSTINGS (one JSON object per line):\n${group.map(jobLine).join('\n')}`,
+          maxTokens: 12000,
+        });
+        const byId = new Map(group.map(j => [j.id, j]));
+        const seen = new Set();
+        return (Array.isArray(out.matches) ? out.matches : []).filter(m => m && byId.has(Number(m.id)) && !seen.has(Number(m.id)) && seen.add(Number(m.id))).map(m => {
+          const j = byId.get(Number(m.id));
+          const score = Math.max(0, Math.min(100, Math.round(Number(m.score) || 0)));
+          return { id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.posted_at, url: j.url, score,
+            bucket: BUCKETS.includes(m.bucket) ? m.bucket : score >= 75 ? 'high' : score >= 50 ? 'medium' : 'stretch',
+            why: String(m.why || m.reason || '').slice(0, 300), gap: String(m.gap || '').slice(0, 160),
+            resume: resumes.length > 1 && labels.includes(m.resume) ? m.resume : '', domain: companyDomain(j.company, j.careers_url) };
+        }).filter(j => j.score >= MIN_SCORE);
+      };
+      const jobs = [];
+      let limited = false;
+      for (let i = 0; i < batch.length; i += SCORE_GROUP) {
+        const to = Math.min(batch.length, i + SCORE_GROUP);
+        step(5, batch.length > SCORE_GROUP ? `Scoring jobs ${i + 1} to ${to} of ${batch.length} against your resume…` : `Scoring the ${batch.length} most relevant of ${pool.length.toLocaleString('en-IN')} live jobs against your resume…`);
+        try { jobs.push(...await scoreGroup(batch.slice(i, to))); }
+        catch (err) {
+          if (!jobs.length || !(err instanceof ApiError)) throw err;
+          limited = true;   // a later group failed: keep the jobs already scored, and say so
+          break;
+        }
+        jobs.sort((x, y) => y.score - x.score);
+        partial.jobs = jobs;
+        partial.coverage.scored = to;
+        savePartial();
+      }
+      lap('scoring');
       // nothing usable (e.g. the AI answered with made-up ids only): an error, not counted against today's limit
       if (!jobs.length) throw new ApiError(502, 'The AI could not score the jobs this time. Please try again.', 'ai');
 
       const result = { profile, jobs, coverage: {
-        companies: rows.length, loading, live: pool.length, considered: batch.length,
+        companies: rows.length, loading, live: pool.length, considered: batch.length, limited, timings,
         notFound: resolved.filter(r => r.error === 'not-found').map(r => r.name),
         notSupported: resolved.filter(r => r.error === 'not-supported').map(r => r.name),
         failed: typed.length ? rows.filter(r => { const c = one('SELECT last_error, job_count FROM job_companies WHERE id = ?', r.id); return c && c.last_error && !c.job_count; }).map(r => r.name) : [],
       } };
       db.prepare("UPDATE career_job_searches SET status = 'done', progress = '', result_json = ?, finished_at = ? WHERE id = ?").run(JSON.stringify(result), now(), id);
       require('./career').countUse(db, customerId);
-      logActivity(db, customerId, 'jobsearch.done', `${jobs.length} matches: ${jobs.filter(j => j.bucket === 'high').length} high, ${jobs.filter(j => j.bucket === 'medium').length} medium, ${jobs.filter(j => j.bucket === 'stretch').length} low`);
+      logActivity(db, customerId, 'jobsearch.done', `${jobs.length} matches: ${jobs.filter(j => j.bucket === 'high').length} high, ${jobs.filter(j => j.bucket === 'medium').length} medium, ${jobs.filter(j => j.bucket === 'stretch').length} low, in ${Math.round((Date.now() - startedAt) / 1000)} s ${JSON.stringify(timings)}`);
     } catch (err) {
       if (!(err instanceof ApiError)) console.error('AI Job search failed:', err);
       const message = err instanceof ApiError ? err.message : 'Something went wrong with this search. Please try again.';

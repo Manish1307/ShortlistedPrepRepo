@@ -150,3 +150,13 @@ body .ac-login, body .auth { background: var(--tint); }
 .google-slot .form-result { text-align: center; }
 .or-line { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--bd); }
+
+/* ---------- AI Job search: what shows while it runs ---------- */
+.js-clock { margin-left: 12px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.js-eta { margin-top: 4px; }
+.js-live-steps { list-style: none; margin: 0 0 14px; padding: 0; }
+.js-live-steps li { position: relative; padding: 5px 0 5px 24px; color: var(--body); }
+.js-live-steps li::before { content: "✓"; position: absolute; left: 0; color: var(--good); font-weight: 700; }
+.js-live-note { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+@media (prefers-reduced-motion: no-preference) { .js-live { animation: js-live-in .25s ease-out; } }
+@keyframes js-live-in { from { opacity: .4; } to { opacity: 1; } }

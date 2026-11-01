@@ -812,6 +812,16 @@
     return h('div', { class: 'co-box' }, h('div', { class: 'ac-subhead' }, 'Companies in your results'), row);
   }
 
+  /** The candidate's profile, as read from the resume. */
+  function profileCard(p) {
+    return h('div', { class: 'js-profile' },
+      h('div', { class: 'ac-subhead' }, 'Your profile'),
+      p.level ? h('p', { class: 'js-level' }, h('b', {}, 'Level: '), p.level) : null,
+      p.summary ? h('p', {}, p.summary) : null,
+      p.strengths.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Strongest areas: '), chips(p.strengths)) : null,
+      p.targetRoles.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Best-fit roles: '), chips(p.targetRoles.map(function (t, i) { return (i + 1) + '. ' + t; }))) : null);
+  }
+
   function searchResult(s) {
     var r = s.result, p = r.profile, cov = r.coverage;
     var withResume = s.params.resume === 'all';
@@ -820,16 +830,12 @@
     if (cov.notSupported.length) notes.push('These careers sites cannot be read yet: ' + cov.notSupported.join(', ') + '. Sites on Greenhouse, Lever, SmartRecruiters, Ashby and Workday work.');
     if (cov.failed.length) notes.push('These careers sites did not answer: ' + cov.failed.join(', ') + '. Try again later.');
     if (cov.loading) notes.push(cov.loading + ' careers site' + (cov.loading === 1 ? ' was' : 's were') + ' still loading. Search again in a few minutes to include them.');
+    if (cov.limited) notes.push('The AI was busy, so only the first group of jobs was scored this time. Search again later to see the rest.');
     if (r.total < 20) notes.push('Fewer than 20 matches: try a wider location, another role, a longer date range or more companies.');
     var groups = h('div', { class: 'js-groups' });
     showGroups(groups, r, s, withResume);
     return h('div', { class: 'js-result' },
-      h('div', { class: 'js-profile' },
-        h('div', { class: 'ac-subhead' }, 'Your profile'),
-        p.level ? h('p', { class: 'js-level' }, h('b', {}, 'Level: '), p.level) : null,
-        p.summary ? h('p', {}, p.summary) : null,
-        p.strengths.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Strongest areas: '), chips(p.strengths)) : null,
-        p.targetRoles.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Best-fit roles: '), chips(p.targetRoles.map(function (t, i) { return (i + 1) + '. ' + t; }))) : null),
+      profileCard(p),
       h('p', { class: 'jb-info' }, r.total + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
         ' · searched ' + dateTime(s.finishedAt) + ' · ' + paramsLine(s.params)),
       h('p', { class: 'ac-muted js-small' }, 'Press 💡 Insight on a job for its skill gap matrix, its technical and functional requirements, how to close each gap, and what to revise before the interview.'),
@@ -870,12 +876,44 @@
     var remote = bind(h('input', { type: 'checkbox', id: 'js-remote' }), 'remote', 'check');
     var run = h('button', { class: 'btn btn-primary js-run', type: 'button', disabled: !state.resume }, '✦ Search jobs with AI');
     var hint = h('p', { class: 'ac-muted js-small' }, 'Pick your sector so we search the right employers. Leave "Companies" empty to search the main employers of that sector.');
+    var eta = h('p', { class: 'ac-muted js-small js-eta' }, 'A search takes about 2 to 4 minutes. You can leave this page: we keep working, and the result will be waiting here. The first matches appear as soon as they are scored.');
 
     function setRunning(on) { run.disabled = on || !state.resume || !f.sector; run.textContent = on ? 'Searching…' : '✦ Search jobs with AI'; }
-    function showStatus(text, kind) {
+    var clockTimer = null, liveSig = '';
+    /** since: when the search started; shows how long it has been working, counting up every second. */
+    function showStatus(text, kind, since) {
+      clearInterval(clockTimer);
       status.className = 'js-status' + (kind ? ' ' + kind : '');
       status.replaceChildren();
-      if (text) status.appendChild(h('span', { class: 'js-status-in' }, kind === 'busy' ? h('span', { class: 'js-spin', 'aria-hidden': 'true' }) : null, h('span', {}, text)));
+      if (!text) return;
+      var clock = since ? h('span', { class: 'js-clock' }) : null;
+      status.appendChild(h('span', { class: 'js-status-in' }, kind === 'busy' ? h('span', { class: 'js-spin', 'aria-hidden': 'true' }) : null, h('span', {}, text), clock));
+      if (clock) {
+        var tick = function () {
+          if (gen !== cardGen) { clearInterval(clockTimer); return; }
+          var secs = Math.max(0, Math.round((Date.now() - since) / 1000));
+          clock.textContent = 'Working for ' + Math.floor(secs / 60) + ':' + ('0' + (secs % 60)).slice(-2);
+        };
+        tick();
+        clockTimer = setInterval(tick, 1000);
+      }
+    }
+    /** What is known while the search still runs: the profile, the employers, the live openings and the first jobs scored. */
+    function drawLive(s) {
+      var r = s.result, cov = r.coverage;
+      var sig = [!!r.profile, r.employers.length, cov.companies, cov.live, cov.scored, r.total].join('|');
+      if (sig === liveSig) return;
+      liveSig = sig;
+      var steps = [];
+      if (r.employers.length) steps.push(h('li', {}, 'Employers chosen for you: ' + r.employers.slice(0, 8).join(', ') + (r.employers.length > 8 ? ' and ' + (r.employers.length - 8) + ' more' : '') + '.'));
+      if (cov.live) steps.push(h('li', {}, cov.live.toLocaleString() + ' live openings read at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') + '. The ' + cov.considered + ' most relevant are being scored against your resume.'));
+      var groups = h('div', { class: 'js-groups' });
+      if (r.total) showGroups(groups, r, s, s.params.resume === 'all');
+      result.replaceChildren(h('div', { class: 'js-result js-live' },
+        r.profile ? profileCard(r.profile) : null,
+        steps.length ? h('ul', { class: 'js-live-steps' }, steps) : null,
+        r.total ? h('p', { class: 'js-live-note' }, 'First matches: ' + cov.scored + ' of ' + cov.considered + ' scored so far. More appear here as they are scored, so you can start reading now.') : null,
+        groups));
     }
     function poll(id) {
       clearTimeout(pollTimer);
@@ -883,7 +921,14 @@
       call('GET', '/api/career/jobsearch/' + id).then(function (d) {
         if (d.elsewhere) ELSEWHERE = d.elsewhere;
         var s = d.search;
-        if (s.status === 'running') { setRunning(true); showStatus(s.progress || 'Searching…', 'busy'); pollTimer = setTimeout(function () { poll(id); }, 2500); return; }
+        if (s.status === 'running') {
+          setRunning(true);
+          showStatus(s.progress || 'Searching…', 'busy', Date.parse(s.createdAt) || Date.now());
+          if (s.result && s.result.partial) drawLive(s);
+          pollTimer = setTimeout(function () { poll(id); }, 2500);
+          return;
+        }
+        liveSig = '';
         setRunning(false);
         setUsage(d.usage);
         if (s.status === 'failed') showStatus(s.error || 'The search failed. Please try again.', 'bad');
@@ -893,7 +938,8 @@
     }
     run.addEventListener('click', function () {
       if (!f.country.trim() && !f.city.trim() && !confirm('No country or city given: search jobs everywhere?')) return;
-      setRunning(true); showStatus('Starting your search…', 'busy');
+      liveSig = '';
+      setRunning(true); showStatus('Starting your search…', 'busy', Date.now());
       call('POST', '/api/career/jobsearch', { resume: f.resume, level: f.level, role: f.role.trim(), country: f.country.trim(), city: f.city.trim(),
         companies: f.companies.trim(), days: f.days ? Number(f.days) : 0, remote: f.remote })
         .then(function (d) { result.replaceChildren(); poll(d.search.id); })
@@ -940,7 +986,7 @@
           h('div', { class: 'js-row three' }, role, country, city),
           companies,
           h('div', { class: 'js-row actions' }, days, h('label', { class: 'js-check', for: 'js-remote' }, remote, ' Include remote jobs'), run)),
-        hint, status, result, history));
+        hint, eta, status, result, history));
   }
 
   // ---------- one tab per step (the address keeps the step: career.html#cr-jobs) ----------

@@ -119,7 +119,7 @@ async function fakeBoards() {
 /** Fake Gemini: the analysis step returns a profile; the scoring step scores every job id it is shown, plus one made-up id that must be ignored. */
 async function fakeGemini() {
   const seen = [];
-  let onlyMadeUp = false, delay = 0;
+  let onlyMadeUp = false, delay = 0, scoringCalls = 0, failScoringAfter = Infinity;
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', c => { raw += c; });
@@ -151,6 +151,7 @@ async function fakeGemini() {
         out = { level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
           searchTerms: ['.net', 'scrum master', 'backend engineer', 'qa engineer'], resumeFixes: ['Replace the [add number] markers'] };
       } else {
+        if (++scoringCalls > failScoringAfter) { res.statusCode = 500; return res.end('{}'); }   // a later group of jobs cannot be scored
         const label = (/labels: ([^|)\n]+)/.exec(user) || [])[1];
         const ids = [...user.matchAll(/"id":(\d+)/g)].map(m => Number(m[1]));
         const matches = onlyMadeUp ? [] : ids.map((id, i) => ({ id, score: [88, 62, 30][i % 3], bucket: ['high', 'medium', 'stretch'][i % 3], why: 'Because ' + id, gap: i % 3 ? 'Kubernetes' : 'none', resume: (label || '').trim() }));
@@ -162,7 +163,7 @@ async function fakeGemini() {
     }, delay));
   });
   const base = await listen(server);
-  return { base, seen, madeUpOnly: v => { onlyMadeUp = v; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
+  return { base, seen, madeUpOnly: v => { onlyMadeUp = v; }, failScoringAfter: n => { failScoringAfter = n; scoringCalls = 0; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
 }
 
 async function start() {
@@ -621,5 +622,60 @@ test('Sector: the candidate sets it in My account, the admin can set it, and AI 
     assert.equal((await admin.patch(`/admin/api/customers/${id}`, { sector: 'pharma' })).status, 200);
     assert.equal((await web.get('/api/account/me')).json.customer.sector, 'pharma');
     assert.equal((await admin.patch(`/admin/api/customers/${id}`, { sector: 'nonsense' })).status, 400);
+  });
+});
+
+test('AI Job search: steps are numbered, results appear while it runs, and the finished search keeps its timings', async () => {
+  await withServer(async s => {
+    s.addResume();
+    s.ai.slow(80);
+    const web = await s.site();
+    const started = await web.post('/api/career/jobsearch', { country: 'India', sector: 'it' });
+    assert.equal(started.status, 202);
+    const id = started.json.search.id;
+    const steps = new Set(), early = [];
+    let done;
+    for (let i = 0; i < 400 && !done; i++) {
+      const r = (await web.get('/api/career/jobsearch/' + id)).json.search;
+      if (r.status === 'running') {
+        const m = /^Step (\d) of 5 · /.exec(r.progress);
+        if (m) steps.add(Number(m[1]));
+        if (r.result && r.result.partial) early.push({ profile: !!r.result.profile && !!r.result.profile.summary, total: r.result.total, companies: r.result.coverage.companies, live: r.result.coverage.live, scored: r.result.coverage.scored });
+      } else done = r;
+      await new Promise(res => setTimeout(res, 15));
+    }
+    assert.ok(done && done.status === 'done');
+    assert.ok(steps.size >= 3, 'the steps were numbered: ' + [...steps]);
+    // the profile showed first, then the jobs of the first group before the second group was scored
+    assert.ok(early.some(e => e.profile && e.total === 0), 'the profile was shown before any job');
+    assert.ok(early.some(e => e.total > 0 && e.total <= 30 && e.live > 0), 'the first jobs were shown while the rest were being scored');
+    assert.equal(done.result.partial, false);
+    assert.ok(done.result.total > 30, 'the finished search has every job');
+    assert.deepEqual(Object.keys(done.result.coverage.timings).sort(), ['descriptions', 'employers', 'resume', 'scoring', 'sites']);
+    assert.equal(done.result.coverage.limited, false);
+  });
+});
+
+test('AI Job search: when a later group cannot be scored, the jobs already scored are kept and the search still counts', async () => {
+  await withServer(async s => {
+    s.addResume();
+    s.ai.failScoringAfter(1);
+    const web = await s.site();
+    const r = await web.search({ country: 'India', sector: 'it' });
+    assert.equal(r.json.search.status, 'done');
+    assert.equal(r.json.search.result.coverage.limited, true);
+    assert.ok(r.json.search.result.total > 0 && r.json.search.result.total <= 30);
+    assert.equal(r.json.usage.used, 1);   // counted once
+  });
+});
+
+test('AI Job search: when the first group cannot be scored the search fails and is not counted', async () => {
+  await withServer(async s => {
+    s.addResume();
+    s.ai.failScoringAfter(0);
+    const web = await s.site();
+    const r = await web.search({ country: 'India', sector: 'it' });
+    assert.equal(r.json.search.status, 'failed');
+    assert.equal(r.json.usage.used, 0);   // not counted
   });
 });

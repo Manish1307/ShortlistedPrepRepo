@@ -124,3 +124,7 @@ section.dc-row { padding: 64px 0; } section.dc-row.alt { background: var(--tint)
 .gap-art { background: var(--purple-l); box-shadow: none; }
 .gap-grad { background: none; color: var(--action-d); }
 .gain, .win { background: var(--action); }
+
+/* ---------- touch targets ---------- */
+.menu a:not(.btn) { padding: 10px 4px; }
+.footer-grid a:not(.brand) { padding: 10px 0; }

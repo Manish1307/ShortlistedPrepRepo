@@ -488,3 +488,5 @@
 /* ---------- AI Job search: the step message stays at the bottom of the screen while the search runs ---------- */
 .js-status.busy { position: sticky; bottom: 12px; z-index: 6; margin-top: 16px; box-shadow: 0 10px 30px -12px rgba(20, 10, 60, .45); border: 1px solid var(--bd); background: #fff; }
 .jb-pager { position: relative; }
+
+.cr-perfect { margin: 0 0 20px; padding: 14px 16px; border-radius: 14px; background: #e3f6ec; color: #08603f; font-weight: 700; }

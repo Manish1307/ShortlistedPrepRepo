@@ -299,7 +299,10 @@
       if (!a.improved) body.appendChild(h('div', { class: 'cr-score' }, scoreRing(a.score, 'ATS score'),
         h('div', {}, h('b', {}, 'ATS score of your current resume'), h('p', {}, a.verdict), h('span', { class: 'ac-muted' }, 'Checked ' + dateTime(r.atsAt)))));
       // 2. the ask, or the before / after
-      if (!a.improved) {
+      if (!a.improved && a.score >= 100) {
+        // nothing left to fix: no "improve" box
+        body.appendChild(h('p', { class: 'cr-perfect', role: 'status' }, '🎉 Perfect score. Your resume passes every check, so there is nothing to improve.'));
+      } else if (!a.improved) {
         body.appendChild(h('div', { class: 'cr-improve-cta' },
           h('div', {}, h('b', {}, a.score >= 90 ? 'Strong already. Want it even better?' : 'Want a higher score?'),
             h('p', { class: 'ac-muted' }, 'We rewrite your resume to fix the points below, then show you the score before and after. It takes about a minute.')),

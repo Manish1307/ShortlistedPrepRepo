@@ -13,7 +13,8 @@ const CAPABILITIES = [
     { id: 'ats', label: 'Check your ATS score', weight: 5, href: 'career.html?step=cr-ats', cta: 'Check my ATS score',
       sql: "SELECT COUNT(*) FROM career_activity WHERE customer_id = ? AND action IN ('ats.checked', 'ats.improved')" },
     { id: 'improve', limitKey: '', label: 'Improve your ATS score', weight: 5, href: 'career.html?step=cr-ats', cta: 'Improve my ATS score',
-      sql: "SELECT COUNT(*) FROM career_activity WHERE customer_id = ? AND action = 'ats.improved'" },
+      // also done when the resume already scores 100: there is nothing to improve
+      sql: "SELECT (SELECT COUNT(*) FROM career_activity WHERE customer_id = ? AND action = 'ats.improved') + (SELECT COUNT(*) FROM career_resumes WHERE customer_id = ? AND json_extract(ats_json, '$.score') >= 100)" },
     { id: 'versions', limitKey: 'roleResumes', label: 'Make a resume for a target role', weight: 5, href: 'career.html?step=cr-versions', cta: 'Create role resume',
       sql: "SELECT COUNT(*) FROM career_activity WHERE customer_id = ? AND action = 'version.created'" },
   ] },
@@ -59,7 +60,7 @@ function strengthOf(db, customerId) {
   };
   const capabilities = CAPABILITIES.map(c => {
     const steps = c.steps.map(s => {
-      const done = Object.values(db.prepare(s.sql).get(customerId))[0] > 0;
+      const done = Object.values(db.prepare(s.sql).get(...Array((s.sql.match(/\?/g) || []).length).fill(customerId)))[0] > 0;
       const lockReason = done ? '' : lockOf(s);
       return { id: s.id, label: s.label, weight: s.weight, done, locked: !!lockReason, lockReason, href: lockReason ? 'pricing.html' : s.href, cta: lockReason ? 'Unlock' : s.cta, highlight: !!s.highlight };
     });

@@ -78,3 +78,14 @@ test('support counts downloads, a computer signed in to the app, and a saved liv
     assert.equal(strengthOf(db, id).capabilities.find(c => c.id === 'support').earned, 35);
   } finally { await close(); }
 });
+
+test('a resume that already scores 100 has nothing to improve, so that step counts as done', async () => {
+  const { db, id, close } = await start();
+  try {
+    db.prepare("INSERT INTO career_resumes (customer_id, file_name, source_text, ats_json, uploaded_at) VALUES (?, 'cv.pdf', 'text', ?, datetime('now'))").run(id, JSON.stringify({ score: 100 }));
+    logActivity(db, id, 'ats.checked', 'ATS score 100');
+    const ats = strengthOf(db, id).capabilities.find(c => c.id === 'ats');
+    assert.equal(ats.steps.find(st => st.id === 'improve').done, true);
+    assert.equal(ats.earned, 15);   // resume 5 + check 5 + improve 5
+  } finally { await close(); }
+});

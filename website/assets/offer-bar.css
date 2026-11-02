@@ -1,0 +1,17 @@
+/* ---------- offer strip (set in the admin portal: Offer bar) ---------- */
+.offer-bar { position: relative; z-index: 60; color: var(--ink); font-size: 15px; --o-bg: #fbb740; --o-chip: rgba(14, 19, 24, .1); }
+.offer-bar.offer-sun { background: var(--o-bg); }
+.offer-bar.offer-purple { background: var(--purple); color: #fff; --o-chip: rgba(255, 255, 255, .18); }
+.offer-bar.offer-teal { background: var(--teal); --o-chip: rgba(14, 19, 24, .1); }
+.offer-row { max-width: 1240px; margin: 0 auto; padding: 9px 48px 9px 16px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 12px; text-align: center; }
+.offer-ico { width: 30px; height: 30px; border-radius: 50%; background: var(--o-chip); display: grid; place-items: center; font-size: 14px; flex: none; }
+.offer-msg { font-weight: 600; }
+.offer-time { background: var(--o-chip); border-radius: 8px; padding: 3px 10px; font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: nowrap; }
+.offer-code { border: 1px dashed currentColor; background: var(--o-chip); color: inherit; border-radius: 8px; padding: 3px 10px; font: 700 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .04em; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.offer-code:hover { background: rgba(255, 255, 255, .35); }
+.offer-cta { color: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.offer-x { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: inherit; font-size: 24px; line-height: 1; width: 34px; height: 34px; border-radius: 8px; cursor: pointer; }
+.offer-x:hover { background: var(--o-chip); }
+.offer-bar :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.offer-purple :focus-visible { outline-color: #fff; }
+@media (max-width: 640px) { .offer-row { padding-right: 44px; font-size: 14px; } }

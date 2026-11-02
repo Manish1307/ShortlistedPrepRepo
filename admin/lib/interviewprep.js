@@ -71,8 +71,8 @@ function addRoutes(ctx) {
     const r = one('SELECT * FROM career_resumes WHERE customer_id = ?', customerId);
     if (r) {
       const ats = parse(r.ats_json);
-      const text = ats ? career.resumeText(ats.resume) : r.source_text;
-      out.push({ key: 'main', label: ats ? 'My ATS-friendly resume' : 'My uploaded resume', text });
+      const text = ats && ats.resume ? career.resumeText(ats.resume) : r.source_text;
+      out.push({ key: 'main', label: ats && ats.resume ? 'My ATS-friendly resume' : 'My uploaded resume', text });
       for (const v of all('SELECT id, role, content_json FROM career_versions WHERE customer_id = ? ORDER BY id DESC', customerId)) {
         const c = parse(v.content_json);
         if (c && c.resume) out.push({ key: 'v' + v.id, label: 'Resume for ' + v.role, text: career.resumeText(c.resume) });

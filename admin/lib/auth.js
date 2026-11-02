@@ -64,6 +64,8 @@ class Limiter {
 const PERMISSIONS = {
   'messages.write': ['owner', 'admin', 'support'],
   'opportunities.write': ['owner', 'admin', 'support'],
+  'demos.write': ['owner', 'admin', 'support'],
+  'offers.write': ['owner', 'admin'],
   'licence.minor': ['owner', 'admin', 'support'],   // extend, reset devices, note
   'licence.major': ['owner', 'admin'],              // create, revoke, reinstate, change device limit
   'customers.write': ['owner', 'admin'],

@@ -76,7 +76,7 @@ function addRoutes(ctx) {
       resume: r ? {
         fileName: r.file_name, uploadedAt: r.uploaded_at, chars: r.source_text.length, preview: r.source_text.slice(0, 1500),
         ats: ats ? { score: ats.score, verdict: ats.verdict, checkedAt: r.ats_at, checks: ats.checks || [], keywords: ats.keywords || { present: [], missing: [] },
-          fixes: ats.fixes || [], suggestedRoles: ats.suggestedRoles || [] } : null,
+          fixes: ats.fixes || [], suggestedRoles: ats.suggestedRoles || [], improved: !!ats.resume, afterScore: ats.afterScore == null ? null : ats.afterScore } : null,
       } : null,
       versions: all('SELECT id, role, content_json, created_at FROM career_versions WHERE customer_id = ? ORDER BY id DESC', c.id)
         .map(v => { const x = parse(v.content_json) || {}; return { id: v.id, role: v.role, fitScore: x.fitScore, fitNote: x.fitNote, createdAt: v.created_at }; }),

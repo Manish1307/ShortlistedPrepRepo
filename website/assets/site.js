@@ -14,6 +14,16 @@
     });
   }
 
+  // signed-in links are added here, not written in the page, so visitors (and search engines) never see them
+  if (document.documentElement.getAttribute('data-auth') === 'member') {
+    var menu = document.getElementById('menu');
+    if (menu) [['career.html', 'career', 'Career toolkit', 'btn btn-sm'], ['account.html', 'account', 'My account', 'btn btn-primary btn-sm']].forEach(function (l) {
+      var a = document.createElement('a');
+      a.href = l[0]; a.setAttribute('data-page', l[1]); a.className = l[3]; a.textContent = l[2];
+      menu.appendChild(a);
+    });
+  }
+
   // highlight the current page in the menu
   var page = (location.pathname.split('/').pop() || 'index.html').replace('.html', '') || 'index';
   document.querySelectorAll('.menu a[data-page]').forEach(function (a) {

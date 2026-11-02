@@ -7,7 +7,8 @@ const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const build = spawnSync(process.execPath, ['website/build.js'], { cwd: root, stdio: 'inherit' });
+// locally the website talks to the admin server on this computer (offer bar, demo slots, forms), not the live API
+const build = spawnSync(process.execPath, ['website/build.js'], { cwd: root, stdio: 'inherit', env: { ...process.env, SITE_API_URL: process.env.SITE_API_URL || 'http://localhost:4180' } });
 if (build.status !== 0) process.exit(build.status || 1);
 
 const children = [

@@ -118,11 +118,23 @@ test('upload, ATS check, role resume, job match, and Word downloads', async () =
     assert.equal((await asha.post('/api/career/resume', { text: 'too short' })).status, 400);
     assert.equal((await asha.post('/api/career/resume', { text: RESUME, fileName: 'asha.docx' })).status, 200);
 
-    const ats = await asha.post('/api/career/ats');
+    // the score is rules-based, free and instant: it needs no AI and does not use tokens
+    const quick = await asha.post('/api/career/ats-score');
+    assert.equal(quick.status, 200);
+    assert.equal(quick.json.ats.improved, false);
+    assert.equal(quick.json.ats.resume, null);
+    assert.equal(quick.json.ats.checks.length, 11);
+    const before = quick.json.ats.score;
+
+
+    const ats = await asha.post('/api/career/ats');                                         // improving is the AI step
     assert.equal(ats.status, 200);
-    assert.equal(ats.json.ats.score, 61);
-    assert.deepEqual(ats.json.ats.checks.map(c => c.status), ['pass', 'fail', 'warn']);    // unknown status -> warn
+    assert.equal(ats.json.ats.improved, true);
+    assert.equal(ats.json.ats.score, before);                                               // the "before" score does not move
+    assert.equal(typeof ats.json.ats.afterScore, 'number');                                 // the "after" score is the same rules run on the improved resume
+    assert.equal(ats.json.ats.checks.length, 11);
     assert.deepEqual(ats.json.ats.suggestedRoles, ['.NET Developer', 'Scrum Master']);
+    assert.equal((await asha.post('/api/career/ats-score')).json.ats.afterScore, ats.json.ats.afterScore);   // checking again keeps the improvement
     assert.equal(ats.json.ats.resume.name, 'Asha Rao');
     assert.deepEqual([ats.json.usage.used, ats.json.usage.tokens.used, ats.json.usage.tokens.daily], [1, 5000, 100000]);   // actions today, and the tokens the AI reported
 
@@ -143,7 +155,7 @@ test('upload, ATS check, role resume, job match, and Word downloads', async () =
 
     const page = (await asha.get('/api/career')).json;
     assert.equal(page.resume.fileName, 'asha.docx');
-    assert.equal(page.resume.ats.score, 61);
+    assert.equal(typeof page.resume.ats.score, 'number');
     assert.equal(page.versions.length, 1);
     assert.equal(page.matches.length, 1);
     assert.equal(page.usage.used, 3);
@@ -207,7 +219,7 @@ test('Groq is used when there is no Gemini key, or when Gemini is busy', async (
   await withServer({ keys: ['groq'] }, async s => {
     const asha = await s.site('asha@example.com');
     await asha.post('/api/career/resume', { text: RESUME });
-    assert.equal((await asha.post('/api/career/ats')).json.ats.score, 61);
+    assert.equal((await asha.post('/api/career/ats')).json.ats.improved, true);
     const groqCall = s.ai.seen.find(x => x.url === '/groq/chat/completions');
     assert.equal(groqCall.body.response_format.type, 'json_object');
   });

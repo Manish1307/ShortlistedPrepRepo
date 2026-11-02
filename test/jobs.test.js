@@ -327,6 +327,14 @@ test('AI Job search: live jobs from the built-in companies, filtered by country 
     assert.deepEqual([page4.page, page4.jobs.length, page4.size], [4, 5, 5]);
     assert.equal((await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=medium&page=99`)).json.page, 4);   // past the end: the last page
     assert.equal((await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=other`)).status, 400);
+    // one list of every match, best first: the first page is the top 5, and the rest come page by page
+    const all = search.result.all;
+    assert.deepEqual([all.bucket, all.total, all.page, all.pages, all.jobs.length], ['all', 60, 1, 12, 5]);
+    assert.equal(all.jobs[0].score, 88);
+    assert.ok(all.jobs.every((j, i) => i === 0 || all.jobs[i - 1].score >= j.score - 8));        // best first (a fresh posting can move up a little)
+    const second = (await web.get(`/api/career/jobsearch/${search.id}/jobs?bucket=all&page=2`)).json;
+    assert.deepEqual([second.page, second.jobs.length], [2, 5]);
+    assert.ok(second.jobs.every(j => !all.jobs.some(x => x.id === j.id)));                       // the next 5 are new ones
     assert.equal(new Set(jobs.map(j => j.id)).size, 60);                          // no job on two pages
     assert.ok(jobs.every(j => j.matrix === undefined && j.insight === false));   // the matrix is made from the job's own description, in Insight
     assert.ok(jobs.every(j => j.domain === ''));                                  // test companies: no web address known

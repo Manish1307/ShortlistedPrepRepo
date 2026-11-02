@@ -8,6 +8,7 @@
   let me = null;
   let openCount = 0;
   let newOppCount = 0;
+  let newDemoCount = 0;
   let view = 'overview';
 
   /** h('div', {class: 'x', onclick: fn}, 'text', childNode, ...) builds an element. */
@@ -62,10 +63,10 @@
   const moneyList = list => (list && list.some(r => r.cents) ? list.filter(r => r.cents).map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'INR'));
   const can = permission => ({
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
-    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'team': ['owner'],
+    'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'demos.write': ['owner', 'admin', 'support'], 'offers.write': ['owner', 'admin'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
 
-  const STATUS_PILL = { default: 'good', approved: 'good', rejected: 'bad', pending: 'warn', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '' };
+  const STATUS_PILL = { default: 'good', approved: 'good', rejected: 'bad', pending: 'warn', on: 'good', off: 'bad', active: 'good', expired: 'warn', revoked: 'bad', paid: 'good', refunded: 'warn', failed: 'bad', open: 'warn', closed: '', new: 'warn', contacted: '', qualified: 'good', won: 'good', lost: 'bad', demo: 'good', interest: '', signup: '', contact: '', Booked: 'warn', Confirmed: 'good', Completed: 'good', Cancelled: 'bad', 'No show': 'bad' };
   const pill = text => h('span', { class: 'pill ' + (STATUS_PILL[text] || '') }, text);
 
   // ---------- dialogs and forms ----------
@@ -177,6 +178,8 @@
     { id: 'overview', label: 'Overview', items: [['overview', 'Overview', 'Revenue, licences and website activity at a glance.', 'dashboard']] },
     { id: 'growth', label: 'Growth', items: [
       ['opportunities', 'Opportunities', 'Demo requests and enquiries that came from the website.', 'target'],
+      ['atschecks', 'ATS checks', 'Resumes checked on the website, with the contact details and score of each visitor.', 'doc'],
+      ['demos', '1-on-1 demos', 'Free demo sessions booked on the website: slots, meeting links and status.', 'chat'],
       ['visitors', 'Website visits', 'Who visits the website and where they come from.', 'globe']] },
     { id: 'customers', label: 'Customers', items: [
       ['customers', 'Customers', 'Customer records, licences and website logins.', 'users'],
@@ -191,7 +194,8 @@
       ['aikeys', 'AI keys', 'AI service keys and which licence uses which.', 'lock']] },
     { id: 'sales', label: 'Sales', items: [
       ['orders', 'Orders', 'Payments, refunds and plan orders.', 'receipt'],
-      ['pricing', 'Pricing', 'Plans, prices, offers and payment settings.', 'tag']] },
+      ['pricing', 'Pricing', 'Plans, prices, offers and payment settings.', 'tag'],
+      ['offers', 'Offer bar', 'The offer strip and coupon code shown at the top of the website.', 'bolt']] },
     { id: 'company', label: 'Company', items: [
       ['messages', 'Support', 'Support messages from customers.', 'mail'],
       ['releases', 'Releases', 'App versions and download links.', 'box'],
@@ -224,7 +228,7 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && menuOpen) closeMenus(); });
   }
   const go = id => { closeMenus(); view = id; render(); window.scrollTo(0, 0); };
-  const badgeFor = id => (id === 'messages' ? openCount : id === 'opportunities' ? newOppCount : 0);
+  const badgeFor = id => (id === 'messages' ? openCount : id === 'opportunities' ? newOppCount : id === 'demos' ? newDemoCount : 0);
 
   function header() {
     const items = g => g.items.filter(([id]) => id !== 'team' || me.role === 'owner');
@@ -297,7 +301,7 @@
 
 
   async function refreshOpenCount() {
-    try { openCount = (await get('/admin/api/messages?status=open')).messages.length; newOppCount = (await get('/admin/api/opportunities?status=new')).counts.new; } catch (_) { /* ignore */ }
+    try { openCount = (await get('/admin/api/messages?status=open')).messages.length; newOppCount = (await get('/admin/api/opportunities?status=new')).counts.new; newDemoCount = (await get('/admin/api/demos?status=booked')).counts.booked; } catch (_) { /* ignore */ }
   }
 
   // ---------- overview ----------
@@ -724,6 +728,119 @@
     dialog((KIND_LABEL[o.kind] || 'Opportunity') + ' · ' + (o.name || o.email), body, buttons);
   }
 
+  // ---------- free ATS checks (resumes checked on the website) ----------
+  async function atsChecks(el, query = '') {
+    const { checks: rows, total, average } = await get('/admin/api/ats-checks?q=' + encodeURIComponent(query));
+    const stat = (label, num) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num));
+    el.replaceChildren(
+      head('ATS checks', searchBox(v => atsChecks(el, v), 'Search name, email, phone', query)),
+      h('p', { class: 'muted' }, 'Everyone who checked their resume on the website. Each one is also an opportunity. Only the name, email, mobile number and result are kept, not the resume itself.'),
+      h('div', { class: 'cards' }, stat('Resumes checked', total), stat('Average score', average + ' / 100')),
+      table([
+        { label: 'Date', render: r => dateTime(r.created_at) }, { label: 'Name', render: r => r.name || '—' }, { label: 'Email', render: r => r.email },
+        { label: 'Mobile', render: r => r.phone || '—' }, { label: 'File', render: r => r.file_name || 'Pasted text' },
+        { label: 'Score', render: r => h('span', { class: 'pill ' + (r.score >= 70 ? 'good' : r.score >= 45 ? 'warn' : 'bad') }, r.score + ' / 100') },
+      ], rows, r => atsDetail(r.id), 'No resumes checked yet. They appear here when a visitor uses the free ATS checker.'));
+  }
+
+  async function atsDetail(id) {
+    const { check: c } = await get('/admin/api/ats-checks/' + id);
+    const detail = (label, text) => h('p', { class: 'small' }, h('b', {}, label + ': '), text || '—');
+    dialog('ATS check · ' + (c.name || c.email), h('div', {},
+      detail('Score', c.score + ' / 100'), detail('Verdict', c.result.verdict), detail('Email', c.email), detail('Mobile', c.phone), detail('File', c.file_name), detail('Checked', dateTime(c.created_at)),
+      h('h2', {}, 'Fix first'), c.result.fixFirst.length ? c.result.fixFirst.map(t => h('div', { class: 'list-item' }, h('span', {}, t))) : h('p', { class: 'muted' }, 'Nothing major.'),
+      h('h2', {}, 'All checks'), c.result.checks.map(k => h('div', { class: 'list-item' }, h('span', {}, k.name + ' · ' + k.detail), h('span', {}, h('span', { class: 'pill ' + ({ pass: 'good', warn: 'warn', fail: 'bad' }[k.status]) }, k.status), ' ' + k.points + '/' + k.weight))),
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(c.email) + '?subject=' + encodeURIComponent('Your ShortlistPrep ATS score: ' + c.score + '/100') }, 'Email them'))));
+  }
+
+  // ---------- 1-on-1 demo bookings (booked on the website) ----------
+  const DEMO_STATUSES = ['booked', 'confirmed', 'completed', 'cancelled', 'no_show'];
+  const demoLabel = s => s.replace('_', ' ').replace(/^./, c => c.toUpperCase());
+  const slotText = d => new Date(d.slot_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ' · ' + d.slot_time + ' IST';
+  async function demos(el, status = '', when = 'upcoming', query = '') {
+    const { demos: rows, counts } = await get('/admin/api/demos?status=' + status + '&when=' + (status ? '' : when) + '&q=' + encodeURIComponent(query));
+    newDemoCount = counts.booked;
+    const redo = (s, w, q) => demos(el, s, w, q);
+    const statusFilter = h('select', { 'aria-label': 'Status', onchange: e => redo(e.target.value, when, query) },
+      [['', 'Upcoming only'], ...DEMO_STATUSES.map(s => [s, demoLabel(s) + ' (' + counts[s] + ')'])].map(([v, l]) => h('option', { value: v }, l)));
+    statusFilter.value = status;
+    el.replaceChildren(
+      head('1-on-1 demos', searchBox(v => redo(status, when, v), 'Search name, email, phone', query), statusFilter),
+      h('div', { class: 'cards' }, DEMO_STATUSES.map(s => h('div', { class: 'card stat' }, h('div', { class: 'label' }, demoLabel(s)), h('div', { class: 'num' }, counts[s])))),
+      table([
+        { label: 'Slot', render: slotText }, { label: 'Who', render: r => r.name + ' <' + r.email + '>' }, { label: 'Phone', render: r => r.phone || '—' },
+        { label: 'Wants help with', render: r => r.goal || '—' }, { label: 'Assigned to', render: r => r.assigned_to || '—' },
+        { label: 'Status', render: r => pill(demoLabel(r.status)) },
+      ], rows, r => demoDetail(r, () => redo(status, when, query)), 'No demo bookings yet. They appear here when someone picks a slot on the website.'));
+  }
+
+  function demoDetail(d, done) {
+    const write = can('demos.write');
+    const detail = (label, text) => h('p', { class: 'small' }, h('b', {}, label + ': '), text || '—');
+    const status = field('Status', { name: 'status', type: 'select', value: d.status, options: DEMO_STATUSES.map(s => ({ value: s, label: demoLabel(s) })) });
+    const date = field('Date', { name: 'date', type: 'date', value: d.slot_date });
+    const time = field('Start time (IST)', { name: 'time', type: 'select', value: d.slot_time, options: ['10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '18:00'].map(t => ({ value: t, label: t })) });
+    const link = field('Meeting link (Google Meet, Zoom)', { name: 'meetingLink', value: d.meeting_link, maxlength: 300 });
+    const assigned = field('Assigned to', { name: 'assignedTo', value: d.assigned_to, maxlength: 100 });
+    const note = field('Internal note', { name: 'adminNote', type: 'textarea', value: d.admin_note, maxlength: 2000 });
+    const body = h('div', {},
+      detail('Slot', slotText(d)), detail('Email', d.email), detail('Phone / WhatsApp', d.phone), detail('Booked on', dateTime(d.created_at)), detail('Came from page', d.source_page),
+      d.goal ? h('div', { class: 'msg-body' }, d.goal) : null,
+      write ? h('div', {}, status, date, time, link, assigned, note) : detail('Meeting link', d.meeting_link),
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'mailto:' + encodeURIComponent(d.email) + '?subject=' + encodeURIComponent('Your ShortlistPrep 1-on-1 demo') + '&body=' + encodeURIComponent('Hello ' + d.name + ',\n\nYour free 1-on-1 demo is booked for ' + slotText(d) + '.' + (d.meeting_link ? '\nJoin here: ' + d.meeting_link : '') + '\n\nShortlistPrep') }, 'Email confirmation')));
+    const buttons = [];
+    if (write) buttons.push({ label: 'Save', kind: 'primary', run: () => guard(async () => {
+      await patch('/admin/api/demos/' + d.id, values(body));
+      toast('Saved'); done();
+    }) });
+    dialog('Demo · ' + d.name, body, buttons);
+  }
+
+  // ---------- offer bar (the strip at the top of every website page) ----------
+  const THEME_LABEL = { sun: 'Gold', purple: 'Purple', teal: 'Teal' };
+  const localInput = iso => { if (!iso) return ''; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const offerState = (o, nowIso) => (!o.active ? 'Off' : o.ends_at && o.ends_at <= nowIso ? 'Ended' : o.starts_at && o.starts_at > nowIso ? 'Scheduled' : 'Live');
+  async function offers(el) {
+    const { offers: rows, now: nowIso } = await get('/admin/api/offers');
+    const write = can('offers.write');
+    const redo = () => offers(el);
+    el.replaceChildren(
+      head('Offer bar', write ? h('button', { class: 'btn primary', onclick: () => offerForm(null, redo) }, '+ New offer') : null),
+      h('p', { class: 'muted' }, 'The strip at the top of every website page. The newest offer that is switched on and inside its dates is shown, with a countdown and a copy button for the coupon code. Visitors can close it.'),
+      table([
+        { label: 'Offer', render: r => h('span', {}, h('b', {}, r.name), h('div', { class: 'muted small' }, r.message)), wrap: true },
+        { label: 'Code', render: r => (r.code ? h('span', { class: 'mono' }, r.code) : '—') },
+        { label: 'Starts', render: r => (r.starts_at ? dateTime(r.starts_at) : 'Now') }, { label: 'Ends', render: r => (r.ends_at ? dateTime(r.ends_at) : 'No end') },
+        { label: 'Status', render: r => { const s = offerState(r, nowIso); return h('span', { class: 'pill ' + ({ Live: 'good', Scheduled: 'warn', Ended: '', Off: '' }[s]) }, s); } },
+        { label: '', render: r => (write ? h('button', { class: 'btn sm danger', onclick: e => { e.stopPropagation(); if (confirm(`Delete the offer "${r.name}"?`)) guard(async () => { await del('/admin/api/offers/' + r.id); toast('Offer deleted'); redo(); }); } }, 'Delete') : '') },
+      ], rows, write ? r => offerForm(r, redo) : null, 'No offers yet. Add one to show a strip with a coupon code at the top of the website.'));
+  }
+
+  function offerForm(o, done) {
+    const f = h('div', {},
+      field('Offer name (only you see this)', { name: 'name', value: o ? o.name : '', maxlength: 80, placeholder: 'Diwali sale' }),
+      field('Message shown on the website', { name: 'message', value: o ? o.message : '', maxlength: 200, placeholder: 'Diwali is almost here: 25% off every plan until 12 November with code DIWALI25.' }),
+      field('Coupon code (optional, shows a copy button)', { name: 'code', value: o ? o.code : '', maxlength: 30, placeholder: 'DIWALI25' }),
+      field('Button text (optional)', { name: 'ctaLabel', value: o ? o.cta_label : '', maxlength: 40, placeholder: 'Get 25% off' }),
+      field('Button link', { name: 'ctaUrl', value: o ? o.cta_url : '', maxlength: 300, placeholder: 'pricing.html' }),
+      field('Starts (leave empty to start now)', { name: 'startsAt', type: 'datetime-local', value: o ? localInput(o.starts_at) : '' }),
+      field('Ends (leave empty for no end; a countdown shows until then)', { name: 'endsAt', type: 'datetime-local', value: o ? localInput(o.ends_at) : '' }),
+      field('Colour', { name: 'theme', type: 'select', value: o ? o.theme : 'sun', options: Object.entries(THEME_LABEL).map(([value, label]) => ({ value, label })) }),
+      field('Show on the website', { name: 'active', type: 'select', value: o ? String(o.active) : '1', options: [{ value: '1', label: 'On' }, { value: '0', label: 'Off' }] }),
+      field('Visitors can close it', { name: 'dismissible', type: 'select', value: o ? String(o.dismissible) : '1', options: [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }] }),
+      h('p', { class: 'muted small' }, 'The coupon code is only displayed here. Make sure the code is accepted wherever you take payment.'));
+    dialog(o ? 'Edit offer' : 'New offer', f, [{ label: 'Save', kind: 'primary', run: async () => {
+      const ok = await guard(async () => {
+        const v = values(f);
+        const body = { ...v, active: v.active === '1', dismissible: v.dismissible === '1', startsAt: v.startsAt ? new Date(v.startsAt).toISOString() : '', endsAt: v.endsAt ? new Date(v.endsAt).toISOString() : '' };
+        if (o) await patch('/admin/api/offers/' + o.id, body); else await post('/admin/api/offers', body);
+        return true;
+      });
+      if (!ok) return true;
+      toast('Offer saved'); done();
+    } }]);
+  }
+
   // ---------- website visits ----------
   async function visitors(el, days = 30) {
     const a = await get('/admin/api/analytics?days=' + days);
@@ -994,10 +1111,10 @@
       section('Resume',
         !r ? h('p', { class: 'muted' }, 'No resume uploaded yet.') : h('div', {},
           h('p', {}, h('b', {}, r.fileName || 'Pasted resume'), h('span', { class: 'muted' }, ` · ${r.chars.toLocaleString()} characters · uploaded ${dateTime(r.uploadedAt)}`)),
-          h('div', { class: 'actions' }, dlLink(id, 'original', null, 'Uploaded resume (.txt)'), r.ats ? dlLink(id, 'ats', null, 'ATS-friendly resume (.docx)') : null),
+          h('div', { class: 'actions' }, dlLink(id, 'original', null, 'Uploaded resume (.txt)'), r.ats && r.ats.improved ? dlLink(id, 'ats', null, 'ATS-friendly resume (.docx)') : null),
           h('details', {}, h('summary', { class: 'small' }, 'Preview the uploaded text'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, r.preview + (r.chars > r.preview.length ? '\n…' : ''))),
           r.ats ? h('div', { class: 'cand-ats' },
-            h('h3', {}, 'ATS check ', scorePill(r.ats.score), h('span', { class: 'small muted' }, `  ${dateTime(r.ats.checkedAt)}`)),
+            h('h3', {}, 'ATS check ', scorePill(r.ats.score), r.ats.afterScore != null ? [' → ', scorePill(r.ats.afterScore)] : '', h('span', { class: 'small muted' }, `  ${dateTime(r.ats.checkedAt)}`)),
             h('p', { class: 'small' }, r.ats.verdict),
             r.ats.checks.length ? h('ul', { class: 'small cand-checks' }, r.ats.checks.map(k => h('li', { class: k.status }, h('b', {}, k.name + ': '), k.detail))) : null,
             r.ats.keywords.missing.length ? h('p', { class: 'small' }, h('b', {}, 'Missing keywords: '), r.ats.keywords.missing.join(', ')) : null,
@@ -1444,7 +1561,7 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, opportunities, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, audit, team, account };
+  const VIEWS = { overview, opportunities, atschecks: atsChecks, demos, offers, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

@@ -43,13 +43,13 @@ This kit has four parts. Do them in order; each has a checklist you can tick.
   ```bash
   rm -rf ~/admin ~/deploy ~/site
   tar -xzf shortlistprep-server.tgz
-  sudo bash deploy/setup.sh api.34-61-176-96.sslip.io <your admin address> shortlistprep.com
+  sudo bash deploy/setup.sh api.shortlistprep.com <your admin address> shortlistprep.com
   ```
   The database, signing key and AI keys are kept. New tables (job searches, activity, tokens, saved plans) are created on start.
 - [ ] Check the server is running and healthy:
   ```bash
   sudo systemctl status shortlistprep-admin --no-pager
-  curl -s https://api.34-61-176-96.sslip.io/api/health
+  curl -s https://api.shortlistprep.com/api/health
   ```
   The second command must print `{"ok":true}`.
 - [ ] If something is wrong, read the log: `sudo journalctl -u shortlistprep-admin -n 100 --no-pager`

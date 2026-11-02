@@ -263,39 +263,78 @@
 
   // ---------- 2. ATS ----------
   var STATUS = { pass: ['✓', 'good'], warn: ['!', 'warn'], fail: ['✕', 'bad'] };
+  /** The score of the uploaded resume is worked out by itself when this step opens (free, instant). */
+  function autoScore() {
+    if (!state.resume || state.resume.ats || state.atsRunning || state.atsFailed) return;
+    state.atsRunning = true; state.atsFailed = '';
+    call('POST', '/api/career/ats-score').then(function (d) { state.resume.ats = d.ats; state.resume.atsAt = new Date().toISOString(); })
+      .catch(function (e) { state.atsFailed = e.message || 'The check did not work.'; })
+      .then(function () { state.atsRunning = false; render(); });
+  }
+
   function atsCard() {
     var r = state.resume, a = r && r.ats;
     var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
-    var run = h('button', { class: 'btn btn-primary', type: 'button', disabled: !r }, a ? 'Run the check again' : 'Check my resume');
-    run.addEventListener('click', function () {
-      var done = busy(run, 'Checking… (up to a minute)');
-      message(out, 'Reading your resume like an ATS would, and writing an improved version…');
-      call('POST', '/api/career/ats').then(function (d) { state.resume.ats = d.ats; state.resume.atsAt = new Date().toISOString(); setUsage(d.usage); render(); goTo('cr-ats'); })
-        .catch(function (e) { message(out, e.message, 'bad'); }).then(done);
-    });
     var body = h('div', {}, !r ? h('p', { class: 'ac-muted' }, 'Upload your resume first (step 1).') : null);
+    if (r && !a) {
+      if (state.atsFailed) {
+        var retry = h('button', { class: 'btn btn-primary', type: 'button' }, 'Try again');
+        retry.addEventListener('click', function () { state.atsFailed = ''; autoScore(); render(); });
+        body.appendChild(h('p', { class: 'form-result bad' }, state.atsFailed));
+        body.appendChild(h('div', { class: 'cr-actions' }, retry));
+      } else {
+        body.appendChild(h('p', { class: 'cr-checking', role: 'status' }, 'Checking your resume like an ATS would…'));
+      }
+    }
     if (a) {
-      body.appendChild(h('div', { class: 'cr-score' }, scoreRing(a.score, 'ATS score'),
+      var improve = h('button', { class: 'btn btn-primary btn-lg', type: 'button' }, a.improved ? 'Improve it again' : 'Improve my ATS score');
+      improve.addEventListener('click', function () {
+        var done = busy(improve, 'Improving… (up to a minute)');
+        message(out, 'Rewriting your resume to fix these points. Nothing is invented: only what your resume already says.');
+        call('POST', '/api/career/ats').then(function (d) { state.resume.ats = d.ats; state.resume.atsAt = new Date().toISOString(); setUsage(d.usage); render(); goTo('cr-ats'); })
+          .catch(function (e) { message(out, e.message, 'bad'); }).then(done);
+      });
+      var delta = a.improved ? a.afterScore - a.score : 0;
+      // 1. the score of the resume as uploaded
+      if (!a.improved) body.appendChild(h('div', { class: 'cr-score' }, scoreRing(a.score, 'ATS score'),
         h('div', {}, h('b', {}, 'ATS score of your current resume'), h('p', {}, a.verdict), h('span', { class: 'ac-muted' }, 'Checked ' + dateTime(r.atsAt)))));
+      // 2. the ask, or the before / after
+      if (!a.improved) {
+        body.appendChild(h('div', { class: 'cr-improve-cta' },
+          h('div', {}, h('b', {}, a.score >= 90 ? 'Strong already. Want it even better?' : 'Want a higher score?'),
+            h('p', { class: 'ac-muted' }, 'We rewrite your resume to fix the points below, then show you the score before and after. It takes about a minute.')),
+          improve));
+        body.appendChild(out);
+      } else {
+        body.appendChild(h('div', { class: 'cr-compare', role: 'group', 'aria-label': 'ATS score before and after' },
+          h('div', { class: 'cr-cmp' }, scoreRing(a.score, 'Before'), h('b', {}, 'Before')),
+          h('span', { class: 'cr-arrow', 'aria-hidden': 'true' }, '→'),
+          h('div', { class: 'cr-cmp' }, scoreRing(a.afterScore, 'After'), h('b', {}, 'After')),
+          h('div', { class: 'cr-delta ' + (delta > 0 ? 'good' : delta < 0 ? 'bad' : '') },
+            delta > 0 ? '+' + delta + ' points better' : delta < 0 ? delta + ' points. Check the wording before you use it.' : 'Same score',
+            h('small', {}, a.afterVerdict || ''))));
+      }
       body.appendChild(h('div', { class: 'cr-grid' },
-        h('div', {}, h('div', { class: 'ac-subhead' }, 'What we checked'),
+        h('div', {}, h('div', { class: 'ac-subhead' }, a.improved ? 'What we checked (before)' : 'What we checked'),
           h('ul', { class: 'cr-checks' }, a.checks.map(function (k) {
             var s = STATUS[k.status] || STATUS.warn;
             return h('li', {}, h('span', { class: 'cr-dot ' + s[1] }, s[0]), h('div', {}, h('b', {}, k.name), h('span', {}, k.detail)));
           }))),
         h('div', {},
           a.keywords.missing.length ? [h('div', { class: 'ac-subhead' }, 'Keywords to add (only if you have them)'), chips(a.keywords.missing, 'cr-missing')] : null,
-          a.keywords.present.length ? [h('div', { class: 'ac-subhead', style: 'margin-top:14px' }, 'Keywords found'), chips(a.keywords.present)] : null,
+          a.keywords.present.length ? [h('div', { class: 'ac-subhead', style: a.keywords.missing.length ? 'margin-top:14px' : '' }, 'Keywords found'), chips(a.keywords.present)] : null,
           a.fixes.length ? [h('div', { class: 'ac-subhead', style: 'margin-top:14px' }, 'What we improved'), h('ul', { class: 'cr-list' }, a.fixes.map(function (f) { return h('li', {}, f); }))] : null)));
-      body.appendChild(h('div', { class: 'cr-improved' },
-        h('div', { class: 'cr-improved-head' }, h('div', {}, h('b', {}, 'Your ATS-friendly resume'),
-          h('p', { class: 'ac-muted' }, 'Plain single-column format that ATS systems read correctly. Replace every "[add number]" with your real figures before sending.')),
-          documentActions('ats', null, 'resume-ATS', a.resume)),
-        h('details', { class: 'cr-preview' }, h('summary', {}, 'Preview'), resumeView(a.resume))));
+      if (a.improved && a.resume) {
+        body.appendChild(h('div', { class: 'cr-improved' },
+          h('div', { class: 'cr-improved-head' }, h('div', {}, h('b', {}, 'Your ATS-friendly resume'),
+            h('p', { class: 'ac-muted' }, 'Plain single-column format that ATS systems read correctly. Replace every "[add number]" with your real figures before sending.')),
+            documentActions('ats', null, 'resume-ATS', a.resume)),
+          h('details', { class: 'cr-preview' }, h('summary', {}, 'Preview'), resumeView(a.resume))));
+        body.appendChild(h('div', { class: 'cr-actions' }, improve));
+        body.appendChild(out);
+      }
     }
-    body.appendChild(h('div', { class: 'cr-actions' }, run));
-    body.appendChild(out);
-    return card('cr-ats', 2, 'ATS check & fix', 'See how applicant tracking systems read your resume, and get an improved version.', body);
+    return card('cr-ats', 2, 'ATS check & fix', 'Your ATS score appears here by itself. Then improve it, and compare the score before and after.', body);
   }
 
   // ---------- 3. role-based resumes ----------
@@ -770,7 +809,7 @@
       for (var n = 1; n <= pg.pages; n++) numbers.push(button(String(n), n, n === pg.page));
       pager.append(
         h('span', { class: 'ac-muted' }, 'Showing ' + ((pg.page - 1) * pg.size + 1) + '–' + Math.min(pg.page * pg.size, pg.total) + ' of ' + pg.total),
-        h('nav', { class: 'jb-pages', 'aria-label': 'Pages: ' + g[1] }, button('‹ Previous', pg.page - 1), numbers, button('Next ›', pg.page + 1)));
+        h('nav', { class: 'jb-pages', 'aria-label': 'Pages: ' + g[1] }, button('‹ Previous', pg.page - 1), numbers, button('Next ' + Math.min(pg.size, pg.total - pg.page * pg.size) + ' ›', pg.page + 1)));
     }
     function open(n) {
       pager.classList.add('busy');
@@ -785,6 +824,11 @@
 
   /** The three groups (high, medium, low) for the company chosen in the filter, or for all companies. */
   function showGroups(box, r, s, withResume) {
+    // one list, best match first and newest first: the top 5 now, and the next 5 each time "Next" is pressed
+    if (r.all && r.all.total) {
+      box.replaceChildren(groupBlock(s, ['all', 'Your best matches', 'Most relevant first, newest first. Press Next to see more.'], r.all, withResume));
+      return;
+    }
     var blocks = GROUPS.map(function (g) {
       var first = r.groups && r.groups[g[0]];
       return first && first.total ? groupBlock(s, g, first, withResume) : null;
@@ -810,7 +854,7 @@
       row.classList.add('busy');
       call('GET', '/api/career/jobsearch/' + s.id + (name ? '?company=' + encodeURIComponent(name) : '')).then(function (d) {
         s.result.company = d.search.result.company;
-        s.result.groups = d.search.result.groups;
+        s.result.groups = d.search.result.groups; s.result.all = d.search.result.all;
         draw();
         showGroups(groups, s.result, s, withResume);
       }).catch(function (e) { showError(e.message); }).then(function () { row.classList.remove('busy'); });
@@ -842,12 +886,12 @@
     var groups = h('div', { class: 'js-groups' });
     showGroups(groups, r, s, withResume);
     return h('div', { class: 'js-result' },
-      profileCard(p),
       h('p', { class: 'jb-info' }, r.total + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
         ' · searched ' + dateTime(s.finishedAt) + ' · ' + paramsLine(s.params)),
       h('p', { class: 'ac-muted js-small' }, 'Press 💡 Insight on a job for its skill gap matrix, its technical and functional requirements, how to close each gap, and what to revise before the interview.'),
       companyFilter(s, groups),
       groups,
+      profileCard(p),
       searchElsewhere(s.params, p),
       p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),
         h('ol', { class: 'cr-list' }, p.resumeFixes.map(function (f) { return h('li', {}, f); }))) : null,
@@ -869,7 +913,7 @@
       el.addEventListener('change', function () { f[key] = kind === 'check' ? el.checked : el.value; });
       return el;
     };
-    var resumeOptions = [['all', 'Resume: all my resumes (' + (1 + state.versions.length) + ')'], ['ats', 'Resume: ' + (state.resume && state.resume.ats ? 'ATS-friendly resume' : 'uploaded resume')]]
+    var resumeOptions = [['all', 'Resume: all my resumes (' + (1 + state.versions.length) + ')'], ['ats', 'Resume: ' + (state.resume && state.resume.ats && state.resume.ats.resume ? 'ATS-friendly resume' : 'uploaded resume')]]
       .concat(state.versions.map(function (v) { return ['v' + v.id, 'Resume: ' + v.role]; }));
     var resumeSel = bind(h('select', { 'aria-label': 'Resume to match' }, resumeOptions.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'resume');
     var levelSel = bind(h('select', { 'aria-label': 'Level' }, LEVELS.map(function (o) { return h('option', { value: o[0] }, o[1]); })), 'level');
@@ -917,10 +961,10 @@
       var groups = h('div', { class: 'js-groups' });
       if (r.total) showGroups(groups, r, s, s.params.resume === 'all');
       result.replaceChildren(h('div', { class: 'js-result js-live' },
-        r.profile ? profileCard(r.profile) : null,
+        r.total ? h('p', { class: 'js-live-note' }, 'First matches: ' + cov.scored + ' of ' + cov.considered + ' scored so far. The best ones are on top, and more appear as they are scored.') : null,
+        groups,
         steps.length ? h('ul', { class: 'js-live-steps' }, steps) : null,
-        r.total ? h('p', { class: 'js-live-note' }, 'First matches: ' + cov.scored + ' of ' + cov.considered + ' scored so far. More appear here as they are scored, so you can start reading now.') : null,
-        groups));
+        r.profile ? profileCard(r.profile) : null));
     }
     function poll(id) {
       clearTimeout(pollTimer);
@@ -993,7 +1037,7 @@
           h('div', { class: 'js-row three' }, role, country, city),
           companies,
           h('div', { class: 'js-row actions' }, days, h('label', { class: 'js-check', for: 'js-remote' }, remote, ' Include remote jobs'), run)),
-        hint, eta, status, result, history));
+        hint, eta, result, history, status));
   }
 
   // ---------- one tab per step (the address keeps the step: career.html#cr-jobs) ----------
@@ -1015,6 +1059,7 @@
   function showStep(id, scroll) {
     if (stepIndex(id) === -1) id = 'cr-resume';
     activeStep = id;
+    if (id === 'cr-ats') autoScore();
     STEPS.forEach(function (s) { var el = document.getElementById(s[0]); if (el) el.hidden = s[0] !== id; });
     document.querySelectorAll('.cr-steps a').forEach(function (a) {
       var target = a.getAttribute('href').slice(1);

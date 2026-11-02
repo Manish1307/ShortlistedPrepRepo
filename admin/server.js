@@ -32,6 +32,10 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
     trial: new auth.Limiter({ max: 10, windowMs: 60 * 60 * 1000 }),
     track: new auth.Limiter({ max: 120, windowMs: 60 * 1000 }),
     opportunity: new auth.Limiter({ max: 8, windowMs: 60 * 60 * 1000 }),
+    demo: new auth.Limiter({ max: 5, windowMs: 60 * 60 * 1000 }),
+    atsCheck: new auth.Limiter({ max: 10, windowMs: 60 * 60 * 1000 }),
+    atsPdf: new auth.Limiter({ max: 4, windowMs: 60 * 60 * 1000 }),       // reading a PDF costs an AI call
+    atsPdfAll: new auth.Limiter({ max: 300, windowMs: 24 * 60 * 60 * 1000 }),   // and so the whole site has a daily cap
   };
   const routes = buildRoutes({ db, signer, vault, limiters, tokens, upstream: aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget, logoSources, logoHome, googleClientId, googleVerify });
   const compiled = routes.map(r => ({

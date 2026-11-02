@@ -473,3 +473,18 @@
 .iv-pts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
 .iv-label { display: inline-block; padding: 1px 9px; border-radius: 999px; background: var(--purple-l); color: var(--purple-d); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 @media (max-width: 720px) { .iv-form.three { grid-template-columns: 1fr; } }
+
+/* ---------- ATS step: automatic check, improve, before and after ---------- */
+.cr-checking { margin: 6px 0 18px; padding: 14px 16px; border-radius: 14px; background: var(--tint, #f7f4ff); color: var(--body); font-weight: 600; }
+.cr-improve-cta { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; padding: 16px 18px; margin-bottom: 20px; border-radius: 16px; background: #fff3c4; border: 1px solid #f2d36a; }
+.cr-improve-cta p { margin: 4px 0 0; max-width: 46ch; }
+.cr-compare { display: flex; align-items: center; justify-content: center; gap: 18px 26px; flex-wrap: wrap; padding: 18px; margin-bottom: 20px; border-radius: 18px; background: var(--tint, #f7f4ff); }
+.cr-cmp { display: grid; justify-items: center; gap: 8px; }
+.cr-arrow { font-size: 34px; color: var(--purple, #7d2ae8); font-weight: 800; }
+.cr-delta { flex: 1 1 200px; font-weight: 800; font-size: 18px; display: grid; gap: 4px; }
+.cr-delta small { font-weight: 500; font-size: 13.5px; color: var(--muted, #6b7385); }
+.cr-delta.good { color: #0a8a5c; } .cr-delta.bad { color: #b4235e; }
+
+/* ---------- AI Job search: the step message stays at the bottom of the screen while the search runs ---------- */
+.js-status.busy { position: sticky; bottom: 12px; z-index: 6; margin-top: 16px; box-shadow: 0 10px 30px -12px rgba(20, 10, 60, .45); border: 1px solid var(--bd); background: #fff; }
+.jb-pager { position: relative; }

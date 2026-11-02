@@ -18,6 +18,9 @@ const interviewprep = require('./interviewprep');
 const candidates = require('./candidates');
 const aiTokens = require('./tokens');
 const pricing = require('./pricing');
+const demos = require('./demos');
+const atscheck = require('./atscheck');
+const strength = require('./strength');
 const { ApiError, text, email, integer, likeTerm } = require('./http');
 
 const TOPICS = ['Support', 'Schools and teams', 'AI-included plan', 'Billing', 'Feedback'];
@@ -146,22 +149,55 @@ function buildRoutes(ctx) {
     };
     if (kind === 'demo' && !f.name) throw new ApiError(400, 'Please tell us your name');
     ctx.limiters.opportunity.hit(ip);
+    transaction(db, () => recordOpportunity(kind, f));
+    return { status: 201, body: { ok: true } };
+  });
+
+  /** One person asking again is one opportunity with a longer history, not a second row. Run it inside a transaction; returns the id. */
+  function recordOpportunity(kind, f) {
     const stamp = now();
     const existing = one("SELECT * FROM opportunities WHERE email = ? AND status NOT IN ('won','lost') ORDER BY id DESC LIMIT 1", f.email);
     if (existing) {
-      // the same person asking again is one opportunity with a longer history, not a second row
-      transaction(db, () => {
-        const upgrade = (KIND_RANK[kind] || 0) > (KIND_RANK[existing.kind] || 0) ? kind : existing.kind;
-        db.prepare('UPDATE opportunities SET kind = ?, name = ?, phone = ?, company = ?, role_interest = ?, updated_at = ? WHERE id = ?')
-          .run(upgrade, existing.name || f.name, existing.phone || f.phone, existing.company || f.company, existing.role_interest || f.role, stamp, existing.id);
-        db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)')
-          .run(existing.id, 'website', `Asked again (${kind}) from ${f.page || 'the website'}${f.message ? ': ' + f.message : ''}`, stamp);
-      });
-      return { status: 201, body: { ok: true } };
+      const upgrade = (KIND_RANK[kind] || 0) > (KIND_RANK[existing.kind] || 0) ? kind : existing.kind;
+      db.prepare('UPDATE opportunities SET kind = ?, name = ?, phone = ?, company = ?, role_interest = ?, updated_at = ? WHERE id = ?')
+        .run(upgrade, existing.name || f.name, existing.phone || f.phone, existing.company || f.company, existing.role_interest || f.role, stamp, existing.id);
+      db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)')
+        .run(existing.id, 'website', `Asked again (${kind}) from ${f.page || 'the website'}${f.message ? ': ' + f.message : ''}`, stamp);
+      return existing.id;
     }
-    db.prepare(`INSERT INTO opportunities (kind, name, email, phone, company, role_interest, message, source_page, visitor, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(kind, f.name, f.email, f.phone, f.company, f.role, f.message, f.page, f.visitor, stamp, stamp);
-    return { status: 201, body: { ok: true } };
+    return Number(db.prepare(`INSERT INTO opportunities (kind, name, email, phone, company, role_interest, message, source_page, visitor, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(kind, f.name, f.email, f.phone, f.company, f.role, f.message, f.page, f.visitor, stamp, stamp).lastInsertRowid);
+  }
+
+  // ---- free 1-on-1 demo: the website shows the open slots, a visitor books one, the admin portal manages the bookings ----
+  add('GET', '/api/demo/slots', { public: true }, () => ({ ok: true, timezone: 'Asia/Kolkata', slots: demos.openSlots(db) }));
+
+  add('POST', '/api/demo/book', { public: true }, (req, res, { body, ip }) => {
+    if (ctx.limiters.demo.blocked(ip)) throw new ApiError(429, 'You have booked several times already. Please try again later.');
+    if (body.website) return { status: 201, body: { ok: true } };   // hidden field that only bots fill in
+    const f = {
+      name: text(body.name, 100, { required: true, field: 'Name' }), email: email(body.email), phone: text(body.phone, 40, { required: true, field: 'Phone or WhatsApp number' }),
+      goal: text(body.goal, 500, { field: 'What you want help with' }), page: text(String(body.page || '').split(/[?#]/)[0], 200, { field: 'Page' }),
+      visitor: /^[A-Za-z0-9-]{8,64}$/.test(String(body.visitor || '')) ? String(body.visitor) : '',
+    };
+    const date = String(body.date || ''), time = String(body.time || '');
+    const bad = demos.checkSlot(date, time);
+    if (bad) throw new ApiError(400, bad);
+    if (one("SELECT id FROM demo_bookings WHERE email = ? AND status IN ('booked','confirmed')", f.email)) throw new ApiError(409, 'You already have a demo booked with this email. Write to us if you want to change it.');
+    ctx.limiters.demo.hit(ip);
+    const stamp = now();
+    try {
+      transaction(db, () => {
+        const opp = recordOpportunity('demo', { name: f.name, email: f.email, phone: f.phone, company: '', role: '', message: f.goal, page: f.page, visitor: f.visitor });
+        db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)').run(opp, 'website', `Booked a 1-on-1 demo for ${date} at ${time} IST`, stamp);
+        db.prepare(`INSERT INTO demo_bookings (name, email, phone, goal, slot_date, slot_time, slot_at, source_page, visitor, opportunity_id, created_at, updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(f.name, f.email, f.phone, f.goal, date, time, date + 'T' + time, f.page, f.visitor, opp, stamp, stamp);
+      });
+    } catch (e) {
+      if (/UNIQUE/i.test(String(e.message))) throw new ApiError(409, 'Sorry, someone just booked that slot. Please pick another time.');
+      throw e;
+    }
+    return { status: 201, body: { ok: true, date, time } };
   });
 
   // ===================== admin: sign in / out =====================
@@ -584,6 +620,171 @@ function buildRoutes(ctx) {
     db.prepare('UPDATE opportunities SET customer_id = ?, updated_at = ? WHERE id = ?').run(customer.id, now(), o.id);
     audit(admin, 'opportunity.customer', `#${o.id}`, o.email);
     return { customer };
+  });
+
+  // ===================== free ATS check (website): score a resume, keep the contact details as an opportunity =====================
+
+  // a resume PDF -> its text (read by Gemini). Open to visitors, so it is capped per person and per day.
+  add('POST', '/api/ats-check/pdf-text', { public: true, maxBody: 8 * 1024 * 1024 }, async (req, res, { body, ip }) => {
+    if (ctx.limiters.atsPdf.blocked(ip) || ctx.limiters.atsPdfAll.blocked('all')) throw new ApiError(429, 'PDF reading is busy right now. Please upload a Word (.docx) file, paste your resume text, or try again later.');
+    const data = String(body.data || '').replace(/\s+/g, '');
+    if (!data || !/^[A-Za-z0-9+/=]+$/.test(data)) throw new ApiError(400, 'Choose a PDF file');
+    if (data.length * 0.75 > 6 * 1024 * 1024) throw new ApiError(400, 'The PDF is larger than 6 MB');
+    ctx.limiters.atsPdf.hit(ip); ctx.limiters.atsPdfAll.hit('all');
+    return { text: await profiles.readPdf({ db, vault: ctx.vault, data, upstream: (ctx.upstream && ctx.upstream.gemini) || undefined }) };
+  });
+
+  add('POST', '/api/ats-check', { public: true, maxBody: 120 * 1024 }, (req, res, { body, ip }) => {
+    if (ctx.limiters.atsCheck.blocked(ip)) throw new ApiError(429, 'You have checked several resumes already. Please try again in an hour.');
+    const resume = text(body.text, atscheck.MAX_TEXT, { required: true, field: 'Resume text' });
+    if (resume.length < 200) throw new ApiError(400, 'That looks too short for a resume. Upload the full file, or paste all of it.');
+    if (body.consent !== true) throw new ApiError(400, 'Please tick the box so we can save your contact details from the resume.');
+    ctx.limiters.atsCheck.hit(ip);
+    const result = atscheck.scoreResume(resume);
+    const found = atscheck.extractContact(resume);
+    // anything the visitor typed in (when the resume has no email or phone) wins over what was read from the file
+    const typed = { name: text(body.name, 100, { field: 'Name' }), email: String(body.email || '').trim().toLowerCase(), phone: text(body.phone, 40, { field: 'Phone' }) };
+    const contact = { name: typed.name || found.name, email: typed.email || found.email, phone: typed.phone || found.phone };
+    const response = { ok: true, ...result, contact: { name: contact.name, email: contact.email, phone: contact.phone }, saved: false, needEmail: false };
+    if (!contact.email) return { status: 200, body: { ...response, needEmail: true } };
+    contact.email = email(contact.email);
+    const fileName = text(body.fileName, 200, { field: 'File name' });
+    const page = text(String(body.page || '').split(/[?#]/)[0], 200, { field: 'Page' });
+    const visitor = /^[A-Za-z0-9-]{8,64}$/.test(String(body.visitor || '')) ? String(body.visitor) : '';
+    const stamp = now();
+    transaction(db, () => {
+      const opp = recordOpportunity('interest', { name: contact.name, email: contact.email, phone: contact.phone, company: '', role: '', message: `Free ATS check: ${result.score}/100${fileName ? ' (' + fileName + ')' : ''}`, page, visitor });
+      db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)').run(opp, 'website', `Ran the free ATS check: score ${result.score}/100. Fix first: ${result.fixFirst.join(' ') || 'nothing major'}`, stamp);
+      db.prepare('INSERT INTO ats_checks (name, email, phone, file_name, score, result_json, source_page, visitor, opportunity_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
+        .run(contact.name, contact.email, contact.phone, fileName, result.score, JSON.stringify({ verdict: result.verdict, checks: result.checks, skills: result.skills, fixFirst: result.fixFirst, words: result.words }), page, visitor, opp, stamp);
+    });
+    return { status: 200, body: { ...response, contact, saved: true } };
+  });
+
+  add('GET', '/admin/api/ats-checks', { admin: true }, (req, res, { query }) => {
+    const term = likeTerm(query.get('q'));
+    const rows = all(`SELECT id, name, email, phone, file_name, score, opportunity_id, created_at FROM ats_checks
+        WHERE email LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 500`, term, term, term);
+    const s = one('SELECT COUNT(*) AS n, ROUND(AVG(score)) AS avg FROM ats_checks');
+    return { checks: rows, total: s.n, average: s.avg || 0 };
+  });
+
+  add('GET', '/admin/api/ats-checks/:id', { admin: true }, (req, res, { params }) => {
+    const c = one('SELECT * FROM ats_checks WHERE id = ?', params.id);
+    if (!c) throw new ApiError(404, 'Check not found');
+    return { check: { ...c, result: JSON.parse(c.result_json) } };
+  });
+
+  // how much of ShortlistPrep the signed-in customer has used (the floating panel on the website)
+  add('GET', '/api/strength', { public: true }, req => ({ ok: true, ...strength.strengthOf(db, accounts.signedInCustomer(db, req).customer.id) }));
+
+  // ===================== website offer bar (the strip at the top of every page) =====================
+
+  const THEMES = ['sun', 'purple', 'teal'];
+  const isoOrBlank = (v, field) => {
+    const s = text(v, 40, { field });
+    if (s && Number.isNaN(Date.parse(s))) throw new ApiError(400, `${field} is not a valid date`);
+    return s ? new Date(s).toISOString() : '';
+  };
+  /** Checks an offer from the admin form; returns the columns to store. */
+  function offerFields(body, o = {}) {
+    const pick = (key, fallback) => (body[key] === undefined ? fallback : body[key]);
+    const f = {
+      name: text(pick('name', o.name), 80, { required: true, field: 'Offer name' }),
+      message: text(pick('message', o.message), 200, { required: true, field: 'Message' }),
+      code: text(pick('code', o.code), 30, { field: 'Coupon code' }).toUpperCase(),
+      cta_label: text(pick('ctaLabel', o.cta_label), 40, { field: 'Button text' }),
+      cta_url: text(pick('ctaUrl', o.cta_url), 300, { field: 'Button link' }),
+      theme: pick('theme', o.theme || 'sun'),
+      starts_at: isoOrBlank(pick('startsAt', o.starts_at), 'Start'),
+      ends_at: isoOrBlank(pick('endsAt', o.ends_at), 'End'),
+      active: pick('active', o.active === undefined ? 1 : o.active) ? 1 : 0,
+      dismissible: pick('dismissible', o.dismissible === undefined ? 1 : o.dismissible) ? 1 : 0,
+    };
+    if (f.code && !/^[A-Z0-9_-]+$/.test(f.code)) throw new ApiError(400, 'The coupon code can only use letters, numbers, - and _');
+    if (!THEMES.includes(f.theme)) throw new ApiError(400, 'Unknown colour');
+    if (f.cta_url && !/^(https:\/\/|[a-z0-9][a-z0-9\-_/.?=&#]*$)/i.test(f.cta_url)) throw new ApiError(400, 'The button link must be a page of this site (pricing.html) or start with https://');
+    if (f.cta_url && !f.cta_label) throw new ApiError(400, 'Add the button text, or clear the button link');
+    if (f.starts_at && f.ends_at && f.ends_at <= f.starts_at) throw new ApiError(400, 'The end must be after the start');
+    return f;
+  }
+
+  // the website asks for the offer to show: the newest one that is switched on and inside its dates
+  add('GET', '/api/offer', { public: true }, () => {
+    const stamp = now();
+    const o = one(`SELECT * FROM site_offers WHERE active = 1 AND (starts_at = '' OR starts_at <= ?) AND (ends_at = '' OR ends_at > ?) ORDER BY id DESC LIMIT 1`, stamp, stamp);
+    return { ok: true, offer: o ? { id: o.id, message: o.message, code: o.code, ctaLabel: o.cta_label, ctaUrl: o.cta_url, theme: o.theme, endsAt: o.ends_at, dismissible: !!o.dismissible } : null };
+  });
+
+  add('GET', '/admin/api/offers', { admin: true }, () => ({ offers: all('SELECT * FROM site_offers ORDER BY id DESC'), now: now() }));
+
+  add('POST', '/admin/api/offers', { admin: true, perm: 'offers.write' }, (req, res, { body, admin }) => {
+    const f = offerFields(body);
+    const stamp = now();
+    const r = db.prepare('INSERT INTO site_offers (name, message, code, cta_label, cta_url, theme, starts_at, ends_at, active, dismissible, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run(f.name, f.message, f.code, f.cta_label, f.cta_url, f.theme, f.starts_at, f.ends_at, f.active, f.dismissible, stamp, stamp);
+    audit(admin, 'offer.created', f.name, f.code);
+    return { status: 201, body: { offer: one('SELECT * FROM site_offers WHERE id = ?', r.lastInsertRowid) } };
+  });
+
+  add('PATCH', '/admin/api/offers/:id', { admin: true, perm: 'offers.write' }, (req, res, { params, body, admin }) => {
+    const o = one('SELECT * FROM site_offers WHERE id = ?', params.id);
+    if (!o) throw new ApiError(404, 'Offer not found');
+    const f = offerFields(body, o);
+    db.prepare('UPDATE site_offers SET name = ?, message = ?, code = ?, cta_label = ?, cta_url = ?, theme = ?, starts_at = ?, ends_at = ?, active = ?, dismissible = ?, updated_at = ? WHERE id = ?')
+      .run(f.name, f.message, f.code, f.cta_label, f.cta_url, f.theme, f.starts_at, f.ends_at, f.active, f.dismissible, now(), o.id);
+    audit(admin, 'offer.updated', f.name, f.active ? 'on' : 'off');
+    return { offer: one('SELECT * FROM site_offers WHERE id = ?', o.id) };
+  });
+
+  add('DELETE', '/admin/api/offers/:id', { admin: true, perm: 'offers.write' }, (req, res, { params, admin }) => {
+    const o = one('SELECT * FROM site_offers WHERE id = ?', params.id);
+    if (!o) throw new ApiError(404, 'Offer not found');
+    db.prepare('DELETE FROM site_offers WHERE id = ?').run(o.id);
+    audit(admin, 'offer.deleted', o.name);
+    return { ok: true };
+  });
+
+  // ===================== admin: 1-on-1 demo bookings =====================
+
+  const DEMO_STATUS = ['booked', 'confirmed', 'completed', 'cancelled', 'no_show'];
+  add('GET', '/admin/api/demos', { admin: true }, (req, res, { query }) => {
+    const term = likeTerm(query.get('q'));
+    const status = DEMO_STATUS.includes(query.get('status')) ? query.get('status') : null;
+    const upcoming = query.get('when') === 'upcoming';
+    const rows = all(`SELECT * FROM demo_bookings WHERE (email LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\')
+        ${status ? 'AND status = ?' : ''} ${upcoming ? "AND status IN ('booked','confirmed') AND slot_at >= ?" : ''} ORDER BY slot_at ${upcoming ? 'ASC' : 'DESC'} LIMIT 500`,
+      term, term, term, ...(status ? [status] : []), ...(upcoming ? [new Date(Date.now() + 330 * 60000).toISOString().slice(0, 16)] : []));
+    const counts = Object.fromEntries(DEMO_STATUS.map(s => [s, 0]));
+    for (const r of all('SELECT status, COUNT(*) AS n FROM demo_bookings GROUP BY status')) counts[r.status] = r.n;
+    return { demos: rows, counts };
+  });
+
+  add('PATCH', '/admin/api/demos/:id', { admin: true, perm: 'demos.write' }, (req, res, { params, body, admin }) => {
+    const d = one('SELECT * FROM demo_bookings WHERE id = ?', params.id);
+    if (!d) throw new ApiError(404, 'Booking not found');
+    const status = body.status === undefined ? d.status : (DEMO_STATUS.includes(body.status) ? body.status : (() => { throw new ApiError(400, 'Unknown status'); })());
+    const link = body.meetingLink === undefined ? d.meeting_link : text(body.meetingLink, 300, { field: 'Meeting link' });
+    if (link && !/^https?:\/\//i.test(link)) throw new ApiError(400, 'The meeting link must start with https://');
+    const assigned = body.assignedTo === undefined ? d.assigned_to : text(body.assignedTo, 100, { field: 'Assigned to' });
+    const adminNote = body.adminNote === undefined ? d.admin_note : text(body.adminNote, 2000, { field: 'Note' });
+    const date = body.date === undefined ? d.slot_date : String(body.date), time = body.time === undefined ? d.slot_time : String(body.time);
+    if (date !== d.slot_date || time !== d.slot_time) {   // moving the booking to another slot
+      const bad = demos.checkSlot(date, time);
+      if (bad) throw new ApiError(400, bad);
+    }
+    try {
+      db.prepare('UPDATE demo_bookings SET status = ?, meeting_link = ?, assigned_to = ?, admin_note = ?, slot_date = ?, slot_time = ?, slot_at = ?, updated_at = ? WHERE id = ?')
+        .run(status, link, assigned, adminNote, date, time, date + 'T' + time, now(), d.id);
+    } catch (e) {
+      if (/UNIQUE/i.test(String(e.message))) throw new ApiError(409, 'Another booking already holds that slot');
+      throw e;
+    }
+    if (d.opportunity_id && status !== d.status && ['completed', 'cancelled', 'no_show'].includes(status)) {
+      db.prepare('INSERT INTO opportunity_notes (opportunity_id, author, body, created_at) VALUES (?,?,?,?)').run(d.opportunity_id, admin.email, `Demo marked ${status.replace('_', ' ')}`, now());
+    }
+    audit(admin, 'demo.updated', `#${d.id} ${d.email}`, status);
+    return { demo: one('SELECT * FROM demo_bookings WHERE id = ?', d.id) };
   });
 
   // ===================== admin: audit log and team =====================

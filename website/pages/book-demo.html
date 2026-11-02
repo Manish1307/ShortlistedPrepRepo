@@ -1,0 +1,39 @@
+<!-- title: Book a free 1-on-1 demo | description: Book a free 1-on-1 session and discover how ShortlistPrep helps you prepare smarter for your next opportunity. Pick a slot that suits you. -->
+<section class="page-head">
+  <div class="wrap narrow">
+    <span class="eyebrow">Free 1-on-1 demo</span>
+    <h1>Book a free 1-on-1 session</h1>
+    <p class="lead"><mark class="hl">Book a free 1-on-1 session and discover how ShortlistPrep helps you prepare smarter for your next opportunity.</mark></p>
+  </div>
+</section>
+
+<section style="padding-top:12px">
+  <div class="wrap">
+    <div class="split" style="align-items:start">
+      <form id="demo-form" class="stack card" novalidate>
+        <fieldset class="slot-pick">
+          <legend>1. Pick a day and time <span class="muted small">(India time, IST)</span></legend>
+          <div id="slot-days" class="slot-days" role="radiogroup" aria-label="Day">Loading open slots…</div>
+          <div id="slot-times" class="slot-times" role="radiogroup" aria-label="Time"></div>
+          <p id="slot-chosen" class="slot-chosen" role="status" aria-live="polite"></p>
+        </fieldset>
+        <input type="hidden" name="date"><input type="hidden" name="time">
+        <p class="slot-legend"><b>2. Tell us who you are</b></p>
+        <label>Your name<input type="text" name="name" required autocomplete="name"></label>
+        <label>Your email<input type="email" name="email" required autocomplete="email"></label>
+        <label>Phone or WhatsApp number<input type="tel" name="phone" required autocomplete="tel" placeholder="+91 98765 43210"></label>
+        <label>What would you like help with? <span class="muted small">(optional)</span><textarea name="goal" maxlength="500" placeholder="For example: my resume is not getting calls, or I have an interview next week."></textarea></label>
+        <div class="hp" aria-hidden="true"><label>Website<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button class="btn btn-primary" type="submit">Book my free session</button>
+        <p class="form-result" role="status" aria-live="polite"></p>
+        <p class="muted small" style="margin:0">Free, no card needed. We will email you the meeting link before your slot. Prefer email? Write to <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
+      </form>
+
+      <div class="grid">
+        <div class="card"><h3>What you get</h3><p>A live walk-through on your own resume: your ATS score, the skills your target jobs expect, and how to practise for the interview.</p></div>
+        <div class="card"><h3>No pressure</h3><p>It is a conversation, not a sales pitch. Ask anything, and leave with a clear next step whether or not you sign up.</p></div>
+        <div class="card"><h3>Can't find a time?</h3><p>Write to us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a> and we will find one that works.</p></div>
+      </div>
+    </div>
+  </div>
+</section>

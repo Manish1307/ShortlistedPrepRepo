@@ -16,6 +16,7 @@ const { buildDocx, resumeParagraphs, letterParagraphs } = require('./docx');
 const { logActivity } = require('./activity');
 const tokens = require('./tokens');
 const entitlements = require('./entitlements');
+const atscheck = require('./atscheck');
 
 const MAX_RESUME = 20000;
 const MAX_JD = 12000;
@@ -50,7 +51,9 @@ Reply with ONLY a JSON object:
   "suggestedRoles": ["3-6 job titles this resume fits"],
   "resume": ${RESUME_SHAPE}
 }
-Give 8-12 checks covering: contact details, standard section headings, simple formatting (no tables/columns/graphics),
+The improved resume is scored by fixed rules, so write it to pass them: standard headings (Summary, Skills, Experience, Education), bullet points that each start
+with an action verb, numbers in achievements where the original has them (otherwise "[add number]"), dates for every role, a 2-3 line summary, and the
+tools and skills the resume really shows. Give 8-12 checks covering: contact details, standard section headings, simple formatting (no tables/columns/graphics),
 keyword coverage, quantified achievements, action verbs, dates and order, length, spelling and grammar, summary quality.`;
 
 const ROLE_PROMPT = `You are an expert resume writer for IT professionals. Create a version of the candidate's resume targeted at ONE role.
@@ -173,24 +176,43 @@ function addRoutes(ctx) {
   });
 
   // ===== 2. ATS check and improved version =====
+  // The score is the same rules-based one as the free ATS checker on the home page (atscheck.js), so a resume gets the same
+  // number everywhere. It is free and instant, and runs by itself when the candidate opens the ATS step. Improving it is the AI step.
+  const baseAts = text => {
+    const r = atscheck.scoreResume(text);
+    return { score: r.score, verdict: r.verdict, checks: r.checks, keywords: { present: r.skills, missing: [] }, fixFirst: r.fixFirst,
+      fixes: [], suggestedRoles: [], resume: null, improved: false, afterScore: null, afterChecks: [] };
+  };
+
+  add('POST', '/api/career/ats-score', { public: true }, req => {
+    const c = me(req);
+    const r = requireResume(c.id);
+    const had = parse(r.ats_json);
+    if (had && had.improved) return { ats: had };   // already improved: keep the before and after
+    const ats = baseAts(r.source_text);
+    db.prepare('UPDATE career_resumes SET ats_json = ?, ats_at = ? WHERE customer_id = ?').run(JSON.stringify(ats), now(), c.id);
+    if (!had) logActivity(db, c.id, 'ats.checked', `ATS score ${ats.score}`);
+    return { ats };
+  });
+
   add('POST', '/api/career/ats', { public: true }, async req => {
     const c = me(req);
     const r = requireResume(c.id);
     checkQuota(c.id);
     const out = await completeJson(aiFor(c.id), { system: ATS_PROMPT, user: 'RESUME:\n' + r.source_text, maxTokens: 8000 });
+    const before = baseAts(r.source_text);
+    const improved = cleanResume(out.resume);
+    const after = atscheck.scoreResume(resumeText(improved));
     const result = {
-      score: score(out.score), verdict: String(out.verdict || '').slice(0, 300),
-      checks: (Array.isArray(out.checks) ? out.checks.slice(0, 14) : []).map(k => ({
-        name: String((k && k.name) || '').slice(0, 80), status: ['pass', 'warn', 'fail'].includes(k && k.status) ? k.status : 'warn',
-        detail: String((k && k.detail) || '').slice(0, 300) })).filter(k => k.name),
+      ...before, improved: true, afterScore: after.score, afterChecks: after.checks, afterVerdict: after.verdict,
       keywords: { present: strList(out.keywords && out.keywords.present, 40, 60), missing: strList(out.keywords && out.keywords.missing, 30, 60) },
       fixes: strList(out.fixes, 15, 300),
       suggestedRoles: strList(out.suggestedRoles, 8, 80),
-      resume: cleanResume(out.resume),
+      resume: improved,
     };
     db.prepare('UPDATE career_resumes SET ats_json = ?, ats_at = ? WHERE customer_id = ?').run(JSON.stringify(result), now(), c.id);
     countUse(c.id);
-    logActivity(db, c.id, 'ats.checked', `ATS score ${result.score}`);
+    logActivity(db, c.id, 'ats.improved', `ATS score ${result.score} to ${result.afterScore}`);
     return { ats: result, usage: usage(c.id) };
   });
 
@@ -289,7 +311,7 @@ function careerDocument(db, customerId, kind, id) {
   }
   if (kind === 'ats') {
     const ats = parse((resume || {}).ats_json);
-    if (!ats) throw new ApiError(404, 'Run the ATS check first');
+    if (!ats || !ats.resume) throw new ApiError(404, 'Improve your resume first');
     return docx(resumeParagraphs(ats.resume), `${ats.resume.name || 'resume'}-ATS`, 'ATS-friendly resume');
   }
   if (kind === 'version') {

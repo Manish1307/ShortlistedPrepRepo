@@ -69,6 +69,28 @@ CREATE TABLE IF NOT EXISTS opportunity_notes (
   id INTEGER PRIMARY KEY, opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
   author TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ats_checks (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL DEFAULT '', email TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', file_name TEXT NOT NULL DEFAULT '',
+  score INTEGER NOT NULL, result_json TEXT NOT NULL, source_page TEXT NOT NULL DEFAULT '', visitor TEXT NOT NULL DEFAULT '',
+  opportunity_id INTEGER REFERENCES opportunities(id) ON DELETE SET NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ats_checks_at ON ats_checks(created_at);
+CREATE TABLE IF NOT EXISTS site_offers (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, message TEXT NOT NULL, code TEXT NOT NULL DEFAULT '',
+  cta_label TEXT NOT NULL DEFAULT '', cta_url TEXT NOT NULL DEFAULT '', theme TEXT NOT NULL DEFAULT 'sun' CHECK (theme IN ('sun','purple','teal')),
+  starts_at TEXT NOT NULL DEFAULT '', ends_at TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1,
+  dismissible INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS demo_bookings (
+  id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', goal TEXT NOT NULL DEFAULT '',
+  slot_date TEXT NOT NULL, slot_time TEXT NOT NULL, slot_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'booked' CHECK (status IN ('booked','confirmed','completed','cancelled','no_show')),
+  meeting_link TEXT NOT NULL DEFAULT '', assigned_to TEXT NOT NULL DEFAULT '', admin_note TEXT NOT NULL DEFAULT '',
+  source_page TEXT NOT NULL DEFAULT '', visitor TEXT NOT NULL DEFAULT '', opportunity_id INTEGER REFERENCES opportunities(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_slot ON demo_bookings(slot_at) WHERE status IN ('booked','confirmed');
+CREATE INDEX IF NOT EXISTS idx_demo_status ON demo_bookings(status, slot_at);
 CREATE TABLE IF NOT EXISTS conversations (
   id INTEGER PRIMARY KEY, uid TEXT NOT NULL, licence_id INTEGER NOT NULL REFERENCES licences(id) ON DELETE CASCADE,
   device_id TEXT NOT NULL, device_name TEXT NOT NULL DEFAULT '', app TEXT NOT NULL DEFAULT 'liveclass', subject TEXT NOT NULL DEFAULT '',

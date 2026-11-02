@@ -260,7 +260,7 @@ function addRoutes(ctx) {
     if (!r) throw new ApiError(400, 'Upload your resume first (Career toolkit, step 1).', 'no-resume');
     const career = require('./career');
     const ats = parse(r.ats_json);
-    const main = { key: 'ats', label: ats ? 'ATS-friendly resume' : 'Uploaded resume', text: ats ? career.resumeText(ats.resume) : r.source_text };
+    const main = { key: 'ats', label: ats && ats.resume ? 'ATS-friendly resume' : 'Uploaded resume', text: ats && ats.resume ? career.resumeText(ats.resume) : r.source_text };
     const versions = all('SELECT id, role, content_json FROM career_versions WHERE customer_id = ? ORDER BY id DESC', customerId)
       .map(v => { const c = parse(v.content_json); return c && { key: 'v' + v.id, label: v.role, text: career.resumeText(c.resume) }; }).filter(Boolean);
     if (key === 'all') return [main, ...versions];
@@ -274,9 +274,14 @@ function addRoutes(ctx) {
   const listJob = j => ({ id: j.id, title: j.title, company: j.company, location: j.location, country: j.country, postedAt: j.postedAt, url: j.url,
     score: j.score, bucket: j.bucket, why: j.why, gap: j.gap, resume: j.resume, domain: j.domain != null ? j.domain : companyDomain(j.company), insight: !!j.prep });
   const pageSize = v => Math.max(1, Math.min(20, Math.round(Number(v)) || PAGE_SIZE));
-  /** Page n (from 1) of one group of a search's jobs. */
+  /** How high a job ranks: its fit score, plus up to 8 points for a fresh posting (fading over 30 days), so the newest of the best come first. */
+  const rankOf = j => {
+    const age = j.postedAt ? (Date.now() - Date.parse(j.postedAt)) / DAY : NaN;
+    return (j.score || 0) + (Number.isFinite(age) ? 8 * Math.max(0, 1 - Math.max(0, age) / 30) : 0);
+  };
+  /** Page n (from 1) of one group of a search's jobs, best first. bucket "all" is every match in one list (the first page is the top 5). */
   function jobPage(result, bucket, page, size, company = '') {
-    const list = result.jobs.filter(j => j.bucket === bucket && (!company || j.company === company));
+    const list = result.jobs.filter(j => (bucket === 'all' || j.bucket === bucket) && (!company || j.company === company)).sort((a, b) => rankOf(b) - rankOf(a));
     const pages = Math.max(1, Math.ceil(list.length / size));
     const n = Math.max(1, Math.min(pages, Math.round(Number(page)) || 1));
     return { bucket, total: list.length, page: n, pages, size, company, jobs: list.slice((n - 1) * size, n * size).map(listJob) };
@@ -300,6 +305,7 @@ function addRoutes(ctx) {
     const counts = Object.fromEntries(BUCKETS.map(b => [b, result ? result.jobs.filter(j => j.bucket === b).length : 0]));
     if (result && company && !result.jobs.some(j => j.company === company)) company = '';   // not in this search: all companies
     const shown = result && { partial: !!result.partial, employers: result.employers || [], profile: result.profile, coverage: result.coverage, total: result.jobs.length, companies: companiesOf(result), company,
+      all: jobPage(result, 'all', 1, size, company),
       groups: Object.fromEntries(BUCKETS.map(b => [b, jobPage(result, b, 1, size, company)])) };
     return { id: row.id, params: parse(row.params_json) || {}, status: row.status, progress: row.progress, error: row.error,
       createdAt: row.created_at, finishedAt: row.finished_at, counts, ...(full ? { result: shown } : {}) };
@@ -565,14 +571,14 @@ function addRoutes(ctx) {
     return { search: presentSearch(row, true, pageSize(query.get('size')), String(query.get('company') || '')), usage: require('./career').usage(db, c.id), elsewhere: SEARCH_ELSEWHERE };
   });
 
-  // one page of one group: ?bucket=high|medium|stretch&page=2&size=5[&company=Adobe]
+  // one page of one group: ?bucket=all|high|medium|stretch&page=2&size=5[&company=Adobe]
   add('GET', '/api/career/jobsearch/:id/jobs', { public: true }, (req, res, { params, query }) => {
     const c = me(req);
     const row = searchRow(params.id, c.id);
     const result = row && parse(row.result_json);
     if (!result) throw new ApiError(404, 'Search not found');
     const bucket = query.get('bucket');
-    if (!BUCKETS.includes(bucket)) throw new ApiError(400, 'Unknown group');
+    if (bucket !== 'all' && !BUCKETS.includes(bucket)) throw new ApiError(400, 'Unknown group');
     return jobPage(result, bucket, query.get('page'), pageSize(query.get('size')), String(query.get('company') || ''));
   });
 

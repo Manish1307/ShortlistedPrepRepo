@@ -1,0 +1,41 @@
+<!-- title: Free ATS Resume Checker | description: Upload your resume and get your ATS score in seconds, with the exact fixes that help it pass applicant tracking systems. Free, built for job seekers in India. -->
+<section class="page-head">
+  <div class="wrap narrow">
+    <span class="eyebrow">Free ATS resume checker</span>
+    <h1>Upload your resume. See your ATS score.</h1>
+    <p class="lead">An ATS (applicant tracking system) is the software many employers use to filter resumes before a person reads them. Find out how yours reads, and what to fix first.</p>
+  </div>
+</section>
+
+<section style="padding-top:12px">
+  <div class="wrap">
+    <div class="split" style="align-items:start">
+      <form id="ats-form" class="stack card" novalidate>
+        <label class="ats-drop">
+          <b>1. Choose your resume</b>
+          <span class="muted small">PDF, Word (.docx) or text, up to 6 MB</span>
+          <input type="file" id="ats-file" accept=".pdf,.docx,.txt">
+        </label>
+        <label>Or paste your resume text<textarea id="ats-text" rows="6" placeholder="Paste your whole resume here…"></textarea></label>
+        <p id="ats-read" class="form-result" role="status" aria-live="polite"></p>
+        <label class="ats-consent"><input type="checkbox" id="ats-consent"> <span>I agree that ShortlistPrep saves the name, email and mobile number in my resume, and may contact me about my result and how to improve it. We do not keep the rest of your resume. See the <a href="privacy.html">privacy policy</a>.</span></label>
+        <div id="ats-missing" class="stack" hidden>
+          <p class="small"><b>We could not find an email address in your resume.</b> Add it here to see your result.</p>
+          <label>Your email<input type="email" id="ats-email" autocomplete="email"></label>
+          <label>Mobile number <span class="muted small">(optional)</span><input type="tel" id="ats-phone" autocomplete="tel"></label>
+        </div>
+        <div class="hp" aria-hidden="true"><label>Website<input type="text" id="ats-hp" tabindex="-1" autocomplete="off"></label></div>
+        <button class="btn btn-primary" type="submit" id="ats-go">Check my ATS score</button>
+        <p id="ats-msg" class="form-result" role="status" aria-live="polite"></p>
+      </form>
+
+      <div class="grid">
+        <div class="card"><h3>What it checks</h3><p>Contact details, section headings, length, bullet points, action verbs, numbers in your achievements, dates, skills and simple formatting.</p></div>
+        <div class="card"><h3>How the score works</h3><p>It is a quick, rules-based check of how well your resume is built for an ATS. It does not compare against a specific job. The full toolkit does that.</p></div>
+        <div class="card"><h3>Your privacy</h3><p>Your file is read to score it and is not stored. Only your name, email, mobile number and score are saved.</p></div>
+      </div>
+    </div>
+
+    <div id="ats-result" class="ats-result" hidden aria-live="polite"></div>
+  </div>
+</section>

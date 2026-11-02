@@ -14,6 +14,7 @@ const path = require('path');
 const ROOT = __dirname;
 const OUT = path.join(ROOT, 'site');
 const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8'));
+if (process.env.SITE_API_URL) config.apiUrl = process.env.SITE_API_URL;   // npm run web points the site at the local admin server
 const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'sample.json'), 'utf8'));
 // <!-- if:reviews --> ... <!-- endif:reviews -->: kept only when there are real reviews in data/sample.json
 const hasReviews = data.reviews.length > 0;
@@ -51,7 +52,7 @@ const fragments = {
         ? `<span class="monthly">${esc(p.price)}<small> / ${esc(p.per.replace('per ', ''))}</small></span><span class="yearly">${esc(p.yearly)}<small> / ${esc(p.yearlyPer.replace('per ', ''))}</small></span>`
         : `${esc(p.price)}${p.per ? `<small> / ${esc(p.per)}</small>` : ''}`}</div>
       <ul class="check-list">${p.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn${p.featured ? ' btn-primary' : ''}" href="signup.html">${p.price === 'Free' ? 'Start free' : 'Get early access'}</a>
+      <a class="btn${p.featured ? ' btn-primary' : ''}" href="signup.html">${p.price === 'Free' ? 'Start free' : 'Start free'}</a>
     </div>`).join('')}</div>`,
 
   compareTable: `<div class="table-scroll"><table class="simple compare"><thead><tr><th>Feature</th><th>Starter</th><th>Pro</th><th>Career pack</th></tr></thead><tbody>${

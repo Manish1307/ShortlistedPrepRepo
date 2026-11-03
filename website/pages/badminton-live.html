@@ -1,0 +1,55 @@
+<!-- title: Live badminton scores | description: Live scores for a private badminton tournament. Enter the match keyword from the organiser. | noindex -->
+<link rel="stylesheet" href="assets/badminton-live.css?v=1">
+<section class="bl-hero">
+  <div class="wrap">
+    <h1 id="bl-title">Live badminton scores</h1>
+    <p id="bl-sub" class="bl-sub">Enter the match keyword you got from the organiser.</p>
+  </div>
+</section>
+
+<section class="bl-main">
+  <div class="wrap">
+    <form id="bl-form" class="bl-form" novalidate>
+      <label for="bl-key">Match keyword</label>
+      <div class="bl-row">
+        <input id="bl-key" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="40" placeholder="for example: friday smash" required>
+        <button class="btn btn-primary" type="submit">Show scores</button>
+      </div>
+      <p id="bl-error" class="bl-error" role="alert" hidden></p>
+    </form>
+
+    <div id="bl-board" hidden>
+      <div class="bl-bar">
+        <span id="bl-status" class="bl-chip">–</span>
+        <span id="bl-venue" class="bl-muted"></span>
+        <span class="bl-spacer"></span>
+        <span id="bl-updated" class="bl-muted" role="status" aria-live="polite"></span>
+        <button id="bl-change" class="bl-link" type="button">Change keyword</button>
+      </div>
+      <p id="bl-announce" class="bl-announce" hidden></p>
+      <p id="bl-champion" class="bl-champion" hidden></p>
+
+      <h2>On court now</h2>
+      <div id="bl-courts" class="bl-courts"></div>
+
+      <div class="bl-two">
+        <div>
+          <h2>Up next</h2>
+          <div id="bl-next" class="bl-list"></div>
+        </div>
+        <div>
+          <h2>Latest results</h2>
+          <div id="bl-results" class="bl-list"></div>
+        </div>
+      </div>
+
+      <h2>Standings</h2>
+      <div class="bl-scroll"><table id="bl-table" class="bl-table"></table></div>
+      <p class="bl-muted bl-small">A team gets points for each tie it wins (more matches won than the other team). Ties on points are split by matches, games and points difference.</p>
+
+      <h2>Teams</h2>
+      <div id="bl-teams" class="bl-teams"></div>
+    </div>
+  </div>
+</section>
+<script src="assets/badminton-live.js?v=1"></script>

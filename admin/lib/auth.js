@@ -78,6 +78,8 @@ const PERMISSIONS = {
   'jobs.write': ['owner', 'admin'],                 // AI Job search: the master prompt
   'tokens.write': ['owner', 'admin'],
   'pricing.write': ['owner', 'admin'],              // plans and prices, payment settings, confirming payments               // AI tokens: daily allowance, packs, approve requests, grant tokens
+  'badminton.write': ['owner', 'admin'],            // Badminton: tournaments, teams, fixtures, courts
+  'badminton.score': ['owner', 'admin', 'support'], // Badminton: scoring a match (a helper at the court can do this)
   'team.read': ['owner'],
   'team.write': ['owner'],
 };

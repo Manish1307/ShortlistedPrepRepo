@@ -62,6 +62,7 @@
   const dateTime = s => (s ? new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
   const moneyList = list => (list && list.some(r => r.cents) ? list.filter(r => r.cents).map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'INR'));
   const can = permission => ({
+    'badminton.write': ['owner', 'admin'], 'badminton.score': ['owner', 'admin', 'support'],
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
     'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'demos.write': ['owner', 'admin', 'support'], 'offers.write': ['owner', 'admin'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
@@ -159,6 +160,7 @@
     tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="8" cy="8" r="1.5"/>',
     box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4V7z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
     receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z"/><path d="M9 8h6M9 12h6"/>',
+    trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/>',
     chevron: '<path d="M6 9l6 6 6-6"/>',
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
@@ -199,6 +201,7 @@
     { id: 'company', label: 'Company', items: [
       ['messages', 'Support', 'Support messages from customers.', 'mail'],
       ['releases', 'Releases', 'App versions and download links.', 'box'],
+      ['badminton', 'Badminton', 'Private tournaments: teams, fixtures, courts and live scores.', 'trophy'],
       ['audit', 'Audit log', 'Everything the admins changed.', 'shield'],
       ['team', 'Team', 'Admin accounts and their roles.', 'users']] },
   ];
@@ -1561,7 +1564,310 @@
     guard(async () => { document.getElementById('pubkey').textContent = (await get('/api/public-key')).publicKey; });
   }
 
-  const VIEWS = { overview, opportunities, atschecks: atsChecks, demos, offers, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, audit, team, account };
+  // ---------- Badminton: tournaments, teams, fixtures, courts and live scoring (private) ----------
+  let bdId = null;          // the tournament that is open
+  let bdTab = 'score';
+  const BD_STATUS = { scheduled: 'Waiting', live: 'Live', finished: 'Finished', walkover: 'Walkover', cancelled: 'Cancelled' };
+  const BD_PILL = { scheduled: '', live: 'bad', finished: 'good', walkover: 'warn', cancelled: '' };
+  const bdNum = (v, d) => (v === '' || v === undefined || v === null ? d : Number(v));
+
+  async function badminton(el) {
+    if (bdId) {
+      try { return bdShow(el, await get('/admin/api/badminton/' + bdId)); } catch (err) { bdId = null; toast(err.message, true); }
+    }
+    const { tournaments: rows } = await get('/admin/api/badminton');
+    const write = can('badminton.write');
+    el.replaceChildren(
+      head('Badminton', write ? h('button', { class: 'btn primary', onclick: () => bdSettings(null, () => badminton(el), el) }, '+ New tournament') : null),
+      h('p', { class: 'muted' }, 'Private: not shown anywhere on the website. Make a tournament, decide the teams, make the fixtures, score the matches, and share the live link with your team. They open the link (or type the keyword) to see the latest scores.'),
+      table([
+        { label: 'Tournament', render: r => h('span', {}, h('b', {}, r.name), h('div', { class: 'muted small' }, r.venue || '')), wrap: true },
+        { label: 'Keyword', render: r => h('span', { class: 'mono' }, r.keyword) },
+        { label: 'Status', render: r => h('span', { class: 'pill ' + (r.status === 'live' ? 'bad' : r.status === 'finished' ? 'good' : '') }, r.status === 'live' ? 'Live' : r.status === 'finished' ? 'Finished' : 'Not started') },
+        { label: 'Teams', render: r => r.teams }, { label: 'Courts', render: r => r.courts },
+        { label: 'Matches played', render: r => `${r.played} of ${r.matches}` },
+        { label: 'Live page', render: r => (r.shared ? 'On' : 'Off') },
+      ], rows, r => { bdId = r.id; bdTab = r.matches ? 'score' : r.teams ? 'fixtures' : 'teams'; badminton(el); }, 'No tournaments yet. Start one with "+ New tournament".'));
+  }
+
+  function bdShow(el, d) {
+    const t = d.tournament, write = can('badminton.write'), score = can('badminton.score');
+    const redo = fresh => (fresh ? bdShow(el, fresh) : badminton(el));
+    const act = async (fn, okMessage) => { const r = await guard(fn); if (r) { if (okMessage) toast(okMessage); bdShow(el, r); } return r; };
+    const teamName = id => (d.teams.find(x => x.id === id) || {}).name || 'To be decided';
+    const tabs = [['score', 'Live scoring'], ['teams', 'Teams'], ['fixtures', 'Fixtures'], ['table', 'Table'], ['share', 'Share and settings']];
+    const link = h('input', { value: d.shareUrl, readonly: true, 'aria-label': 'Live page link', style: 'width:100%' });
+    const body = el2 => el2;
+
+    const panel = {
+      score: () => bdScore(d, act, score, teamName),
+      teams: () => bdTeams(d, act, write, el),
+      fixtures: () => bdFixtures(d, act, write, teamName),
+      table: () => bdTable(d),
+      share: () => h('div', { class: 'card' },
+        h('h2', {}, 'Share with your team'),
+        h('p', { class: 'muted' }, 'They need no sign-in. They open this link, or the live page and type the keyword. The page refreshes by itself every few seconds.'),
+        h('label', { class: 'field' }, 'Live page link', link),
+        h('p', {}, h('b', {}, 'Keyword: '), h('span', { class: 'mono' }, t.keyword), '  ', h('span', { class: 'pill ' + (t.shared ? 'good' : '') }, t.shared ? 'Live page is on' : 'Live page is off')),
+        h('div', { class: 'tools' },
+          h('button', { class: 'btn', onclick: async () => { link.select(); try { await navigator.clipboard.writeText(d.shareUrl); toast('Link copied'); } catch (_) { toast('Press Ctrl+C to copy the link'); } } }, 'Copy link'),
+          h('a', { class: 'btn', href: d.shareUrl, target: '_blank', rel: 'noopener' }, 'Open live page'),
+          write ? h('button', { class: 'btn', onclick: () => bdSettings(d, () => badminton(el), el) }, 'Settings and keyword') : null,
+          write ? h('button', { class: 'btn', onclick: () => bdAnnounce(t, act) }, 'Announcement') : null,
+          write ? h('button', { class: 'btn danger', onclick: () => { if (confirm(`Delete "${t.name}" with all its teams, matches and scores? This cannot be undone.`)) guard(async () => { await del('/admin/api/badminton/' + t.id); bdId = null; toast('Tournament deleted'); badminton(el); }); } }, 'Delete tournament') : null)),
+    };
+
+    el.replaceChildren(...[
+      head(t.name, h('button', { class: 'btn', onclick: () => { bdId = null; badminton(el); } }, '← All tournaments'),
+        h('span', { class: 'pill ' + (t.status === 'live' ? 'bad' : t.status === 'finished' ? 'good' : '') }, t.status === 'live' ? 'Live' : t.status === 'finished' ? 'Finished' : 'Not started')),
+      d.champion ? h('p', { class: 'bd-champ' }, 'Champions: ' + d.champion) : null,
+      h('div', { class: 'bd-tabs', role: 'tablist' }, tabs.map(([id, label]) => h('button', { class: 'btn' + (bdTab === id ? ' primary' : ''), role: 'tab', 'aria-selected': bdTab === id ? 'true' : 'false', onclick: () => { bdTab = id; bdShow(el, d); } }, label))),
+      body(panel[bdTab]())].filter(Boolean));   // (replaceChildren would write a null as the word "null")
+  }
+
+  /** One match on the scoring screen: the score, the +1 / -1 buttons, and Finish / Reset. */
+  function bdMatchCard(m, d, act, score, teamName) {
+    const post1 = (side, delta) => act(() => post(`/admin/api/badminton/matches/${m.id}/point`, { side, delta }));
+    const cur = m.current || { a: 0, b: 0, game: 1 };
+    const side = (key, name, players) => h('div', { class: 'bd-side' },
+      h('div', { class: 'bd-name' }, (m.serving === key ? h('span', { class: 'bd-serve', title: 'Serving' }) : null), h('b', {}, name), players ? h('div', { class: 'muted small' }, players) : null),
+      h('div', { class: 'bd-score' }, cur[key]),
+      score ? h('div', { class: 'bd-btns' }, h('button', { class: 'btn primary', onclick: () => post1(key, 1) }, '+1'), h('button', { class: 'btn', onclick: () => post1(key, -1), title: 'Take a point away' }, '−1')) : null);
+    return h('div', { class: 'card bd-match' + (m.status === 'live' ? ' live' : '') },
+      h('div', { class: 'bd-head' }, h('span', {}, [m.court ? `Court ${m.court}` : 'No court', m.round, m.kind].filter(Boolean).join(' · ')), h('span', { class: 'pill ' + BD_PILL[m.status] }, BD_STATUS[m.status])),
+      side('a', m.teamAName, m.playersA), side('b', m.teamBName, m.playersB),
+      h('div', { class: 'muted small' }, `Game ${cur.game} · games won ${m.gamesWonA}-${m.gamesWonB} · first to ${m.rules.gamesToWin}`, m.games.length ? ' · ' + m.games.map(g => `${g.a}-${g.b}`).join(', ') : ''),
+      score ? h('div', { class: 'tools', style: 'margin-top:8px' },
+        h('button', { class: 'btn sm', onclick: () => bdFinish(m, act, teamName) }, 'Finish or walkover'),
+        h('button', { class: 'btn sm', onclick: () => bdScoreSheet(m, act) }, 'Type the score'),
+        h('button', { class: 'btn sm danger', onclick: () => { if (confirm('Reset this match to 0-0 and waiting?')) act(() => post(`/admin/api/badminton/matches/${m.id}/reset`)); } }, 'Reset')) : null);
+  }
+
+  function bdScore(d, act, score, teamName) {
+    const live = d.matches.filter(m => m.status === 'live');
+    const next = d.matches.filter(m => m.status === 'scheduled' && m.teamA && m.teamB);
+    const done = d.matches.filter(m => m.status === 'finished' || m.status === 'walkover').slice().reverse();
+    if (!d.matches.length) return h('div', { class: 'card' }, h('p', {}, 'There are no matches yet. Add the teams, then make the fixtures.'));
+    return h('div', {},
+      h('h2', {}, `On court now (${live.length})`),
+      live.length ? h('div', { class: 'bd-grid' }, live.map(m => bdMatchCard(m, d, act, score, teamName))) : h('p', { class: 'muted' }, 'No match is being played. Start the next one below.'),
+      h('h2', {}, `Up next (${next.length})`),
+      next.length ? table([
+        { label: '#', render: m => m.matchNo }, { label: 'Court', render: m => m.court || '—' }, { label: 'Time', render: m => (m.scheduledAt ? dateTime(m.scheduledAt) : '—') },
+        { label: 'Match', render: m => h('span', {}, h('b', {}, `${m.teamAName} vs ${m.teamBName}`), h('div', { class: 'muted small' }, [m.round, m.kind].filter(Boolean).join(' · '))), wrap: true },
+        { label: '', render: m => (score ? h('button', { class: 'btn sm primary', onclick: e => { e.stopPropagation(); act(() => post(`/admin/api/badminton/matches/${m.id}/start`), 'Match started'); } }, 'Start') : null) },
+      ], next.slice(0, 12), null) : h('p', { class: 'muted' }, 'Nothing waiting.'),
+      h('h2', {}, `Results (${done.length})`),
+      done.length ? h('div', { class: 'bd-grid' }, done.slice(0, 12).map(m => bdMatchCard(m, d, act, score, teamName))) : h('p', { class: 'muted' }, 'No finished matches yet.'));
+  }
+
+  function bdFinish(m, act, teamName) {
+    const f = h('div', {},
+      field('Winner', { name: 'winner', type: 'select', value: 'a', options: [{ value: 'a', label: teamName(m.teamA) }, { value: 'b', label: teamName(m.teamB) }] }),
+      field('How did it end?', { name: 'walkover', type: 'select', value: '1', options: [{ value: '1', label: 'Walkover or retired (no full score)' }, { value: '0', label: 'Normal result' }] }),
+      field('Note (optional)', { name: 'note', value: m.note || '', maxlength: 200, placeholder: 'Team B player injured' }));
+    dialog('Finish the match', f, [{ label: 'Save result', kind: 'primary', run: async () => {
+      const v = values(f);
+      const ok = await act(() => post(`/admin/api/badminton/matches/${m.id}/finish`, { winner: v.winner, walkover: v.walkover === '1', note: v.note }), 'Result saved');
+      return !ok;
+    } }]);
+  }
+
+  function bdScoreSheet(m, act) {
+    const rows = [1, 2, 3].map(n => { const g = m.games[n - 1]; return h('div', { class: 'bd-sheet' }, h('span', {}, `Game ${n}`),
+      h('input', { name: 'a' + n, type: 'number', min: 0, max: 50, value: g ? g.a : '', 'aria-label': `Game ${n} team A` }), h('span', {}, '-'), h('input', { name: 'b' + n, type: 'number', min: 0, max: 50, value: g ? g.b : '', 'aria-label': `Game ${n} team B` })); });
+    const f = h('div', {}, h('p', { class: 'muted small' }, `${m.teamAName} (left) vs ${m.teamBName} (right). Fill the games played; leave the rest empty. Use this for a score kept on paper.`), rows);
+    dialog('Type the score', f, [{ label: 'Save score', kind: 'primary', run: async () => {
+      const v = values(f);
+      const games = [1, 2, 3].filter(n => v['a' + n] !== '' || v['b' + n] !== '').map(n => ({ a: bdNum(v['a' + n], 0), b: bdNum(v['b' + n], 0) }));
+      if (!games.length) { toast('Type at least one game', true); return true; }
+      const ok = await act(() => post(`/admin/api/badminton/matches/${m.id}/score`, { games }), 'Score saved');
+      return !ok;
+    } }]);
+  }
+
+  function bdTeams(d, act, write, el) {
+    const t = d.tournament;
+    return h('div', {},
+      write ? h('div', { class: 'tools' },
+        h('button', { class: 'btn primary', onclick: () => bdDraw(d, act) }, 'Random team draw'),
+        h('button', { class: 'btn', onclick: () => bdTeamForm(null, d, act) }, '+ Add a team')) : null,
+      h('p', { class: 'muted' }, 'The draw deals your players into balanced teams (strong players spread out, using the level 1 to 5 you give), or add teams and players by hand.'),
+      d.teams.length ? h('div', { class: 'bd-grid' }, d.teams.map(x => h('div', { class: 'card' },
+        h('div', { class: 'bd-head' }, h('b', {}, x.name), write ? h('span', {},
+          h('button', { class: 'btn sm', onclick: () => bdTeamForm(x, d, act) }, 'Rename'), ' ',
+          h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Delete team "${x.name}"?`)) act(() => del('/admin/api/badminton/teams/' + x.id)); } }, 'Delete')) : null),
+        h('ul', { class: 'bd-players' }, x.players.map(p => h('li', {}, p.name, h('span', { class: 'muted small' }, ` level ${p.level}`), write ? h('span', {}, ' ',
+          h('button', { class: 'btn sm', title: 'Move to another team', onclick: () => bdMovePlayer(p, d, act) }, 'Move'), ' ',
+          h('button', { class: 'btn sm danger', onclick: () => act(() => del('/admin/api/badminton/players/' + p.id)) }, '×')) : null))),
+        write ? h('button', { class: 'btn sm', onclick: () => bdPlayerForm(x, t, act) }, '+ Player') : null))) : h('div', { class: 'card' }, h('p', {}, 'No teams yet.')));
+  }
+
+  function bdTeamForm(team, d, act) {
+    const f = h('div', {}, field('Team name', { name: 'name', value: team ? team.name : '', maxlength: 60, placeholder: 'Smashers' }),
+      team ? null : field('Players (one per line, optional, "Name, level 1-5")', { name: 'players', type: 'textarea', maxlength: 1500 }));
+    dialog(team ? 'Rename team' : 'Add a team', f, [{ label: 'Save', kind: 'primary', run: async () => {
+      const v = values(f);
+      const players = team ? undefined : String(v.players || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => { const m = /^(.*?)(?:\s*[,:;-]\s*([1-5]))?$/.exec(l); return { name: m[1], level: m[2] || 3 }; });
+      const ok = await act(() => (team ? patch('/admin/api/badminton/teams/' + team.id, { name: v.name }) : post(`/admin/api/badminton/${d.tournament.id}/teams`, { name: v.name, players })), 'Saved');
+      return !ok;
+    } }]);
+  }
+  function bdPlayerForm(team, t, act) {
+    const f = h('div', {}, field('Player name', { name: 'name', maxlength: 60 }), field('Level (1 beginner to 5 strong)', { name: 'level', type: 'number', min: 1, max: 5, value: '3' }));
+    dialog('Add a player to ' + team.name, f, [{ label: 'Add', kind: 'primary', run: async () => {
+      const v = values(f);
+      const ok = await act(() => post(`/admin/api/badminton/${t.id}/players`, { teamId: team.id, name: v.name, level: bdNum(v.level, 3) }), 'Player added');
+      return !ok;
+    } }]);
+  }
+  function bdMovePlayer(p, d, act) {
+    const f = h('div', {}, field('Move ' + p.name + ' to', { name: 'teamId', type: 'select', options: d.teams.map(x => ({ value: x.id, label: x.name })) }));
+    dialog('Move player', f, [{ label: 'Move', kind: 'primary', run: async () => { const ok = await act(() => patch('/admin/api/badminton/players/' + p.id, { teamId: Number(values(f).teamId) }), 'Moved'); return !ok; } }]);
+  }
+
+  function bdDraw(d, act) {
+    const f = h('div', {},
+      field('Players (one per line: "Name, level 1-5"; level is optional and means 3)', { name: 'players', type: 'textarea', maxlength: 4000 }),
+      field('Number of teams', { name: 'teams', type: 'number', min: 2, max: 32, value: '4' }),
+      field('Team names (optional, separated by commas)', { name: 'names', maxlength: 500, placeholder: 'Smashers, Rockets, Titans, Falcons' }),
+      field('If teams exist already', { name: 'replace', type: 'select', value: '0', options: [{ value: '0', label: 'Keep them and add these teams' }, { value: '1', label: 'Replace them (also deletes the fixtures)' }] }),
+      h('p', { class: 'muted small' }, 'Every team gets at least two players. Run the draw again for a different split.'));
+    dialog('Random team draw', f, [{ label: 'Draw teams', kind: 'primary', run: async () => {
+      const v = values(f);
+      const ok = await act(() => post(`/admin/api/badminton/${d.tournament.id}/draw`, { players: v.players, teams: bdNum(v.teams, 2), names: v.names, replace: v.replace === '1' }), 'Teams drawn');
+      return !ok;
+    } }]);
+  }
+
+  function bdFixtures(d, act, write, teamName) {
+    const t = d.tournament;
+    return h('div', {},
+      write ? h('div', { class: 'tools' },
+        h('button', { class: 'btn primary', onclick: () => bdGenerate(d, act) }, d.matches.length ? 'Make fixtures again' : 'Make fixtures'),
+        h('button', { class: 'btn', onclick: () => bdKnockout(d, act) }, 'Next knockout round'),
+        h('button', { class: 'btn', onclick: () => bdReschedule(d, act) }, 'Re-plan courts and times'),
+        h('button', { class: 'btn', onclick: () => bdMatchForm(null, d, act, teamName) }, '+ Add a match')) : null,
+      h('p', { class: 'muted' }, `Every team plays every other team. A "tie" is a few matches (such as singles and doubles); the team that wins more of them wins the tie. ${t.courts} court${t.courts === 1 ? '' : 's'}, ${t.minutesPerMatch} minutes a match.`),
+      table([
+        { label: '#', render: m => m.matchNo }, { label: 'Round', render: m => h('span', {}, m.round, m.stage === 'knockout' ? h('span', { class: 'pill warn' }, 'KO') : null) }, { label: 'Match', render: m => m.kind },
+        { label: 'Teams', render: m => h('span', {}, h('b', {}, m.teamAName), ' vs ', h('b', {}, m.teamBName), m.playersA || m.playersB ? h('div', { class: 'muted small' }, [m.playersA, m.playersB].filter(Boolean).join(' vs ')) : null), wrap: true },
+        { label: 'Court', render: m => m.court || '—' }, { label: 'Time', render: m => (m.scheduledAt ? dateTime(m.scheduledAt) : '—') },
+        { label: 'Status', render: m => h('span', { class: 'pill ' + BD_PILL[m.status] }, BD_STATUS[m.status]) },
+        { label: 'Score', render: m => (m.games.length ? m.games.map(g => `${g.a}-${g.b}`).join(', ') : '—') },
+      ], d.matches, write ? m => bdMatchForm(m, d, act, teamName) : null, 'No matches yet. Make the fixtures once the teams are ready.'));
+  }
+
+  function bdGenerate(d, act) {
+    const f = h('div', {},
+      field('Matches in each tie (separated by commas)', { name: 'rubbers', value: 'Singles, Doubles', maxlength: 200, placeholder: "Men's Singles, Women's Singles, Mixed Doubles" }, 'For example: Singles, Doubles. One match only? Type one name.'),
+      field('Rounds', { name: 'legs', type: 'select', value: '1', options: [{ value: '1', label: 'Everyone plays everyone once' }, { value: '2', label: 'Twice (home and away)' }] }),
+      field('First match starts at', { name: 'startAt', type: 'datetime-local', value: d.tournament.startsAt ? localInput(d.tournament.startsAt) : '' }, 'Leave empty to plan only the order and courts.'),
+      d.matches.length ? field('Existing fixtures', { name: 'replace', type: 'select', value: '1', options: [{ value: '1', label: 'Replace them (nothing has been played)' }] }) : null);
+    dialog('Make the fixtures', f, [{ label: 'Make fixtures', kind: 'primary', run: async () => {
+      const v = values(f);
+      const ok = await act(() => post(`/admin/api/badminton/${d.tournament.id}/fixtures`, { rubbers: v.rubbers, legs: bdNum(v.legs, 1), startAt: v.startAt ? new Date(v.startAt).toISOString() : '', replace: v.replace === '1' }), 'Fixtures made');
+      return !ok;
+    } }]);
+  }
+  function bdKnockout(d, act) {
+    const first = !d.matches.some(m => m.stage === 'knockout');
+    const f = h('div', {}, first ? field('Teams that go into the knockout (the top of the table)', { name: 'top', type: 'select', value: '4', options: [2, 4, 8, 16].map(n => ({ value: n, label: n === 2 ? 'Top 2 (a final)' : `Top ${n}` })) }) : h('p', {}, 'Makes the next round from the winners of the last knockout round.'),
+      field('Matches in each tie', { name: 'rubbers', value: 'Singles, Doubles', maxlength: 200 }));
+    dialog(first ? 'Start the knockout' : 'Next knockout round', f, [{ label: 'Make the round', kind: 'primary', run: async () => {
+      const v = values(f);
+      const ok = await act(() => post(`/admin/api/badminton/${d.tournament.id}/knockout`, { top: bdNum(v.top, 4), rubbers: v.rubbers }), 'Round made');
+      return !ok;
+    } }]);
+  }
+  function bdReschedule(d, act) {
+    const f = h('div', {}, field('Next waiting match starts at', { name: 'startAt', type: 'datetime-local', value: localInput(new Date().toISOString()) }),
+      h('p', { class: 'muted small' }, 'Plans the courts and times again for matches not played yet (for example after a delay or a change in the number of courts). Matches being played stay as they are.'));
+    dialog('Re-plan courts and times', f, [{ label: 'Re-plan', kind: 'primary', run: async () => {
+      const v = values(f);
+      const ok = await act(() => post(`/admin/api/badminton/${d.tournament.id}/reschedule`, { startAt: v.startAt ? new Date(v.startAt).toISOString() : '' }), 'Planned again');
+      return !ok;
+    } }]);
+  }
+
+  function bdMatchForm(m, d, act, teamName) {
+    const t = d.tournament;
+    const teamOpts = [{ value: '', label: 'To be decided' }].concat(d.teams.map(x => ({ value: x.id, label: x.name })));
+    const courtOpts = [{ value: '', label: 'Not set' }].concat(Array.from({ length: t.courts }, (_, i) => ({ value: i + 1, label: `Court ${i + 1}` })));
+    const started = m && m.status !== 'scheduled' && m.status !== 'cancelled';
+    const f = h('div', {},
+      field('Team A', { name: 'teamA', type: 'select', value: m && m.teamA ? m.teamA : '', options: teamOpts }, started ? 'The teams cannot change once the match has started.' : ''),
+      field('Team B', { name: 'teamB', type: 'select', value: m && m.teamB ? m.teamB : '', options: teamOpts }),
+      field('Match type', { name: 'kind', value: m ? m.kind : 'Singles', maxlength: 30, placeholder: "Men's Doubles" }),
+      field('Round', { name: 'round', value: m ? m.round : '', maxlength: 40, placeholder: 'Round 1, Semi Final' }),
+      field('Team A players (optional)', { name: 'playersA', value: m ? m.playersA : '', maxlength: 100, placeholder: 'Asha / Ben' }),
+      field('Team B players (optional)', { name: 'playersB', value: m ? m.playersB : '', maxlength: 100 }),
+      field('Court', { name: 'court', type: 'select', value: m && m.court ? m.court : '', options: courtOpts }),
+      field('Time', { name: 'scheduledAt', type: 'datetime-local', value: m && m.scheduledAt ? localInput(m.scheduledAt) : '' }),
+      field('Order in the queue (a lower number plays earlier)', { name: 'matchNo', type: 'number', min: 1, value: m ? m.matchNo : '' }),
+      field('Note (optional)', { name: 'note', value: m ? m.note : '', maxlength: 200 }),
+      m ? field('Status', { name: 'status', type: 'select', value: m.status === 'cancelled' ? 'cancelled' : 'scheduled', options: [{ value: 'scheduled', label: 'Waiting to be played' }, { value: 'cancelled', label: 'Cancelled' }] }, started ? 'Use Reset on the scoring screen to change a match that was played.' : '') : null);
+    const body = v => ({ teamA: v.teamA === '' ? null : Number(v.teamA), teamB: v.teamB === '' ? null : Number(v.teamB), kind: v.kind, round: v.round, playersA: v.playersA, playersB: v.playersB,
+      court: v.court === '' ? null : Number(v.court), scheduledAt: v.scheduledAt ? new Date(v.scheduledAt).toISOString() : '', note: v.note });
+    const buttons = [{ label: 'Save', kind: 'primary', run: async () => {
+      const v = values(f);
+      const b = body(v);
+      if (m) { if (v.matchNo !== '') b.matchNo = Number(v.matchNo); if (!started) b.status = v.status; if (started) { delete b.teamA; delete b.teamB; } }
+      const ok = await act(() => (m ? patch('/admin/api/badminton/matches/' + m.id, b) : post(`/admin/api/badminton/${t.id}/matches`, b)), 'Saved');
+      return !ok;
+    } }];
+    if (m) buttons.push({ label: 'Delete', kind: 'danger', run: async () => {
+      if (!confirm('Delete this match and its score?')) return true;
+      const ok = await act(() => del('/admin/api/badminton/matches/' + m.id), 'Match deleted');
+      return !ok;
+    } });
+    dialog(m ? 'Edit match' : 'Add a match', f, buttons);
+  }
+
+  function bdTable(d) {
+    return h('div', {},
+      h('p', { class: 'muted' }, `A team gets ${d.tournament.tiePoints} points for each tie it wins, half for a level tie. Ties on points are split by matches won, then games, then points scored minus conceded. Knockout matches are not in this table.`),
+      table([
+        { label: '#', render: r => r.rank }, { label: 'Team', render: r => h('b', {}, r.name) }, { label: 'Ties played', render: r => r.played },
+        { label: 'W', render: r => r.won }, { label: 'D', render: r => r.drawn }, { label: 'L', render: r => r.lost }, { label: 'Points', render: r => h('b', {}, r.points) },
+        { label: 'Matches won', render: r => `${r.matchesWon}-${r.matchesLost}` }, { label: 'Games', render: r => `${r.gamesWon}-${r.gamesLost}` }, { label: 'Points scored', render: r => `${r.pointsFor}-${r.pointsAgainst}` },
+      ], d.standings, null, 'Add teams to see the table.'));
+  }
+
+  function bdSettings(d, done, el) {
+    const t = d ? d.tournament : null;
+    const num = (name, label, value, min, max, hint) => field(label, { name, type: 'number', min, max, value: String(value) }, hint);
+    const f = h('div', {},
+      field('Tournament name', { name: 'name', value: t ? t.name : '', maxlength: 80, placeholder: 'Friday Smash' }),
+      field('Keyword for the live page', { name: 'keyword', value: t ? t.keyword : '', maxlength: 40, placeholder: 'friday smash' }, 'What your team types to see the scores. 4 to 40 letters, numbers, spaces or dashes. Change it any time to lock out people who had the old one.'),
+      field('Venue (optional)', { name: 'venue', value: t ? t.venue : '', maxlength: 100, placeholder: 'City Sports Hall' }),
+      num('courts', 'Number of courts', t ? t.courts : 2, 1, 12),
+      num('gamesToWin', 'Games to win a match (2 = best of 3)', t ? t.gamesToWin : 2, 1, 3),
+      num('pointsToWin', 'Points in a game', t ? t.pointsToWin : 21, 5, 30),
+      num('winBy', 'Win by (clear points)', t ? t.winBy : 2, 1, 2),
+      num('pointCap', 'Point cap (the first to this wins)', t ? t.pointCap : 30, 5, 50),
+      num('tiePoints', 'Points for winning a tie', t ? t.tiePoints : 2, 1, 6),
+      num('minutesPerMatch', 'Minutes planned for a match', t ? t.minutesPerMatch : 30, 5, 180),
+      field('Tournament starts (optional)', { name: 'startsAt', type: 'datetime-local', value: t && t.startsAt ? localInput(t.startsAt) : '' }),
+      field('Status', { name: 'status', type: 'select', value: t ? t.status : 'draft', options: [{ value: 'draft', label: 'Not started' }, { value: 'live', label: 'Live' }, { value: 'finished', label: 'Finished' }] }),
+      field('Live page', { name: 'shared', type: 'select', value: t ? (t.shared ? '1' : '0') : '1', options: [{ value: '1', label: 'On: anyone with the keyword can see it' }, { value: '0', label: 'Off: nobody can see it' }] }));
+    dialog(t ? 'Tournament settings' : 'New tournament', f, [{ label: 'Save', kind: 'primary', run: async () => {
+      const v = values(f);
+      const b = { ...v, courts: bdNum(v.courts, 2), gamesToWin: bdNum(v.gamesToWin, 2), pointsToWin: bdNum(v.pointsToWin, 21), winBy: bdNum(v.winBy, 2), pointCap: bdNum(v.pointCap, 30),
+        tiePoints: bdNum(v.tiePoints, 2), minutesPerMatch: bdNum(v.minutesPerMatch, 30), startsAt: v.startsAt ? new Date(v.startsAt).toISOString() : '', shared: v.shared === '1' };
+      const r = await guard(() => (t ? patch('/admin/api/badminton/' + t.id, b) : post('/admin/api/badminton', b)));
+      if (!r) return true;
+      toast('Saved');
+      bdId = r.tournament.id; if (!t) bdTab = 'teams';
+      badminton(el);
+    } }]);
+  }
+  function bdAnnounce(t, act) {
+    const f = h('div', {}, field('Message shown at the top of the live page', { name: 'announcement', value: t.announcement, maxlength: 200, placeholder: 'Lunch break at 1 pm. Finals at 4 pm on court 1.' }, 'Leave empty to hide it.'));
+    dialog('Announcement', f, [{ label: 'Save', kind: 'primary', run: async () => { const ok = await act(() => patch('/admin/api/badminton/' + t.id, { announcement: values(f).announcement }), 'Saved'); return !ok; } }]);
+  }
+
+  const VIEWS = { overview, opportunities, atschecks: atsChecks, demos, offers, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, badminton, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

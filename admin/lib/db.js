@@ -258,6 +258,36 @@ CREATE TABLE IF NOT EXISTS downloads (
 );
 CREATE INDEX IF NOT EXISTS idx_downloads_tool ON downloads(tool, day);
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
+
+-- Badminton tournaments (private; see badminton.js). keyword: what the team types on the live page, always lower case.
+CREATE TABLE IF NOT EXISTS bd_tournaments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, keyword TEXT NOT NULL UNIQUE, venue TEXT NOT NULL DEFAULT '',
+  courts INTEGER NOT NULL DEFAULT 2, games_to_win INTEGER NOT NULL DEFAULT 2, points_to_win INTEGER NOT NULL DEFAULT 21,
+  win_by INTEGER NOT NULL DEFAULT 2, point_cap INTEGER NOT NULL DEFAULT 30, tie_points INTEGER NOT NULL DEFAULT 2,
+  minutes_per_match INTEGER NOT NULL DEFAULT 30, starts_at TEXT NOT NULL DEFAULT '', announcement TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'draft', shared INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bd_teams (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, tournament_id INTEGER NOT NULL REFERENCES bd_tournaments(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, color TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS bd_players (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, team_id INTEGER NOT NULL REFERENCES bd_teams(id) ON DELETE CASCADE,
+  tournament_id INTEGER NOT NULL REFERENCES bd_tournaments(id) ON DELETE CASCADE, name TEXT NOT NULL, level INTEGER NOT NULL DEFAULT 3
+);
+CREATE TABLE IF NOT EXISTS bd_matches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, tournament_id INTEGER NOT NULL REFERENCES bd_tournaments(id) ON DELETE CASCADE,
+  tie_no INTEGER NOT NULL DEFAULT 0, match_no INTEGER NOT NULL DEFAULT 0, stage TEXT NOT NULL DEFAULT 'league', round_label TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'Singles', team_a INTEGER, team_b INTEGER, players_a TEXT NOT NULL DEFAULT '', players_b TEXT NOT NULL DEFAULT '',
+  court INTEGER, scheduled_at TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'scheduled', winner TEXT NOT NULL DEFAULT '',
+  serving TEXT NOT NULL DEFAULT '', started_at TEXT NOT NULL DEFAULT '', finished_at TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS bd_games (
+  match_id INTEGER NOT NULL REFERENCES bd_matches(id) ON DELETE CASCADE, game_no INTEGER NOT NULL,
+  a INTEGER NOT NULL DEFAULT 0, b INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (match_id, game_no)
+);
+CREATE INDEX IF NOT EXISTS idx_bd_matches_t ON bd_matches(tournament_id, match_no);
+CREATE INDEX IF NOT EXISTS idx_bd_teams_t ON bd_teams(tournament_id);
 `;
 
 function open(file) {

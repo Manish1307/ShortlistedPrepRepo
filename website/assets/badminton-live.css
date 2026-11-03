@@ -1,0 +1,54 @@
+/* Live badminton scores (private page, not linked from the site). Mobile first: players watch it on a phone at the court. */
+.bl-hero { padding: 28px 0 8px; background: var(--tint); border-bottom: 1px solid var(--line); }
+.bl-hero h1 { margin: 0 0 4px; font-size: clamp(1.5rem, 5vw, 2.2rem); }
+.bl-sub { margin: 0 0 14px; color: var(--body); }
+.bl-main { padding: 18px 0 56px; }
+.bl-main h2 { font-size: 1.1rem; margin: 26px 0 10px; }
+.bl-form { max-width: 460px; }
+.bl-form label { display: block; font-weight: 700; margin-bottom: 6px; }
+.bl-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.bl-row input { flex: 1 1 200px; min-width: 0; padding: 12px 14px; border: 1.5px solid var(--bd); border-radius: 12px; font: inherit; background: var(--bg); color: var(--ink); }
+.bl-error { color: #b3261e; margin: 8px 0 0; }
+.bl-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bl-spacer { flex: 1; }
+.bl-muted { color: var(--muted); }
+.bl-small { font-size: .85rem; }
+.bl-link { background: none; border: 0; color: var(--purple); font: inherit; text-decoration: underline; cursor: pointer; padding: 4px; }
+.bl-chip { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; font-size: .85rem; background: var(--line); color: var(--body); }
+.bl-chip.live { background: #ffe3e3; color: #b3261e; }
+.bl-chip.live::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #d92d20; margin-right: 6px; animation: bl-pulse 1.4s infinite; }
+.bl-chip.done { background: var(--teal-l); color: var(--good); }
+@keyframes bl-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .bl-chip.live::before { animation: none; } }
+.bl-announce { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--sun-l); color: var(--warn); font-weight: 600; }
+.bl-champion { margin: 12px 0 0; padding: 14px 16px; border-radius: 14px; background: var(--grad); color: #fff; font-weight: 800; font-size: 1.15rem; text-align: center; }
+
+.bl-courts { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+.bl-court, .bl-item { background: var(--bg); border: 1px solid var(--bd); border-radius: 16px; box-shadow: var(--shadow-s); padding: 14px 16px; }
+.bl-court.live { border-color: #f4b4b0; }
+.bl-court-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; color: var(--body); font-size: .9rem; margin-bottom: 8px; }
+.bl-side { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.bl-side + .bl-side { border-top: 1px dashed var(--line); }
+.bl-team { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.bl-players { display: block; font-weight: 400; font-size: .82rem; color: var(--muted); }
+.bl-serve { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--sun); margin-right: 6px; box-shadow: 0 0 0 2px #fff1c2; }
+.bl-score { font-size: 2.2rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink); min-width: 2ch; text-align: right; }
+.bl-games { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: .85rem; color: var(--body); }
+.bl-games span { background: var(--tint); border-radius: 8px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+.bl-won { color: var(--good); }
+.bl-empty { color: var(--muted); padding: 14px 0; }
+.bl-two { display: grid; gap: 0 28px; grid-template-columns: 1fr; }
+@media (min-width: 820px) { .bl-two { grid-template-columns: 1fr 1fr; } }
+.bl-list { display: grid; gap: 10px; }
+.bl-item .bl-meta { display: flex; justify-content: space-between; gap: 8px; font-size: .82rem; color: var(--muted); margin-bottom: 4px; }
+.bl-item .bl-vs { font-weight: 700; overflow-wrap: anywhere; }
+.bl-item .bl-res { margin-top: 4px; font-variant-numeric: tabular-nums; color: var(--body); }
+.bl-scroll { overflow-x: auto; }
+.bl-table { width: 100%; border-collapse: collapse; font-size: .92rem; min-width: 460px; }
+.bl-table th, .bl-table td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--line); }
+.bl-table th:nth-child(2), .bl-table td:nth-child(2) { text-align: left; }
+.bl-table th { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.bl-table td.pts { font-weight: 800; color: var(--purple); }
+.bl-teams { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.bl-teams .bl-item b { display: block; margin-bottom: 4px; }
+.bl-teams .bl-item span { color: var(--body); font-size: .9rem; }

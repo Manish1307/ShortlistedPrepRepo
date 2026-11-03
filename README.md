@@ -9,6 +9,7 @@ interview practice from your own resume. This repository holds everything:
 | Mock Interview (desktop, Windows) | `interview-main.js`, `interview-window.html` | Practise with an AI interviewer; questions are made from your resume |
 | Website | `website/` | The public pages, free sign-up, the Download page and My account |
 | Server and admin dashboard | `admin/` | Licence API, accounts, downloads and the admin dashboard (SQLite) |
+| Badminton (private) | `admin/lib/badminton.js`, `website/pages/badminton-live.html`, admin → Company → Badminton | Tournaments: teams (random draw), fixtures, courts and times, point-by-point scoring, standings, knockout. The team opens the live page (not linked anywhere on the site) with the tournament's keyword to see the latest scores |
 | Deployment | `deploy/` | Server setup script, systemd service, Caddy config, backups |
 
 All commands and ports are in [SHORTLISTPREP-COMMANDS.txt](SHORTLISTPREP-COMMANDS.txt).

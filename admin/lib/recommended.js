@@ -1,5 +1,5 @@
 'use strict';
-// Recommended jobs (website: Career toolkit → Jobs & AI search): the best matches for a candidate's resume among the jobs
+// Recommended jobs (website: Career toolkit → Live Search): the best matches for a candidate's resume among the jobs
 // the server already holds from career sites, found without the AI, so it is instant and uses no AI tokens. The AI job
 // search stays for a deeper match; this is the quick first look.
 //
@@ -86,7 +86,7 @@ function skillsOf(text) {
 
 /**
  * The profile used to match: { roles, skills, years }. extraRoles: roles the candidate already chose elsewhere
- * (a role-based resume, the target roles of an earlier AI search).
+ * (a role-based resume, the target roles of an earlier Live Search).
  */
 function profileOf(text, extraRoles = []) {
   return { roles: rolesOf(text, extraRoles), skills: skillsOf(text), years: yearsOf(text) };
@@ -161,7 +161,7 @@ function addRoutes(ctx) {
     const city = String(query.get('city') || '').trim().slice(0, 80);
     const days = [7, 14, 30].includes(Number(query.get('days'))) ? Number(query.get('days')) : 0;
 
-    // roles the candidate already named elsewhere: their role-based resumes and the targets of their latest AI search
+    // roles the candidate already named elsewhere: their role-based resumes and the targets of their latest Live Search
     const extra = all('SELECT role FROM career_versions WHERE customer_id = ?', c.id).map(v => v.role);
     const last = one("SELECT result_json FROM career_job_searches WHERE customer_id = ? AND status = 'done' ORDER BY id DESC LIMIT 1", c.id);
     const profile0 = last && (parse(last.result_json) || {}).profile;
@@ -189,7 +189,7 @@ function addRoutes(ctx) {
         recommended: ranked.map(x => ({ id: x.job.id, title: x.job.title, company: x.job.company, location: x.job.location, country: x.job.country, postedAt: x.job.posted_at,
           url: x.job.url, score: x.score, role: x.role, skills: x.skills, domain: companyDomain(x.job.company, x.job.careers_url) })),
       };
-      if (!data.recommended.length) data.message = pool.length ? 'No cached job matches your resume well enough yet. Try a wider location or date range, or run an AI search.' : 'We hold no jobs for that location yet. Try another country, or run an AI search.';
+      if (!data.recommended.length) data.message = pool.length ? 'No cached job matches your resume well enough yet. Try a wider location or date range, or run a Live Search.' : 'We hold no jobs for that location yet. Try another country, or run a Live Search.';
     }
     if (cache.size > 500) cache.clear();
     cache.set(key, { at: Date.now(), data });

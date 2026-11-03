@@ -89,7 +89,7 @@ function buildRoutes(ctx) {
   profiles.addRoutes({ ...ctx, add, audit, one, all });        // topics and resume per customer (sent to the app above)
   accounts.addRoutes({ ...ctx, add, audit, one, all });        // customer logins for the website's My account page
   career.addRoutes({ ...ctx, add, one, all });                 // career toolkit for signed-in customers (resume, ATS, job match)
-  jobs.addRoutes({ ...ctx, add, audit, one, all });            // AI Job search: live openings from career sites, scored by the AI
+  jobs.addRoutes({ ...ctx, add, audit, one, all });            // Live Search: live openings from career sites, scored by the AI
   downloads.addRoutes({ ...ctx, add, audit, one, all });       // Download page: counted downloads for signed-in customers
   interviewprep.addRoutes({ ...ctx, add, one, all });          // Virtual Interview: personalised questions from the candidate's resume
   logos.addRoutes({ ...ctx, add });                            // company logos next to the jobs

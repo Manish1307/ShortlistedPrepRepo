@@ -1,5 +1,5 @@
 'use strict';
-// AI tokens for website customers (Career toolkit, AI Job search, Prepare for this job, reading PDFs).
+// AI tokens for website customers (Career toolkit, Live Search, Prepare for this job, reading PDFs).
 // Every AI call records the tokens it really used (the AI services report them; estimated from the text when not).
 // Each customer has a daily allowance (the admin's default, or a bigger one granted for some days) plus bonus tokens
 // that are spent once the day's allowance is used up. Customers can ask for more tokens (a pack the admin defined,

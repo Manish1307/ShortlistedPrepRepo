@@ -206,7 +206,7 @@
           return el('div', { class: 'tok-claim' }, el('span', {}, k.packName + ' · ' + short(k.tokens) + (k.kind === 'daily' ? '/day' : '')),
             el('span', { class: 'tok-status ' + k.status }, k.status === 'pending' ? 'Waiting' : k.status === 'approved' ? 'Approved ✓' : 'Not approved'));
         })) : null,
-        el('p', { class: 'muted small', style: 'margin:0' }, 'An ATS check uses about 8,000 tokens; an AI job search about 20,000 to 30,000.')));
+        el('p', { class: 'muted small', style: 'margin:0' }, 'An ATS check uses about 8,000 tokens; a Live Search about 20,000 to 30,000.')));
       dlg.addEventListener('close', function () { dlg.remove(); });
       dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
       document.body.appendChild(dlg);

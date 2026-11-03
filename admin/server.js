@@ -132,7 +132,7 @@ if (require.main === module) {
     secureCookies: process.env.SECURE_COOKIES === '1',
   });
   const owners = app.db.prepare("SELECT COUNT(*) AS n FROM admins WHERE role = 'owner' AND disabled = 0").get().n;
-  require('./lib/jobs').scheduleSync(app.db);   // AI Job search: refresh recently searched career sites every JOB_SYNC_HOURS (default 6)
+  require('./lib/jobs').scheduleSync(app.db);   // Live Search: refresh recently searched career sites every JOB_SYNC_HOURS (default 6)
   app.server.listen(port, host, () => {
     console.log(`Admin dashboard: http://${host === '127.0.0.1' ? 'localhost' : host}:${port}`);
     if (!owners) console.log('No admin account yet. Create the first owner with:  npm run admin:create -- you@example.com');

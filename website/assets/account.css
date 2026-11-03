@@ -215,7 +215,7 @@
   .cr-ring { width: 70px; height: 70px; } .cr-ring span { width: 54px; height: 54px; font-size: 20px; }
 }
 
-/* ---------- AI Job search (career.html, step 5) ---------- */
+/* ---------- Live Search (career.html, step 5) ---------- */
 .js-form { display: grid; gap: 10px; }
 .js-row { display: grid; gap: 10px; align-items: center; }
 .js-row.two { grid-template-columns: 1fr 1fr; }
@@ -273,7 +273,7 @@
   .jb-open { text-align: left; margin-top: 6px; }
 }
 
-/* ---------- Prepare for this job (AI Job search results) ---------- */
+/* ---------- Prepare for this job (Live Search results) ---------- */
 .js-table .jb-open { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .pp-toggle { white-space: nowrap; }
 .pp-toggle[aria-expanded="true"] { background: var(--purple-l); border-color: var(--purple); color: var(--purple-d); }
@@ -485,18 +485,9 @@
 .cr-delta small { font-weight: 500; font-size: 13.5px; color: var(--muted, #6b7385); }
 .cr-delta.good { color: #0a8a5c; } .cr-delta.bad { color: #b4235e; }
 
-/* ---------- AI Job search: the step message stays at the bottom of the screen while the search runs ---------- */
+/* ---------- Live Search: the step message stays at the bottom of the screen while the search runs ---------- */
 .js-status.busy { position: sticky; bottom: 12px; z-index: 6; margin-top: 16px; box-shadow: 0 10px 30px -12px rgba(20, 10, 60, .45); border: 1px solid var(--bd); background: #fff; }
 .jb-pager { position: relative; }
 
 .cr-perfect { margin: 0 0 20px; padding: 14px 16px; border-radius: 14px; background: #e3f6ec; color: #08603f; font-weight: 700; }
 
-/* Recommended jobs (Career toolkit step 5) */
-.rc-box { margin-bottom: 26px; padding-bottom: 20px; border-bottom: 1px dashed var(--bd, #e7e1f5); }
-.rc-title { margin: 0 0 10px; font-size: 1.1rem; }
-.rc-ai-title { margin-top: 4px; }
-.rc-filters { margin-bottom: 8px; }
-.rc-filters input, .rc-filters select { padding: 9px 12px; font-size: 15px; }
-.rc-info { margin: 6px 0 10px; }
-.rc-ai { margin: 14px 0 0; }
-@media (max-width: 720px) { .rc-filters, .rc-filters .js-row.two { grid-template-columns: 1fr; } }

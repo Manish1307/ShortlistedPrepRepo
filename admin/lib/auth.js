@@ -75,7 +75,7 @@ const PERMISSIONS = {
   'conversations.delete': ['owner', 'admin'],       // delete a saved ShortlistPrep.AI conversation
   'profiles.write': ['owner', 'admin', 'support'],  // a customer's topics and resume (what the AI focuses on)
   'accounts.write': ['owner', 'admin'],             // a customer's website login: new password, turn off / on
-  'jobs.write': ['owner', 'admin'],                 // AI Job search: the master prompt
+  'jobs.write': ['owner', 'admin'],                 // Live Search: the master prompt
   'tokens.write': ['owner', 'admin'],
   'pricing.write': ['owner', 'admin'],              // plans and prices, payment settings, confirming payments               // AI tokens: daily allowance, packs, approve requests, grant tokens
   'badminton.write': ['owner', 'admin'],            // Badminton: tournaments, teams, fixtures, courts

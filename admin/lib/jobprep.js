@@ -1,5 +1,5 @@
 'use strict';
-// Insight (AI Job search results; formerly "Prepare for this job"): for one job, the skill matrix taken from the job's
+// Insight (Live Search results; formerly "Prepare for this job"): for one job, the skill matrix taken from the job's
 // own description (technical and functional requirements), what the candidate already matches, the skill gaps
 // that keep the fit score below 100 (with how many points each one is worth), a study plan, topics to revise,
 // likely interview questions and tips. The AI only chooses WHAT to search for; every link is built here as a search

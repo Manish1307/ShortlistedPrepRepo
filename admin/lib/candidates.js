@@ -1,7 +1,7 @@
 'use strict';
 const { SECTORS } = require('./jobcatalogue');
 // Dashboard → Candidates: what each customer does with My account and the Career toolkit. Progress through the
-// steps (resume, ATS check, role resumes, job matches, AI job searches), their documents to download, the job
+// steps (resume, ATS check, role resumes, job matches, Live Searches), their documents to download, the job
 // search results, AI use per day and an activity log (activity.js). Every signed-in admin may look; downloads
 // are written to the audit log.
 

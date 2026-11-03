@@ -35,7 +35,7 @@ test('a new customer has used 0% and each action moves the percentage', async ()
   try {
     assert.equal(strengthOf(db, id).percent, 0);
     assert.equal(strengthOf(db, id).name, 'Asha');
-    assert.equal(strengthOf(db, id).next.weight, 15);   // the biggest thing left that the plan allows: an AI job search (live sessions are locked on Free)
+    assert.equal(strengthOf(db, id).next.weight, 15);   // the biggest thing left that the plan allows: a Live Search (live sessions are locked on Free)
     db.prepare("INSERT INTO career_resumes (customer_id, file_name, source_text, uploaded_at) VALUES (?, 'cv.pdf', 'text', datetime('now'))").run(id);
     logActivity(db, id, 'ats.checked', 'ATS score 70');
     assert.equal(strengthOf(db, id).percent, 10);       // resume 5 + ATS check 5

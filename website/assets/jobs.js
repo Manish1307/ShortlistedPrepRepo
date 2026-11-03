@@ -1,5 +1,5 @@
 // Jobs page. Everyone can browse the jobs the server holds, with filters (GET /api/jobs). Signed-in candidates also see jobs
-// picked from their resume (GET /api/career/recommended), and the live AI search sends guests to sign in or the plans and
+// picked from their resume (GET /api/career/recommended), and the live Live Search sends guests to sign in or the plans and
 // members to the Career toolkit. Everything shown is inserted as text, never as HTML.
 (function () {
   'use strict';
@@ -101,10 +101,10 @@
       more.panel]);
   }
 
-  // ---------- the live AI search: members go to the toolkit, guests sign in or choose a plan ----------
+  // ---------- the live Live Search: members go to the toolkit, guests sign in or choose a plan ----------
   (function () {
     var box = $('jb-ai-actions'), next = encodeURIComponent(AI_PAGE);
-    if (member) box.appendChild(h('a', { class: 'btn btn-primary', href: AI_PAGE }, 'Open AI job search'));
+    if (member) box.appendChild(h('a', { class: 'btn btn-primary', href: AI_PAGE }, 'Open Live Search'));
     else {
       box.appendChild(h('a', { class: 'btn btn-primary', href: 'login.html?next=' + next }, 'Sign in to search'));
       box.appendChild(h('a', { class: 'btn', href: 'signup.html?next=' + next }, 'Start free'));

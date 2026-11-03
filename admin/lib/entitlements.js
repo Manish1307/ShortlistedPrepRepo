@@ -8,8 +8,8 @@ const { now } = require('./db');
 const DAY = 86400000;
 const parse = (s, d) => { try { return JSON.parse(s); } catch (_) { return d; } };
 
-const LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
-const SINGULAR = { jobSearches: 'AI job search', preps: 'Insight plan', roleResumes: 'Role-based resume' };   // for "includes 1 Insight plan"
+const LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'Live Searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
+const SINGULAR = { jobSearches: 'Live Search', preps: 'Insight plan', roleResumes: 'Role-based resume' };   // for "includes 1 Insight plan"
 // the limits counted here (dailyTokens is enforced by tokens.js; liveSessions by the desktop app's licence)
 const COUNTED = ['jobSearches', 'preps', 'roleResumes'];
 
@@ -50,7 +50,7 @@ function forCustomer(db, customerId) {
 /** What a candidate reads when an action is past the plan's limit. The website turns the trailing sentence into an upgrade popup. */
 function limitMessage(plan, key, limit, used) {
   const when = plan.free ? 'in the last 30 days' : 'in your plan period';
-  const noun = (limit === 1 && SINGULAR[key] ? SINGULAR[key] : LABELS[key]).replace(/^(?!AI\b)\w/, c => c.toLowerCase());   // "1 insight plan", "30 AI job searches"
+  const noun = (limit === 1 && SINGULAR[key] ? SINGULAR[key] : LABELS[key]).replace(/^(?!AI\b|Live\b)\w/, c => c.toLowerCase());   // "1 insight plan", "30 Live Searches"
   return `Your ${plan.name} plan includes ${limit} ${noun} ${key === 'roleResumes' ? '' : when}`.trim() + `. You have used ${used}. Upgrade your plan at pricing.html to continue.`;
 }
 

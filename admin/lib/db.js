@@ -259,7 +259,7 @@ CREATE TABLE IF NOT EXISTS downloads (
 CREATE INDEX IF NOT EXISTS idx_downloads_tool ON downloads(tool, day);
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
 
--- AI Job search: company names no job board answered to, so the same unknown names are not looked up again on every search.
+-- Live Search: company names no job board answered to, so the same unknown names are not looked up again on every search.
 CREATE TABLE IF NOT EXISTS job_lookup_misses (key TEXT PRIMARY KEY, at TEXT NOT NULL);
 
 -- Badminton tournaments (private; see badminton.js). keyword: what the team types on the live page, always lower case.
@@ -298,10 +298,10 @@ function open(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
-  addColumn(db, 'job_companies', 'last_used', 'TEXT');   // AI Job search: boards nobody searched lately are dropped
+  addColumn(db, 'job_companies', 'last_used', 'TEXT');   // Live Search: boards nobody searched lately are dropped
   addColumn(db, 'jobs', 'full_description', 'TEXT');      // Insight: a job's whole description, read when a candidate opens it
   addColumn(db, 'jobs', 'full_fetched_at', 'TEXT');
-  addColumn(db, 'customers', 'sector', "TEXT NOT NULL DEFAULT ''");   // the candidate's sector (domain): decides which employers AI Job search reads
+  addColumn(db, 'customers', 'sector', "TEXT NOT NULL DEFAULT ''");   // the candidate's sector (domain): decides which employers Live Search reads
   return db;
 }
 

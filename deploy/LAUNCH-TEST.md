@@ -76,7 +76,7 @@ Create a test login for yourself (Customers → a customer → Website login →
 | 5 | ATS check: score, checks and an improved resume; **Download .docx** opens in Word | ☐ |
 | 6 | Create one role-based resume and download it | ☐ |
 | 7 | Job match: paste a job description; get a score and a cover letter | ☐ |
-| 8 | AI Job search with country **India** and no companies: results in high / medium / low groups within about 2 minutes | ☐ |
+| 8 | Live Search with country **India** and no companies: results in high / medium / low groups within about 2 minutes | ☐ |
 | 9 | Each job shows its **Skill Gap Matrix**; clicking a row opens **Prepare** at that gap | ☐ |
 | 10 | Prepare: matrix, gaps with learning links (open a YouTube and a Microsoft Learn link), plan, questions | ☐ |
 | 11 | **Apply ↗** opens the company's own job page | ☐ |
@@ -109,7 +109,7 @@ A mix gives the most useful feedback:
 > 1. Sign in and upload your latest resume (Career toolkit).
 > 2. Run the ATS check and download the improved resume.
 > 3. Make one resume for a role you want.
-> 4. Run an AI Job search for the city and role you want.
+> 4. Run a Live Search for the city and role you want.
 > 5. Open the Skill Gap Matrix of one or two jobs and press Prepare.
 > 6. If you find a job you like, apply through the Apply link.
 > Then fill in the short feedback form: {form link}
@@ -135,9 +135,9 @@ Copy these questions into a Google Form (or any form tool).
 
 1. Your name and email (so we can follow up)
 2. Years of experience: 0–1 / 2–4 / 5–9 / 10+
-3. What did you try? (tick all) Resume upload · ATS check · Role resume · Cover letter · AI Job search · Skill Gap Matrix · Prepare · Get more tokens
+3. What did you try? (tick all) Resume upload · ATS check · Role resume · Cover letter · Live Search · Skill Gap Matrix · Prepare · Get more tokens
 4. How useful was the **ATS check and improved resume**? (1–5)
-5. How useful was **AI Job search**? Were the jobs relevant to you? (1–5)
+5. How useful was **Live Search**? Were the jobs relevant to you? (1–5)
 6. How useful was the **Skill Gap Matrix and Prepare** plan? (1–5)
 7. Did anything not work, or confuse you? Where? (text)
 8. What was the **most valuable** part for you? (text)
@@ -152,7 +152,7 @@ Copy these questions into a Google Form (or any form tool).
 | Measure | Target |
 |---|---|
 | Candidates who uploaded a resume | 80% or more |
-| Candidates who ran an AI Job search | 60% or more |
+| Candidates who ran a Live Search | 60% or more |
 | Average usefulness (questions 4–6) | 4 out of 5 or more |
 | Recommend score (question 11) | 8 or more on average |
 | Would pay something (question 12) | 30% or more |

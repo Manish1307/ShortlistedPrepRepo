@@ -1,6 +1,6 @@
 'use strict';
 // "How much of ShortlistPrep have you used?" for a signed-in customer. The platform is four capabilities that share
-// 100%: ATS score check 20, AI Job Search 25, Interview preparation 20 (introduction preparation is most of it) and
+// 100%: ATS score check 20, Live Search 25, Interview preparation 20 (introduction preparation is most of it) and
 // Interview support 35 (the desktop apps). Each capability is a few steps, worth part of its share; a step is done when
 // the customer's records show it (the same data as the Activity log and the Candidates page in the dashboard).
 
@@ -18,8 +18,8 @@ const CAPABILITIES = [
     { id: 'versions', limitKey: 'roleResumes', label: 'Make a resume for a target role', weight: 5, href: 'career.html?step=cr-versions', cta: 'Create role resume',
       sql: "SELECT COUNT(*) FROM career_activity WHERE customer_id = ? AND action = 'version.created'" },
   ] },
-  { id: 'jobs', label: 'AI Job Search', journey: 'Find the right jobs', weight: 25, blurb: 'Live openings ranked by how well your resume fits, with the skill gaps.', steps: [
-    { id: 'search', limitKey: 'jobSearches', label: 'Run an AI job search', weight: 15, href: 'career.html?step=cr-jobs', cta: 'Find my jobs',
+  { id: 'jobs', label: 'Live Search', journey: 'Find the right jobs', weight: 25, blurb: 'Live openings ranked by how well your resume fits, with the skill gaps.', steps: [
+    { id: 'search', limitKey: 'jobSearches', label: 'Run a Live Search', weight: 15, href: 'career.html?step=cr-jobs', cta: 'Find my jobs',
       sql: "SELECT COUNT(*) FROM career_job_searches WHERE customer_id = ? AND status = 'done'" },
     { id: 'match', label: 'Match your resume to a job and get a cover letter', weight: 5, href: 'career.html?step=cr-match', cta: 'Match a job',
       sql: "SELECT COUNT(*) FROM career_activity WHERE customer_id = ? AND action = 'match.created'" },

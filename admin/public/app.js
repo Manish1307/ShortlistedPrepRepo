@@ -191,7 +191,7 @@
       ['conversations', 'Conversations', 'ShortlistPrep.AI sessions saved by the app.', 'chat'],
       ['profiles', 'Topics and resume', 'The topics and resume that set the area of the AI answers.', 'doc']] },
     { id: 'ai', label: 'AI and jobs', items: [
-      ['jobs', 'Jobs', 'AI Job search: the Master Prompt, companies and live openings.', 'briefcase'],
+      ['jobs', 'Jobs', 'Live Search: the Master Prompt, companies and live openings.', 'briefcase'],
       ['tokens', 'AI tokens', 'The daily AI allowance, token packs and requests for more.', 'bolt'],
       ['aikeys', 'AI keys', 'AI service keys and which licence uses which.', 'lock']] },
     { id: 'sales', label: 'Sales', items: [
@@ -358,7 +358,7 @@
       field('Email', { name: 'email', type: 'email', required: true, value: existing ? existing.email : '' }),
       h('div', { class: 'row2' }, field('Name', { name: 'name', value: existing ? existing.name : '' }), field('Organisation', { name: 'organisation', value: existing ? existing.organisation : '' })),
       h('div', { class: 'row2' }, field('Country', { name: 'country', value: existing ? existing.country : '' }),
-        field('Sector (domain)', { name: 'sector', type: 'select', options: [{ value: '', label: 'Not chosen yet' }].concat(sectorList.map(s => ({ value: s.id, label: s.label }))), value: existing ? existing.sector || '' : '' }, 'Decides which employers AI Job search reads. The candidate can also set it in My account.')),
+        field('Sector (domain)', { name: 'sector', type: 'select', options: [{ value: '', label: 'Not chosen yet' }].concat(sectorList.map(s => ({ value: s.id, label: s.label }))), value: existing ? existing.sector || '' : '' }, 'Decides which employers Live Search reads. The candidate can also set it in My account.')),
       field('Notes (private)', { name: 'notes', type: 'textarea', value: existing ? existing.notes : '', maxlength: 2000 }));
     dialog(existing ? 'Edit customer' : 'New customer', f, [{
       label: 'Save', kind: 'primary',
@@ -966,12 +966,12 @@
   }
 
   // ---------- Candidates: progress, documents and activity in My account and the Career toolkit ----------
-  const STEP_NAMES = [['resume', 'Resume'], ['ats', 'ATS check'], ['versions', 'Role resumes'], ['matches', 'Job match'], ['searches', 'AI job search']];
+  const STEP_NAMES = [['resume', 'Resume'], ['ats', 'ATS check'], ['versions', 'Role resumes'], ['matches', 'Job match'], ['searches', 'Live Search']];
   const ACTION_LABEL = {
     login: '🔑 Signed in', 'resume.uploaded': '📄 Uploaded resume', 'resume.pdf_read': '📄 PDF read', 'ats.checked': '✅ ATS check',
     'version.created': '🧩 Role resume created', 'version.deleted': '🗑 Role resume deleted', 'match.created': '✉️ Job match & cover letter',
-    'match.deleted': '🗑 Job match deleted', 'jobsearch.started': '🎯 AI job search started', 'jobsearch.done': '🎯 AI job search finished',
-    'jobsearch.failed': '⚠️ AI job search failed', 'jobprep.created': '💡 Opened Insight for a job', 'tokens.claimed': '⚡ Asked for more AI tokens', 'tokens.granted': '⚡ Got AI tokens', download: '⬇️ Downloaded',
+    'match.deleted': '🗑 Job match deleted', 'jobsearch.started': '🎯 Live Search started', 'jobsearch.done': '🎯 Live Search finished',
+    'jobsearch.failed': '⚠️ Live Search failed', 'jobprep.created': '💡 Opened Insight for a job', 'tokens.claimed': '⚡ Asked for more AI tokens', 'tokens.granted': '⚡ Got AI tokens', download: '⬇️ Downloaded',
   };
   const scorePill = n => (n == null ? '—' : h('span', { class: 'pill ' + (n >= 75 ? 'good' : n >= 50 ? 'warn' : 'bad') }, String(n)));
   const progressDots = steps => h('span', { class: 'cand-dots', title: STEP_NAMES.map(([k, l]) => `${steps[k] ? '✓' : '·'} ${l}`).join('\n') },
@@ -988,14 +988,14 @@
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
     const redo = change => candidates(el, { ...state, ...change });
     const filter = h('select', { 'aria-label': 'Show', onchange: e => redo({ filter: e.target.value }) },
-      [['', 'All candidates'], ['resume', 'Uploaded a resume'], ['noresume', 'No resume yet'], ['searching', 'Ran an AI job search'], ['active', 'Active in the last 7 days']]
+      [['', 'All candidates'], ['resume', 'Uploaded a resume'], ['noresume', 'No resume yet'], ['searching', 'Ran a Live Search'], ['active', 'Active in the last 7 days']]
         .map(([v, l]) => h('option', { value: v }, l)));
     filter.value = state.filter;
     el.replaceChildren(
       head('Candidates', filter, searchBox(v => redo({ q: v }), 'Search name, email, organisation', state.q)),
       h('p', { class: 'muted' }, 'Customers using My account and the Career toolkit on the website: how far they got, their documents, job searches and what they did. Click a candidate for the details.'),
       h('div', { class: 'cards' }, stat('Candidates', d.stats.total), stat('Uploaded a resume', d.stats.withResume, `${d.stats.atsDone} ran the ATS check`),
-        stat('Active in 7 days', d.stats.activeWeek), stat('AI job searches (7 days)', d.stats.searchesWeek)),
+        stat('Active in 7 days', d.stats.activeWeek), stat('Live Searches (7 days)', d.stats.searchesWeek)),
       table([
         { label: 'Candidate', render: r => h('span', {}, h('b', {}, r.name || r.email), h('br'), h('span', { class: 'small muted' }, r.name ? r.email : (r.organisation || ''))) },
         { label: 'Progress', render: r => h('span', { class: 'cand-progress' }, progressDots(r.steps), h('span', { class: 'small muted' }, `${r.done}/5`)) },
@@ -1136,7 +1136,7 @@
         { label: '', render: m => (m.hasLetter ? dlLink(id, 'letter', m.id, 'Cover letter') : '—') },
       ], d.matches, null, 'No job matches yet.')),
 
-      section(`AI job searches (${d.searches.length})`,
+      section(`Live Searches (${d.searches.length})`,
         table([
           { label: 'When', render: s => dateTime(s.createdAt) },
           { label: 'Search', render: s => h('span', { class: 'small' }, [s.params.role || 'Roles from resume', [s.params.city, s.params.country].filter(Boolean).join(', ') || 'Any location',
@@ -1144,7 +1144,7 @@
           { label: 'Result', render: s => (s.status === 'done' ? h('span', { class: 'cand-counts' }, h('span', { class: 'pill good' }, `${s.counts.high} high`), h('span', { class: 'pill warn' }, `${s.counts.medium} med`), h('span', { class: 'pill bad' }, `${s.counts.stretch} low`))
             : s.status === 'running' ? pill('open') : h('span', { class: 'small', style: 'color:var(--bad)' }, s.error || 'Failed')), wrap: true },
           { label: '', render: s => (s.status === 'done' ? h('button', { class: 'btn sm', onclick: e => { e.stopPropagation(); guard(() => showSearch(s)); } }, 'View results') : '') },
-        ], d.searches, null, 'No AI job searches yet.'),
+        ], d.searches, null, 'No Live Searches yet.'),
         results),
 
       section(`Job preparation plans (${d.preps.length})`,
@@ -1186,7 +1186,7 @@
       h('h2', {}, 'Daily allowance'),
       h('p', { class: 'muted small' }, `Every customer gets this many AI tokens a day (the day changes at midnight India time), unless you give them more. Customers see their tokens at the bottom of the website and are warned from the level below. Today is ${d.day}.`),
       h('div', { class: 'row2' },
-        h('label', { class: 'field' }, 'Tokens per customer per day', daily, h('span', { class: 'hint' }, 'An ATS check uses about 8,000 tokens; an AI job search 20,000 to 30,000.')),
+        h('label', { class: 'field' }, 'Tokens per customer per day', daily, h('span', { class: 'hint' }, 'An ATS check uses about 8,000 tokens; a Live Search 20,000 to 30,000.')),
         h('label', { class: 'field' }, 'Warn customers at (% of the day used)', warn)),
       write ? h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => guard(async () => { await post('/admin/api/tokens/settings', { dailyDefault: daily.value, warnPct: warn.value }); toast('Saved'); reload(); }) }, 'Save')) : null);
 
@@ -1242,7 +1242,7 @@
     const pending = d.claims.filter(k => k.status === 'pending');
     el.replaceChildren(
       head('AI tokens', write ? h('button', { class: 'btn', onclick: () => packForm(null) }, '+ New token pack') : null),
-      h('p', { class: 'muted' }, 'AI tokens used by website customers (Career toolkit, AI Job search, Insight). Set the daily allowance, offer token packs, and answer requests for more.'),
+      h('p', { class: 'muted' }, 'AI tokens used by website customers (Career toolkit, Live Search, Insight). Set the daily allowance, offer token packs, and answer requests for more.'),
       h('div', { class: 'cards' },
         stat('Tokens used today', tok(d.totals.today.t), `${d.totals.today.c} AI calls by ${d.totals.today.n} customers`),
         stat('Tokens in 7 days', tok(d.totals.week.t), `${d.totals.week.c} AI calls`),
@@ -1290,7 +1290,7 @@
   // ---------- Pricing: plans master, active pricing (the website), payment settings, plan orders ----------
   const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
   const ORDER_PILL = { created: '', pending: 'warn', paid: 'good', failed: 'bad', cancelled: '', refunded: 'warn' };
-  const LIMIT_LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'AI job searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
+  const LIMIT_LABELS = { dailyTokens: 'AI tokens a day', jobSearches: 'Live Searches', preps: 'Insight plans', roleResumes: 'Role-based resumes', liveSessions: 'Live interview sessions' };
 
   async function pricingPage(el) {
     const d = await get('/admin/api/pricing');
@@ -1434,14 +1434,14 @@
         ], d.history, null, 'No price changes yet.')));
   }
 
-  // ---------- AI Job search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
+  // ---------- Live Search: the Master Prompt (candidates choose the companies, country and role themselves) ----------
   async function jobs(el) {
     const d = await get('/admin/api/jobs');
     const write = can('jobs.write');
     const stat = (label, num, sub) => h('div', { class: 'card stat' }, h('div', { class: 'label' }, label), h('div', { class: 'num' }, num ?? 0), sub ? h('div', { class: 'sub' }, sub) : null);
     el.replaceChildren(
       head('Jobs'),
-      h('p', { class: 'muted' }, 'Candidates run AI Job search in Career toolkit: they pick a resume (or all of them) and type the country, city, role and companies they want. ' +
+      h('p', { class: 'muted' }, 'Candidates run Live Search in Career toolkit: they pick a resume (or all of them) and type the country, city, role and companies they want. ' +
         'The server reads those companies\' live openings from their own career sites, and the AI scores them with the Master Prompt below into high, medium and low-probability jobs.'),
       h('div', { class: 'cards' }, stat('Searches (7 days)', d.stats.searches), stat('Candidates searching (7 days)', d.stats.candidates), stat('Failed searches (7 days)', d.stats.failed),
         stat('Live jobs cached', d.stats.jobs, `from ${d.stats.companies} career sites`)),
@@ -1455,7 +1455,7 @@
     box.style.minHeight = '320px';
     return h('div', { class: 'card', style: 'margin-top:18px' },
       h('h2', {}, 'Master Prompt'),
-      h('p', { class: 'muted small' }, 'Runs on every AI Job search: first the AI analyses the candidate\'s resume(s), then it scores the live jobs found for their search. ' +
+      h('p', { class: 'muted small' }, 'Runs on every Live Search: first the AI analyses the candidate\'s resume(s), then it scores the live jobs found for their search. ' +
         (d.prompt.isDefault ? 'Using the default prompt.' : `Last changed ${dateTime(d.prompt.updatedAt)} by ${d.prompt.updatedBy}.`)),
       box,
       h('details', {}, h('summary', { class: 'small' }, 'Rules always added after your prompt (keep the AI from inventing jobs, and the answer readable)'), h('pre', { class: 'mono small', style: 'white-space:pre-wrap' }, d.outputRules)),

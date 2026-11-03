@@ -18,7 +18,7 @@ function feedback(r) {
     for (const e of r.browser.consoleErrors || []) add('warn', 'Browser console', e, '');
     for (const e of r.browser.failedRequests || []) add('warn', 'Failed request', e, '');
   }
-  for (const x of r.resumes) for (const i of x.issues) if (i.sev !== 'info') add(i.sev, 'AI Job search', `${x.title}: ${i.msg}`, x.id);
+  for (const x of r.resumes) for (const i of x.issues) if (i.sev !== 'info') add(i.sev, 'Live Search', `${x.title}: ${i.msg}`, x.id);
   // group repeated messages (same text once the resume name is removed)
   const key = i => `${i.area}|${i.msg.replace(/^[^:]+:\s*/, '').replace(/\d+/g, 'N')}`;
   const groups = new Map();
@@ -100,7 +100,7 @@ ${r.fatal ? `<p class="i fail">The run stopped: ${esc(r.fatal)}</p>` : ''}
 <h2>Feedback to incorporate</h2>
 ${fb.length ? `<table><tr><th></th><th>Area</th><th>What to fix</th><th>Seen</th></tr>${fb.map(f => `<tr><td>${badge(f.sev)}</td><td>${esc(f.area)}</td><td>${esc(f.msg)}</td><td>${f.n > 1 ? f.n + '×' : ''}</td></tr>`).join('')}</table>` : '<p>Nothing to fix: every check passed.</p>'}
 
-<h2>AI Job search by resume</h2>
+<h2>Live Search by resume</h2>
 <div class="scroll"><table><tr><th></th><th>Resume</th><th>Detected field / target roles</th><th>ATS</th><th>Jobs</th><th>Fit of top 20 titles</th><th>Time</th><th>Best jobs and notes</th></tr>${rows || '<tr><td colspan=8>No resumes were tested.</td></tr>'}</table></div>
 
 <h2>Every job and Insight, by resume</h2>

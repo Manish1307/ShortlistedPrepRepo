@@ -4,7 +4,7 @@ Signs in like a candidate and checks, in order:
 
 1. **Public website**: 12 pages load, titles and CSS/JS/images exist, API `/api/health`.
 2. **Sign-in** and, with Playwright, the real login form, My account and **Career toolkit** (all 5 steps render, no console errors, mobile layout).
-3. **AI Job search with 20 resumes**: 10 IT / infrastructure / security variations (Java, data science, DevOps, security, QA, frontend, Android, data engineering, network admin, SAP) and 10 engineering branches (electronics, civil, mechanical, electrical, chemical, aerospace, biotech, instrumentation, automobile, production). For each: upload → ATS score → job search → checks the detected field, jobs found, high/medium split, how many top-20 titles fit the field, jobs from another field, apply links, time taken.
+3. **Live Search with 20 resumes**: 10 IT / infrastructure / security variations (Java, data science, DevOps, security, QA, frontend, Android, data engineering, network admin, SAP) and 10 engineering branches (electronics, civil, mechanical, electrical, chemical, aerospace, biotech, instrumentation, automobile, production). For each: upload → ATS score → job search → checks the detected field, jobs found, high/medium split, how many top-20 titles fit the field, jobs from another field, apply links, time taken.
 
 For each resume it also lists **every job** (high / medium / low) and clicks **Insight** on the best job (`INSIGHT=1` by default, `INSIGHT=0` to skip, `INSIGHT=3` for three jobs): it checks the skill matrix (weights add to 100, requirements, your status), the gaps (points, how to close, links), the study plan and the 20 practice questions. Each Insight is 2 AI calls and uses one Insight plan of the QA account. Open a resume in the report to see the details.
 
@@ -24,7 +24,7 @@ Create a QA account on the website (sign up as `qa@yourdomain.com`), then give i
 SITE_URL=https://shortlistprep.com \   # the API address is read from the site itself; set API_URL only to override it
 QA_EMAIL=qa@yourdomain.com QA_PASSWORD='...' node qa-agent/agent.js
 ```
-On a real site the agent never creates accounts. One full run starts 20 real AI job searches, so it uses AI tokens.
+On a real site the agent never creates accounts. One full run starts 20 real Live Searches, so it uses AI tokens.
 
 ## Deploy it (GitHub Actions, free, runs every morning)
 1. Push the repo to GitHub (it already is). The workflow is `.github/workflows/qa-agent.yml`.

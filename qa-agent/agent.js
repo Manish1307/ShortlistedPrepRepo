@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// ShortlistPrep QA agent: signs in like a candidate and checks the website, the Career toolkit and AI Job search
+// ShortlistPrep QA agent: signs in like a candidate and checks the website, the Career toolkit and Live Search
 // with 20 resumes (IT, infrastructure, security and the main engineering branches). It writes an HTML + JSON report.
 //
 //   node qa-agent/agent.js                          local: site :4173, API :4180, makes its own test account
@@ -88,7 +88,7 @@ async function signIn() {
   return { token: r.data.token, email: mail, ms: r.ms, created: true, password: pw };
 }
 
-// ---------- 3. Career toolkit + AI Job search, one resume at a time ----------
+// ---------- 3. Career toolkit + Live Search, one resume at a time ----------
 async function testResume(s, session) {
   const res = { id: s.id, group: s.group, title: s.title, sector: s.sector, steps: {}, issues: [], status: 'pass', jobs: { total: 0, high: 0, medium: 0, stretch: 0 }, top: [], relevance: null, leaks: [], seconds: null };
   const note = (sev, msg) => { res.issues.push({ sev, msg }); if (sev === 'fail') res.status = 'fail'; else if (res.status === 'pass') res.status = 'warn'; };
@@ -113,7 +113,7 @@ async function testResume(s, session) {
     else if (res.ats < 40) note('warn', `ATS score is only ${res.ats} for a well-formed test resume`);
   }
 
-  // 5. AI Job search
+  // 5. Live Search
   const t0 = Date.now();
   r = await call('POST', `${API}/api/career/jobsearch`, { token, body: { resume: 'all', role: '', level: '', country: COUNTRY, city: CITY, days: 0, remote: true, companies: '' } });
   if (r.status === 429 || /limit|allowance|plan|upgrade/i.test(apiError(r))) { res.status = 'blocked'; res.issues.push({ sev: 'info', msg: `Plan or token limit reached: ${apiError(r)}. Give the QA account a bigger plan.` }); return res; }
@@ -262,7 +262,7 @@ async function checkBrowser(session, shotsDir) {
       if (n !== 5) throw new Error(`expected 5 steps, found ${n}`);
       await shot('03-career');
     });
-    for (const [anchor, label] of [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match'], ['cr-jobs', 'Jobs & AI search']]) {
+    for (const [anchor, label] of [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match'], ['cr-jobs', 'Live Search']]) {
       await step(`Step "${label}" renders`, async () => {
         await page.click(`.cr-steps a[href="#${anchor}"]`);
         await page.waitForTimeout(600);
@@ -280,7 +280,7 @@ async function checkBrowser(session, shotsDir) {
       if (/undefined|\[object|NaN/.test(text)) throw new Error('the recommended jobs show a raw value');
       await shot('04-recommended');
     });
-    await step('AI Job search shows a form with a Search button', async () => {
+    await step('Live Search shows a form with a Search button', async () => {
       await page.click('.cr-steps a[href="#cr-jobs"]');
       await page.waitForTimeout(600);
       if (!(await page.getByRole('button', { name: /search|find/i }).first().isVisible())) throw new Error('no Search button');

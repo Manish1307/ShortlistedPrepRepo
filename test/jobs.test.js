@@ -1,5 +1,5 @@
 'use strict';
-// AI Job search: candidates pick a resume and say what to look for; live jobs are read from the companies' careers
+// Live Search: candidates pick a resume and say what to look for; live jobs are read from the companies' careers
 // boards (Greenhouse, Lever, SmartRecruiters, Ashby, Workday) and the admin's Master Prompt scores them with the AI.
 // A fake job board and a fake Gemini stand in for the real services.
 const test = require('node:test');
@@ -304,7 +304,7 @@ test('the Master Prompt can be changed and reset; the dashboard shows search sta
   });
 });
 
-test('AI Job search: live jobs from the built-in companies, filtered by country and scored into groups with the Master Prompt', async () => {
+test('Live Search: live jobs from the built-in companies, filtered by country and scored into groups with the Master Prompt', async () => {
   await withServer(async s => {
     const boss = await s.admin('boss@example.com');
     await boss.post('/admin/api/jobs/prompt', { prompt: 'CUSTOM MASTER PROMPT: act as a recruiter for Indian IT candidates and score every job.' });
@@ -366,7 +366,7 @@ test('AI Job search: live jobs from the built-in companies, filtered by country 
   });
 });
 
-test('AI Job search: companies typed by the candidate are found by name or careers link', async () => {
+test('Live Search: companies typed by the candidate are found by name or careers link', async () => {
   await withServer(async s => {
     s.addResume();
     const web = await s.site();
@@ -389,7 +389,7 @@ test('AI Job search: companies typed by the candidate are found by name or caree
   });
 });
 
-test('AI Job search: failures say why and are not counted; one search at a time', async () => {
+test('Live Search: failures say why and are not counted; one search at a time', async () => {
   await withServer(async s => {
     s.addResume();
     const web = await s.site();
@@ -620,7 +620,7 @@ test('the results can be narrowed to one company, still read a page at a time', 
   });
 });
 
-test('Sector: the candidate sets it in My account, the admin can set it, and AI Job search needs it', async () => {
+test('Sector: the candidate sets it in My account, the admin can set it, and Live Search needs it', async () => {
   await withServer(async s => {
     s.addResume();
     s.app.db.prepare("UPDATE customers SET sector = '' WHERE email = 'asha@example.com'").run();
@@ -647,7 +647,7 @@ test('Sector: the candidate sets it in My account, the admin can set it, and AI 
   });
 });
 
-test('AI Job search: steps are numbered, results appear while it runs, and the finished search keeps its timings', async tc => {
+test('Live Search: steps are numbered, results appear while it runs, and the finished search keeps its timings', async tc => {
   process.env.JOB_SCORE_PARALLEL = '1';   // one group after the other: the first group shows while the second is scored
   tc.after(() => { delete process.env.JOB_SCORE_PARALLEL; });
   await withServer(async s => {
@@ -680,7 +680,7 @@ test('AI Job search: steps are numbered, results appear while it runs, and the f
   });
 });
 
-test('AI Job search: when a later group cannot be scored, the jobs already scored are kept and the search still counts', async () => {
+test('Live Search: when a later group cannot be scored, the jobs already scored are kept and the search still counts', async () => {
   await withServer(async s => {
     s.addResume();
     s.ai.failScoringAfter(1);
@@ -693,7 +693,7 @@ test('AI Job search: when a later group cannot be scored, the jobs already score
   });
 });
 
-test('AI Job search: when the first group cannot be scored the search fails and is not counted', async () => {
+test('Live Search: when the first group cannot be scored the search fails and is not counted', async () => {
   await withServer(async s => {
     s.addResume();
     s.ai.failScoringAfter(0);
@@ -704,7 +704,7 @@ test('AI Job search: when the first group cannot be scored the search fails and 
   });
 });
 
-test('AI Job search: the groups of jobs are scored at the same time, or one by one when JOB_SCORE_PARALLEL is 1', async () => {
+test('Live Search: the groups of jobs are scored at the same time, or one by one when JOB_SCORE_PARALLEL is 1', async () => {
   await withServer(async s => {
     s.addResume();
     s.ai.slow(60);
@@ -726,7 +726,7 @@ test('AI Job search: the groups of jobs are scored at the same time, or one by o
   } finally { delete process.env.JOB_SCORE_PARALLEL; }
 });
 
-test('AI Job search: a company the AI names that no job board knows is not looked up again on the next search', async () => {
+test('Live Search: a company the AI names that no job board knows is not looked up again on the next search', async () => {
   await withServer(async s => {
     s.addResume();
     s.ai.nameEmployers(['Ghost Systems']);

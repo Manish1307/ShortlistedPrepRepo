@@ -1,7 +1,7 @@
 'use strict';
 // The public Jobs page (website: Jobs): everyone can browse the jobs the server already holds from career sites, with
 // filters, without signing in. Only what a job board shows is sent (title, company, place, date and the company's own
-// apply link): never the description. The live AI search and the recommendations from a resume need a sign-in (career.js,
+// apply link): never the description. The live Live Search and the recommendations from a resume need a sign-in (career.js,
 // jobs.js, recommended.js).
 
 const { ApiError, likeTerm } = require('./http');
@@ -16,7 +16,7 @@ const MAX_PAGES = 200;
 const FILTERS_FOR = 5 * 60000;
 const MAX_TEXT = 15000;   // characters of a job description sent to the page
 
-/** The employers of a sector (the same lists AI Job search uses by default), and every employer that is in some sector. */
+/** The employers of a sector (the same lists Live Search uses by default), and every employer that is in some sector. */
 const sectorNames = id => (id === 'it' ? CATALOGUE.map(c => c.name) : ((SECTORS.find(x => x.id === id) || {}).companies || [])).concat(INDIA_COMPANIES.filter(c => c.sector === id).map(c => c.name));
 const LISTED = [...new Set(SECTORS.filter(x => x.id !== 'other').flatMap(x => sectorNames(x.id)))];
 /** A job's date for ordering and "posted within": when it was posted, else when we first saw it; never later than now. */

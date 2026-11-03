@@ -235,7 +235,7 @@ function addRoutes(ctx) {
     };
   });
 
-  // the candidate's sector: required, and the one AI Job search uses
+  // the candidate's sector: required, and the one Live Search uses
   add('POST', '/api/account/profile', { public: true }, (req, res, { body }) => {
     const { customer } = customerOf(req);
     const sector = String(body.sector || '').trim();

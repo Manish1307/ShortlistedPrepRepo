@@ -237,7 +237,7 @@
     return form;
   }
 
-  /** The candidate's sector: required. It decides which employers AI Job search reads. */
+  /** The candidate's sector: required. It decides which employers Live Search reads. */
   function sectorForm(me) {
     var out = h('p', { class: 'form-result', role: 'status', 'aria-live': 'polite' });
     var sel = h('select', { name: 'sector', required: true, 'aria-label': 'Sector' },
@@ -289,7 +289,7 @@
     var p = e.plan;
     return h('div', {},
       h('div', { class: 'ac-lic-head' }, h('b', { style: 'font-size:18px' }, p.name), badge(p.free ? 'free' : 'active')),
-      h('p', { class: 'ac-muted', style: 'margin:4px 0 12px' }, p.free ? 'You are on the free plan. Upgrade for more AI job searches, Insight plans and a bigger daily AI allowance.'
+      h('p', { class: 'ac-muted', style: 'margin:4px 0 12px' }, p.free ? 'You are on the free plan. Upgrade for more Live Searches, Insight plans and a bigger daily AI allowance.'
         : 'Valid until ' + date(p.endsAt) + ' (' + plural(Math.max(0, daysLeft(p.endsAt) || 0), 'day') + ' left).'),
       p.dailyTokens ? h('p', { class: 'ac-muted', style: 'margin:0 0 10px' }, 'AI allowance: ' + p.dailyTokens.toLocaleString('en-IN') + ' tokens a day') : null,
       e.limits.map(function (l) {
@@ -508,7 +508,7 @@
     panels = {
       overview: h('div', { class: 'ac-panel' },
         c.sector ? null : h('section', { class: 'ac-card ac-need' }, tile('class', 'sun'), h('div', {}, h('b', {}, 'Choose your sector'),
-          h('p', { class: 'ac-muted' }, 'It is required. We use it to search the right employers for you in AI Job search.'),
+          h('p', { class: 'ac-muted' }, 'It is required. We use it to search the right employers for you in Live Search.'),
           h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { var f = document.getElementById('ac-sector-form'); if (f) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.sector.focus(); } } }, 'Choose now'))),
         h('div', { class: 'ac-stats' },
           stat('key', 'purple', active.length, active.length === 1 ? 'Active licence' : 'Active licences'),

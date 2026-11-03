@@ -151,7 +151,7 @@ body .ac-login, body .auth { background: var(--tint); }
 .or-line { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; color: var(--muted); font-size: 13px; }
 .or-line::before, .or-line::after { content: ""; flex: 1; height: 1px; background: var(--bd); }
 
-/* ---------- AI Job search: what shows while it runs ---------- */
+/* ---------- Live Search: what shows while it runs ---------- */
 .js-clock { margin-left: 12px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
 .js-eta { margin-top: 4px; }
 .js-live-steps { list-style: none; margin: 0 0 14px; padding: 0; }

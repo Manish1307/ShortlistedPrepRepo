@@ -1,5 +1,5 @@
 'use strict';
-// Well-known companies whose careers sites have a public job list (see jobsources.js). AI Job search uses them
+// Well-known companies whose careers sites have a public job list (see jobsources.js). Live Search uses them
 // when a candidate leaves "Companies" empty; candidates can also type any other company name or careers URL.
 
 const CATALOGUE = [
@@ -56,7 +56,7 @@ const CATALOGUE = [
 ]);
 
 /**
- * Employers outside IT, grouped by sector. The candidate picks a sector in AI Job search (or the AI picks it from the
+ * Employers outside IT, grouped by sector. The candidate picks a sector in Live Search (or the AI picks it from the
  * resume) and these are the career sites that are read; the IT list above is used only for the "it" sector.
  * country: India narrows a global Workday site to India with the site's own filter.
  */

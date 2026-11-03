@@ -1,5 +1,5 @@
 'use strict';
-// AI Job search (website: Career toolkit → step 5). The candidate picks one resume or all of them, and says where and
+// Live Search (website: Career toolkit → step 5). The candidate picks one resume or all of them, and says where and
 // what to look for: country, city, role, level and, optionally, the companies (names or careers URLs). The server
 // reads those companies' live openings from their own career sites (jobsources.js; a built-in list of well-known
 // companies when none are given), then the AI, guided by the admin's Master Prompt (dashboard → Jobs), works out the
@@ -500,7 +500,7 @@ function addRoutes(ctx) {
       require('./career').countUse(db, customerId);
       logActivity(db, customerId, 'jobsearch.done', `${jobs.length} matches: ${jobs.filter(j => j.bucket === 'high').length} high, ${jobs.filter(j => j.bucket === 'medium').length} medium, ${jobs.filter(j => j.bucket === 'stretch').length} low, in ${Math.round((Date.now() - startedAt) / 1000)} s ${JSON.stringify(timings)}`);
     } catch (err) {
-      if (!(err instanceof ApiError)) console.error('AI Job search failed:', err);
+      if (!(err instanceof ApiError)) console.error('Live Search failed:', err);
       const message = err instanceof ApiError ? err.message : 'Something went wrong with this search. Please try again.';
       try { db.prepare("UPDATE career_job_searches SET status = 'failed', progress = '', error = ?, finished_at = ? WHERE id = ?").run(message, now(), id); } catch (_) { /* database closed */ }
       logActivity(db, customerId, 'jobsearch.failed', message);
@@ -535,7 +535,7 @@ function addRoutes(ctx) {
     return { prompt: masterPrompt(db) };
   });
 
-  // ===================== website: Career toolkit → AI Job search =====================
+  // ===================== website: Career toolkit → Live Search =====================
   const me = req => signedInCustomer(db, req).customer;
   const searchRow = (id, customerId) => one('SELECT * FROM career_job_searches WHERE id = ? AND customer_id = ?', id, customerId);
 

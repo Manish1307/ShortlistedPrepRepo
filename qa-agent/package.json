@@ -1,7 +1,7 @@
 {
   "name": "shortlistprep-qa-agent",
   "private": true,
-  "description": "QA agent for the ShortlistPrep website, Career toolkit and AI Job search",
+  "description": "QA agent for the ShortlistPrep website, Career toolkit and Live Search",
   "scripts": {
     "start": "node agent.js",
     "quick": "LIMIT=3 node agent.js"

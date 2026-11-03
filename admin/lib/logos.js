@@ -1,5 +1,5 @@
 'use strict';
-// Company logos for AI Job search: GET /api/logo?domain=adobe.com&name=Adobe
+// Company logos for Live Search: GET /api/logo?domain=adobe.com&name=Adobe
 // Each icon service misses some companies (DuckDuckGo answers adobe.com with an empty reply, Google has no icon for
 // hcltech.com) and answers a miss with a placeholder picture the page cannot tell from a logo. So the server tries
 // the sources in turn and checks each answer is a real picture; a company with no icon anywhere gets a plain 404 and

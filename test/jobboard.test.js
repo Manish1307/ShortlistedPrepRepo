@@ -115,7 +115,7 @@ test('the website has a Jobs page in the menu, not hidden from search engines', 
   assert.match(layout, /<nav id="menu"[\s\S]*<a href="jobs\.html" data-page="jobs">Jobs<\/a>/);
   const page = fs.readFileSync(path.join(__dirname, '..', 'website', 'pages', 'jobs.html'), 'utf8');
   assert.ok(!/noindex/.test(page.split('\n')[0]), 'the Jobs page can be found by search engines');
-  for (const id of ['jb-form', 'jb-results', 'jb-pager', 'jb-ai-actions', 'jb-for-you', 'jb-lead']) assert.ok(page.includes(`id="${id}"`), id);
+  for (const id of ['jb-form', 'jb-results', 'jb-pager', 'jb-ai-actions', 'jb-for-you', 'jb-lead', 'tab-reco', 'tab-live', 'tab-latest', 'pane-reco', 'pane-live', 'pane-latest', 'jb-filter-toggle']) assert.ok(page.includes(`id="${id}"`), id);
 });
 
 test('browse: a job dated in the future is not put above the jobs of today', async () => {

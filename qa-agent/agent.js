@@ -47,7 +47,7 @@ async function call(method, url, { token, body, timeout = 60000 } = {}) {
 const apiError = r => (r.data && (r.data.error || r.data.message)) || `HTTP ${r.status}`;
 
 // ---------- 1. the public website ----------
-const PAGES = ['index.html', 'features.html', 'how-it-works.html', 'pricing.html', 'download.html', 'ats-checker.html', 'faq.html', 'login.html', 'signup.html', 'contact.html', 'trust.html', 'use-cases.html'];
+const PAGES = ['index.html', 'jobs.html', 'features.html', 'how-it-works.html', 'pricing.html', 'download.html', 'ats-checker.html', 'faq.html', 'login.html', 'signup.html', 'contact.html', 'trust.html', 'use-cases.html'];
 
 async function checkWebsite() {
   const results = [];

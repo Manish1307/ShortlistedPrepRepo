@@ -1,0 +1,35 @@
+/* Jobs page: browse the jobs we hold (everyone), recommendations (signed in), live AI search (signed in or a plan). */
+.jb-section { padding: 12px 0 56px; }
+.jb-h2 { margin: 30px 0 12px; font-size: 1.3rem; }
+.jb-ai { display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 18px 0 6px; }
+.jb-ai h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.jb-ai p { margin: 0; max-width: 62ch; }
+.jb-ai-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.jb-foryou { margin: 8px 0 8px; }
+.jb-foryou h2 { margin: 0 0 4px; font-size: 1.2rem; }
+.jb-foryou .muted { margin: 0 0 12px; }
+.jb-teaser { background: var(--tint); border: 1px dashed var(--bd); border-radius: 16px; padding: 16px 18px; display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.jb-teaser p { margin: 0; max-width: 62ch; }
+.jb-filters { display: grid; gap: 10px; grid-template-columns: 2fr 1fr 1fr 1.3fr; align-items: center; }
+.jb-filters input[type="search"], .jb-filters input[type="text"], .jb-filters select { width: 100%; padding: 11px 12px; border: 1.5px solid var(--bd); border-radius: 12px; font: inherit; background: var(--bg); color: var(--ink); min-width: 0; }
+.jb-check { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.jb-filters .btn { justify-self: start; }
+@media (max-width: 900px) { .jb-filters { grid-template-columns: 1fr 1fr; } .jb-filters input[type="search"] { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .jb-filters { grid-template-columns: 1fr; } }
+.jb-count { margin: 14px 0 8px; color: var(--body); font-weight: 600; }
+.jb-list { display: grid; gap: 10px; }
+.jb-row { display: grid; grid-template-columns: 44px 1fr auto; gap: 14px; align-items: center; background: var(--bg); border: 1px solid var(--bd); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow-s); }
+.jb-row .t { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.jb-row .m { color: var(--muted); font-size: .9rem; margin-top: 2px; }
+.jb-row .why { color: var(--body); font-size: .88rem; margin-top: 4px; }
+.jb-side { display: flex; gap: 10px; align-items: center; }
+.jb-score { display: inline-block; min-width: 2.2em; text-align: center; padding: 3px 9px; border-radius: 999px; font-weight: 800; font-size: .85rem; background: var(--sun-l); color: var(--warn); }
+.jb-score.good { background: var(--teal-l); color: var(--good); }
+.jb-score.low { background: var(--pink-l); color: #a1245c; }
+.jb-logo, .jb-initials { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; background: #fff; border: 1px solid var(--line); }
+.jb-initials { display: grid; place-items: center; font-weight: 800; color: var(--purple); background: var(--purple-l); }
+@media (max-width: 600px) { .jb-row { grid-template-columns: 40px 1fr; } .jb-side { grid-column: 1 / -1; justify-content: space-between; } }
+.jb-pager { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 16px 0 10px; }
+.jb-pager button { min-width: 38px; }
+.jb-pager .cur { background: var(--grad); color: #fff; border-color: transparent; }
+.jb-empty { padding: 22px; text-align: center; color: var(--muted); background: var(--tint); border-radius: 14px; }

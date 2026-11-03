@@ -1,0 +1,46 @@
+<!-- title: Jobs | description: Browse fresh jobs from top company career sites with filters, free. Sign in to see jobs picked from your resume and to run a live AI job search. -->
+<link rel="stylesheet" href="assets/jobs.css?v=1">
+<section class="page-head">
+  <div class="wrap">
+    <span class="eyebrow">Jobs</span>
+    <h1>Find your next job</h1>
+    <p class="lead" id="jb-lead">Browse jobs from company career sites. Free, no sign-in needed.</p>
+  </div>
+</section>
+
+<section class="jb-section">
+  <div class="wrap">
+    <div id="jb-for-you"></div>
+
+    <div class="jb-ai card" id="jb-ai">
+      <div>
+        <h2>🔎 Live AI job search</h2>
+        <p class="muted">Reads openings straight from company career sites right now, and the AI scores each one against your resume into high, medium and low-probability jobs. Pick the companies, country and role you want.</p>
+      </div>
+      <div class="jb-ai-actions" id="jb-ai-actions"></div>
+    </div>
+
+    <h2 class="jb-h2" id="jb-browse-title">Browse all jobs</h2>
+    <form id="jb-form" class="jb-filters" novalidate>
+      <input type="search" name="q" placeholder="Job title, skill or company" aria-label="Job title, skill or company" maxlength="120">
+      <select name="country" aria-label="Country"></select>
+      <input type="text" name="city" placeholder="City (optional)" aria-label="City" maxlength="80">
+      <select name="company" aria-label="Company"></select>
+      <select name="type" aria-label="Job type"></select>
+      <select name="days" aria-label="Posted within">
+        <option value="">Posted: any time</option><option value="7">Last 7 days</option><option value="14">Last 14 days</option><option value="30">Last 30 days</option>
+      </select>
+      <select name="sort" aria-label="Sort">
+        <option value="new">Newest first</option><option value="oldest">Oldest first</option>
+      </select>
+      <label class="jb-check"><input type="checkbox" name="remote" value="1"> Remote only</label>
+      <button class="btn btn-primary" type="submit">Search jobs</button>
+      <button class="btn" type="button" id="jb-reset">Clear</button>
+    </form>
+    <p id="jb-count" class="jb-count" role="status" aria-live="polite">Loading jobs…</p>
+    <div id="jb-results"></div>
+    <nav id="jb-pager" class="jb-pager" aria-label="Pages"></nav>
+    <p class="muted small">Every job opens on the company's own career page, where you apply. The list is refreshed regularly, so a job may have closed since: check on the company's site.</p>
+  </div>
+</section>
+<script src="assets/jobs.js?v=1"></script>

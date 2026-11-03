@@ -44,8 +44,8 @@
       h('div', 'bl-court-head', [h('span', '', 'Court ' + c.court + ' · ' + [m.round, m.kind].filter(Boolean).join(' · ')), h('span', '', 'Game ' + (m.current ? m.current.game : 1))]),
       h('div', 'bl-side', [who(m.teamA, m.playersA, m.serving === 'a'), h('span', 'bl-score', cur.a)]),
       h('div', 'bl-side', [who(m.teamB, m.playersB, m.serving === 'b'), h('span', 'bl-score', cur.b)]),
-      h('div', 'bl-muted bl-small', 'Games won: ' + m.gamesWonA + ' - ' + m.gamesWonB + ' (first to ' + $('bl-board').dataset.gtw + ')'),
-      gameLine(m),
+      $('bl-board').dataset.gtw === '1' ? null : h('div', 'bl-muted bl-small', 'Games won: ' + m.gamesWonA + ' - ' + m.gamesWonB + ' (first to ' + $('bl-board').dataset.gtw + ')'),
+      $('bl-board').dataset.gtw === '1' ? null : gameLine(m),
       c.next ? h('div', 'bl-muted bl-small', 'Next on this court: ' + c.next.teamA + ' vs ' + c.next.teamB) : null]);
   }
 
@@ -66,7 +66,7 @@
   function render(d) {
     var t = d.tournament;
     $('bl-title').textContent = t.name;
-    $('bl-sub').textContent = 'Live scores · first to ' + t.rules.pointsToWin + ' points, best of ' + (t.rules.gamesToWin * 2 - 1) + ' games';
+    $('bl-sub').textContent = 'Live scores · first to ' + t.rules.pointsToWin + ' points, ' + (t.rules.gamesToWin === 1 ? 'one game a match' : 'best of ' + (t.rules.gamesToWin * 2 - 1) + ' games');
     $('bl-board').dataset.gtw = t.rules.gamesToWin;
     var chip = $('bl-status');
     var live = d.live.length > 0;

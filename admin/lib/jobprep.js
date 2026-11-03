@@ -118,7 +118,7 @@ function learningLinks(query, provider) {
   return links;
 }
 
-const VERSION = 4;              // 2: matrix from the job description; 3: gaps, topics and questions from it too, never a guess; 4: 20 practice questions with answers
+const VERSION = 5;              // 5: the fit and each gap's points follow the skill matrix; 2: matrix from the job description; 3: gaps, topics and questions from it too, never a guess; 4: 20 practice questions with answers
 const MIN_DESCRIPTION = 300;    // characters: shorter is not a job description we can trust
 const MAX_DESCRIPTION = 15000;  // characters a candidate may paste
 const str = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
@@ -184,17 +184,17 @@ function skillMatrix(requirements, jd) {
  * The AI's answer, checked and with the links added. jd: the job description the AI was given ('' when the careers
  * site gave none); the skill matrix keeps only the requirements it states.
  */
-function cleanPrep(out, fit, jd) {
+function cleanPrep(out, fit, jd) {   // fit: the job's score from the search (replaced by the matrix score below)
   const matrix = jd ? skillMatrix(out.requirements, jd) : null;
   const text = flat(jd);
   // a gap must be a requirement of the matrix that the resume lacks or shows weakly; it takes that requirement's name
   const open = matrix ? matrix.rows.filter(r => r.status !== 'match') : [];
   const used = new Set();
   const gaps = (Array.isArray(out.gaps) ? out.gaps : []).slice(0, 10).map(g => {
-    let skill = str(g && g.skill, 80);
+    let skill = str(g && g.skill, 80), row = null;
     if (!skill) return null;
     if (jd) {
-      const row = open.find(r => sameSkill(r.skill, skill));
+      row = open.find(r => sameSkill(r.skill, skill));
       if (!row || used.has(row.skill)) return null;
       used.add(row.skill);
       skill = row.skill;
@@ -203,15 +203,19 @@ function cleanPrep(out, fit, jd) {
     const query = str(g.searchQuery, 100) || `${skill} tutorial`;
     const certification = str(g.certification, 80);
     return {
-      skill, points: Math.max(0, Math.min(50, Math.round(Number(g.points) || 0))),
+      // a gap is worth what its row of the matrix is missing, so closing every gap takes the fit to 100 (the AI's own number only when there is no row)
+      skill, points: Math.max(0, Math.min(50, Math.round(row ? row.missing : Number(g.points) || 0))),
       importance: ['high', 'medium', 'low'].includes(g.importance) ? g.importance : 'medium',
       why: str(g.why, 240), howToClose: str(g.howToClose, 300), hours: Math.max(0, Math.min(400, Math.round(Number(g.hours) || 0))),
       provider, links: learningLinks(query, provider),
       certification: certification ? { name: certification, url: google(`${certification} certification official`) } : null,
     };
   }).filter(Boolean).sort((a, b) => b.points - a.points);
+  // the job's whole description is a better source than the short text the search scored from: the fit follows the matrix
+  const searchFit = fit;
+  if (matrix) fit = matrix.score;
   return {
-    version: VERSION, fit, summary: str(out.summary, 300), matrix, description: jd ? 'full' : 'none',
+    version: VERSION, fit, searchFit, summary: str(out.summary, 300), matrix, description: jd ? 'full' : 'none',
     matched: list(out.matched, 20, 60).filter(m => !jd || mentions(text, m)), gaps,
     gapPoints: gaps.reduce((n, g) => n + g.points, 0),
     // topics to revise are things the job description talks about

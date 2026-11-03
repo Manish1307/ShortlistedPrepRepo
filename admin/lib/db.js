@@ -259,6 +259,9 @@ CREATE TABLE IF NOT EXISTS downloads (
 CREATE INDEX IF NOT EXISTS idx_downloads_tool ON downloads(tool, day);
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
 
+-- AI Job search: company names no job board answered to, so the same unknown names are not looked up again on every search.
+CREATE TABLE IF NOT EXISTS job_lookup_misses (key TEXT PRIMARY KEY, at TEXT NOT NULL);
+
 -- Badminton tournaments (private; see badminton.js). keyword: what the team types on the live page, always lower case.
 CREATE TABLE IF NOT EXISTS bd_tournaments (
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, keyword TEXT NOT NULL UNIQUE, venue TEXT NOT NULL DEFAULT '',

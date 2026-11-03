@@ -209,7 +209,11 @@ async function testInsight(searchId, token, job, note) {
     if (m.rows.length < 3) bad('warn', `Skill matrix has only ${m.rows.length} requirement(s)`);
     const w = m.rows.reduce((n, x) => n + x.weight, 0);
     if (Math.abs(w - 100) > 1) bad('warn', `Matrix weights add up to ${w}, not 100`);
-    if (typeof p.fit === 'number' && Math.abs(m.score - p.fit) > 25) bad('warn', `Matrix score ${m.score} is far from the search fit score ${p.fit}`);
+    // the Insight's fit is the matrix score; the search's first guess (searchFit) shows how well the search scoring is calibrated
+    const first = typeof p.searchFit === 'number' ? p.searchFit : p.fit;
+    if (typeof first === 'number' && Math.abs(m.score - first) > 25) bad('warn', `The search scored this job ${first}, but its full description gives ${m.score}`);
+    if (typeof p.fit === 'number' && p.fit !== m.score) bad('warn', `Insight fit ${p.fit} does not match its own matrix score ${m.score}`);
+    out.searchFit = first;
   }
   if (!out.gaps.length && m && m.counts && (m.counts.missing + m.counts.partial) > 0) bad('warn', 'The matrix shows missing skills but no gaps are listed');
   if (out.gaps.some(g => !g.howToClose)) bad('warn', 'Some gaps have no "how to close" advice');

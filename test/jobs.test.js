@@ -28,6 +28,7 @@ const ICON = Buffer.alloc(100, 7);   // a small picture
 /** A fake of the five job-board APIs. greenhouse.jobs can be changed between syncs. */
 async function fakeBoards() {
   const state = {
+    log: [],   // every path asked for
     greenhouse: [
       { id: 1, title: 'Senior .NET Developer', location: { name: 'Bengaluru, India' }, departments: [{ name: 'Engineering' }], first_published: daysAgo(1), absolute_url: 'https://boards.greenhouse.io/contoso/jobs/1', content: '&lt;p&gt;C#, ASP.NET Core, Azure&lt;/p&gt;' },
       { id: 2, title: 'Scrum Master', location: { name: 'Pune, India' }, first_published: daysAgo(10), absolute_url: 'https://boards.greenhouse.io/contoso/jobs/2', content: 'Agile, Jira' },
@@ -40,6 +41,7 @@ async function fakeBoards() {
     req.on('data', c => { raw += c; });
     req.on('end', () => {
       const u = new URL(req.url, 'http://x');
+      state.log.push(u.pathname);
       const send = body => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
       if (u.pathname === '/gh/contoso/jobs') return send({ jobs: state.greenhouse });
       if (u.pathname === '/gh/contoso/jobs/1') return send({ id: 1, content: FULL_JD });
@@ -119,7 +121,7 @@ async function fakeBoards() {
 /** Fake Gemini: the analysis step returns a profile; the scoring step scores every job id it is shown, plus one made-up id that must be ignored. */
 async function fakeGemini() {
   const seen = [];
-  let onlyMadeUp = false, delay = 0, scoringCalls = 0, failScoringAfter = Infinity, active = 0, maxActive = 0;
+  let namedEmployers = [], onlyMadeUp = false, delay = 0, scoringCalls = 0, failScoringAfter = Infinity, active = 0, maxActive = 0;
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', c => { raw += c; });
@@ -153,7 +155,7 @@ async function fakeGemini() {
           short: Array.from({ length: 11 }, (_, i) => ({ question: 'What is ' + i + '?', answer: 'It is ' + i })),
           scenario: Array.from({ length: 5 }, (_, i) => ({ question: 'Scenario ' + i, answer: 'Do ' + i })) };
       } else if (/This step only analyses the candidate/.test(system)) {
-        out = { level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
+        out = { employers: namedEmployers, level: 'Mid-level (6 years)', summary: 'Strong .NET engineer.', strengths: ['C#', 'Azure'], targetRoles: ['.NET Developer', 'Scrum Master'],
           searchTerms: ['.net', 'scrum master', 'backend engineer', 'qa engineer'], resumeFixes: ['Replace the [add number] markers'] };
       } else {
         if (++scoringCalls > failScoringAfter) { res.statusCode = 500; return res.end('{}'); }   // a later group of jobs cannot be scored
@@ -169,7 +171,7 @@ async function fakeGemini() {
   });
   });
   const base = await listen(server);
-  return { base, seen, scoringAtOnce: () => maxActive, madeUpOnly: v => { onlyMadeUp = v; }, failScoringAfter: n => { failScoringAfter = n; scoringCalls = 0; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
+  return { base, seen, nameEmployers: v => { namedEmployers = v; }, scoringAtOnce: () => maxActive, madeUpOnly: v => { onlyMadeUp = v; }, failScoringAfter: n => { failScoringAfter = n; scoringCalls = 0; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
 }
 
 async function start() {
@@ -442,8 +444,9 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     const prep = r.json.prep;
     // gaps are requirements of the matrix (named as in it), biggest first; "Presales & Account Mining" is not in the
     // description and Kubernetes' row was dropped, so neither is a gap
-    assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Azure DevOps', 9], ['Docker', 6]]);
-    assert.equal(prep.gapPoints, 15);
+    // a gap is worth what its row of the matrix is missing (Docker 18, Azure DevOps 13.5 rounded), so closing all of them reaches 100
+    assert.deepEqual(prep.gaps.map(g => [g.skill, g.points]), [['Docker', 18], ['Azure DevOps', 14]]);
+    assert.equal(prep.gapPoints, 32);
     assert.deepEqual(prep.matched, ['C#', '.NET']);                                          // "Presales and RFP writing" is not in the description
     assert.deepEqual(prep.revise.map(x => x.topic), ['C# and .NET']);                        // "Cloud migration and FinOps" is not either
     assert.match(s.ai.seen[calls].systemInstruction.parts[0].text, /no RFPs, presales/);
@@ -459,7 +462,7 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     assert.deepEqual([prep.matrix.checked, prep.matrix.dropped, prep.matrix.types], [true, 1, { technical: 3, functional: 1 }]);
     assert.equal(prep.matrix.rows.find(r => r.skill === 'Azure DevOps').quote, 'Hands-on  Azure DevOps pipelines.');   // found whatever the spacing
     assert.equal(prep.matrix.rows.find(r => r.skill === 'Docker').quote, '');                                         // not word for word: no quote shown
-    assert.deepEqual([prep.version, prep.description], [4, 'full']);
+    assert.deepEqual([prep.version, prep.description], [5, 'full']);
     // 20 practice questions: 5 multiple choice (4 options, a correct one), 10 short, 5 scenarios, each with an answer
     const byType = t => prep.interviewQuestions.filter(q => q.type === t);
     assert.deepEqual(['mcq', 'short', 'scenario'].map(t => byType(t).length), [5, 10, 5]);
@@ -468,19 +471,24 @@ test('Insight: the skill matrix from the job\'s whole description, gaps to a ful
     assert.equal(prep.matrix.rows.reduce((n, r) => n + r.weight, 0), 100);
     assert.equal(prep.matrix.score, 50);
     assert.deepEqual(prep.matrix.counts, { match: 1, partial: 1, missing: 2 });
-    assert.equal(prep.fit, job.score);
-    const ado = prep.gaps[0];
+    // the fit is the matrix score (from the whole description), not the search's guess from a short text; the job in the list follows it
+    assert.equal(prep.fit, 50);
+    assert.equal(prep.searchFit, job.score);
+    const listed = (await web.jobsOf(search)).find(j => j.id === job.id);
+    assert.deepEqual([listed.score, listed.bucket], [50, 'medium']);
+    assert.equal(prep.fit + prep.gapPoints, 82, 'the fit plus the gaps: Agile (nice to have, no gap) is the rest');
+    const ado = prep.gaps.find(g => g.skill === 'Azure DevOps');
     assert.equal(ado.links.find(l => l.kind === 'youtube').url, 'https://www.youtube.com/results?search_query=Azure%20DevOps%20pipelines%20tutorial');
     assert.match(ado.links.find(l => l.kind === 'udemy-free').url, /udemy\.com\/courses\/search\/\?q=Azure%20DevOps.*price-free/);
     assert.match(ado.links.find(l => l.kind === 'official').url, /^https:\/\/learn\.microsoft\.com\/en-us\/search\/\?terms=/);
     assert.equal(ado.certification.name, 'AZ-400');
-    assert.equal(prep.gaps[1].provider, 'other');                                          // an unknown provider is not trusted
+    assert.equal(prep.gaps.find(g => g.skill === 'Docker').provider, 'other');             // an unknown provider is not trusted
     assert.deepEqual(prep.revise[0].links.map(l => l.kind), ['youtube', 'articles']);
     assert.match(s.ai.seen[calls].contents[0].parts[0].text, /CURRENT FIT SCORE: \d+\/100/);
     // kept in its own table, for the dashboard
     const kept = s.app.db.prepare('SELECT * FROM career_job_preps WHERE search_id = ? AND job_id = ?').get(search.id, job.id);
-    assert.deepEqual([kept.job_title, kept.company, kept.fit], [job.title, job.company, job.score]);
-    assert.equal(JSON.parse(kept.prep_json).gapPoints, 15);
+    assert.deepEqual([kept.job_title, kept.company, kept.fit], [job.title, job.company, 50]);
+    assert.equal(JSON.parse(kept.prep_json).gapPoints, 32);
 
     // made once: opening it again uses no AI action
     const used = r.json.usage.used;
@@ -716,4 +724,24 @@ test('AI Job search: the groups of jobs are scored at the same time, or one by o
       assert.equal(s.ai.scoringAtOnce(), 1, 'one group at a time');
     });
   } finally { delete process.env.JOB_SCORE_PARALLEL; }
+});
+
+test('AI Job search: a company the AI names that no job board knows is not looked up again on the next search', async () => {
+  await withServer(async s => {
+    s.addResume();
+    s.ai.nameEmployers(['Ghost Systems']);
+    const web = await s.site();
+    const asked = () => s.boards.state.log.filter(p => /ghostsystems|ghost-systems|Ghost/i.test(p)).length;
+    const first = (await web.search({ country: 'India' })).json.search;
+    assert.equal(first.status, 'done');
+    const tried = asked();
+    assert.ok(tried > 0, 'the first search looked for it on the job boards');
+    assert.ok(s.app.db.prepare("SELECT 1 FROM job_lookup_misses WHERE key = 'ghostsystems'").get(), 'and remembered that it found nothing');
+    const second = (await web.search({ country: 'India' })).json.search;
+    assert.equal(second.status, 'done');
+    assert.equal(asked(), tried, 'the second search did not look again');
+    // a company the candidate types is always tried, whatever was remembered
+    await web.search({ country: 'India', companies: 'Ghost Systems' }).catch(() => {});
+    assert.ok(asked() > tried, 'a typed name is looked up again');
+  });
 });

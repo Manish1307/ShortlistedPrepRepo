@@ -21,6 +21,7 @@ const aiTokens = require('./tokens');
 
 const HOUR = 3600000, DAY = 24 * HOUR;
 const FRESH_FOR = 6 * HOUR;       // a company's jobs fetched within this time are used as they are
+const MISS_FOR = 3 * DAY;         // a company name no board answered to is not looked up again for this long (names the AI chose)
 const RETRY_FAILED = HOUR;        // a career site that failed is tried again after this
 const FETCH_BUDGET = 90000;       // a search waits at most this long for career sites (the rest keep loading)
 const PARALLEL = 8;               // career sites fetched at the same time
@@ -233,7 +234,7 @@ function addRoutes(ctx) {
   }
 
   /** A company name or careers URL → {row} or {error}. Unknown names are looked up on the job-board systems. */
-  async function resolve(entry) {
+  async function resolve(entry, { useMisses = false } = {}) {
     if (/^https?:\/\//i.test(entry) || /^[\w-]+(\.[\w-]+)+\//.test(entry)) {
       const board = sources.parseBoardUrl(/^https?:/i.test(entry) ? entry : 'https://' + entry);
       if (!board) return { name: entry, error: 'not-supported' };
@@ -244,6 +245,9 @@ function addRoutes(ctx) {
     if (known) return { name: entry, row: boardRow(known.name, catalogueBoard(known), known.url) };
     const cached = all('SELECT * FROM job_companies').find(c => norm(c.name) === key && !c.last_error && c.job_count > 0);
     if (cached) return { name: entry, row: boardRow(cached.name, { provider: cached.provider, board: cached.board, ...(parse(cached.extra) || {}) }, cached.careers_url) };
+    // a name that no board answered to a short while ago is not looked up again (only for names the AI chose: a company the candidate typed is always tried)
+    const missed = useMisses && one('SELECT at FROM job_lookup_misses WHERE key = ?', key);
+    if (missed && Date.now() - Date.parse(missed.at) < MISS_FOR) return { name: entry, error: 'not-found' };
     // try the name as a board on each system; the first that lists jobs wins
     const hyphen = entry.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const tries = [['greenhouse', key], ['lever', key], ['lever', hyphen], ['ashby', key], ['smartrecruiters', entry.replace(/[^A-Za-z0-9]/g, '')]]
@@ -251,7 +255,10 @@ function addRoutes(ctx) {
     const found = await Promise.all(tries.map(([provider, board]) =>
       sources.fetchJobs({ provider, board }, fetchOpts).then(list => (list.length ? { provider, board, list } : null), () => null)));
     const hit = found.find(Boolean);
-    if (!hit) return { name: entry, error: 'not-found' };
+    if (!hit) {
+      db.prepare('INSERT INTO job_lookup_misses (key, at) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET at = excluded.at').run(key, now());
+      return { name: entry, error: 'not-found' };
+    }
     const row = boardRow(entry.trim(), hit, CAREERS_URL[hit.provider](hit.board));
     await syncCompany(db, row, fetchOpts, hit.list);
     return { name: entry, row: one('SELECT * FROM job_companies WHERE id = ?', row.id) };
@@ -363,9 +370,9 @@ function addRoutes(ctx) {
       step(2, typed.length ? `Finding the career sites of ${typed.length} compan${typed.length === 1 ? 'y' : 'ies'}…` : `Finding employers${profile.field ? ' in ' + profile.field : ''}…`);
       const builtIn = () => catalogue.map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url), builtIn: true }));
       let resolved;
-      if (typed.length) resolved = await Promise.all(typed.map(resolve));
+      if (typed.length) resolved = await Promise.all(typed.map(n => resolve(n)));
       else {
-        const named = (await Promise.all(strings(a.employers, 20, 80).map(resolve))).filter(r => r.row);
+        const named = (await Promise.all(strings(a.employers, 20, 80).map(n => resolve(n, { useMisses: true })))).filter(r => r.row);
         // the sector the candidate picked, else the one the AI chose from the resume
         const sector = (p.sector !== 'other' && SECTORS.find(x => x.id === p.sector)) || SECTORS.find(x => x.id === (String(a.sector || '').trim() || 'it'));   // no sector given at all: the IT list, as before
         const all2 = catalogue.concat(sectorCompanies);
@@ -625,24 +632,31 @@ function addRoutes(ctx) {
         `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 15000)}`].filter(Boolean).join('\n'),
       maxTokens: 6000,
     });
-    // the 20 practice questions are a call of their own; if it fails the Insight is still made (without them)
+    // the 20 practice questions are a call of their own; tried twice, and if both fail the Insight is still made (without them)
     let questions = null;
-    try {
-      questions = await completeJson({ ...ai, meter: aiTokens.meter(db, c.id) }, {
-        system: jobprep.QUESTIONS_PROMPT,
-        user: [`JOB: ${job.title} at ${job.company}`, `JOB DESCRIPTION:\n${jd}`, `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 8000)}`].join('\n'),
-        maxTokens: 9000,
-      });
-    } catch (err) { console.error('Insight questions failed:', err && err.message); }
+    for (let attempt = 0; attempt < 2 && !questions; attempt++) {
+      try {
+        questions = await completeJson({ ...ai, meter: aiTokens.meter(db, c.id) }, {
+          system: jobprep.QUESTIONS_PROMPT,
+          user: [`JOB: ${job.title} at ${job.company}`, `JOB DESCRIPTION:\n${jd}`, `\nCANDIDATE RESUME (${resume.label}):\n${resume.text.slice(0, 8000)}`].join('\n'),
+          maxTokens: 9000,
+        });
+        if (!jobprep.cleanQuestions(questions).length) questions = null;   // an answer with no usable question counts as a failure
+      } catch (err) { console.error('Insight questions failed:', err && err.message); }
+    }
     const prep = jobprep.cleanPrep({ ...out, questions }, job.score, jd);
     if (pasted) prep.description = 'pasted';
     if (!prep.matrix) throw new ApiError(502, 'The AI could not match this job\'s requirements to its description this time. Please try again.', 'ai');
     // save it with the search (read again: another job may have been prepared meanwhile)
     const fresh = parse(one('SELECT result_json FROM career_job_searches WHERE id = ?', row.id).result_json);
     const target = fresh.jobs.find(j => j.id === job.id);
-    if (target) target.prep = prep;
+    if (target) {
+      target.prep = prep;
+      // the fit now comes from the job's whole description, so the job's score (and its group) in the list follows it
+      if (prep.fit !== target.score) { target.score = prep.fit; target.bucket = prep.fit >= 75 ? 'high' : prep.fit >= 50 ? 'medium' : 'stretch'; }
+    }
     db.prepare('UPDATE career_job_searches SET result_json = ? WHERE id = ?').run(JSON.stringify(fresh), row.id);
-    savePrep(c.id, row.id, job, prep);
+    savePrep(c.id, row.id, { ...job, score: prep.fit }, prep);
     require('./career').countUse(db, c.id);
     logActivity(db, c.id, 'jobprep.created', `${job.title} at ${job.company} · ${prep.gaps.length} gaps`);
     return { prep, usage: require('./career').usage(db, c.id) };

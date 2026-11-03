@@ -544,7 +544,7 @@
     var bodies = {
       gap: function () {
         return h('div', {},
-          p.matrix ? [h('p', { class: 'ac-muted pp-intro' }, 'Each requirement of this job against your resume. Click a row to see how to close that gap.'), matrixView(p.matrix, p.fit, toGap)]
+          p.matrix ? [h('p', { class: 'ac-muted pp-intro' }, 'Each requirement of this job against your resume. Click a row to see how to close that gap.' + (p.matrix.rows.length < 3 ? ' This job description names very few requirements, so treat the score as a rough guide.' : '')), matrixView(p.matrix, p.fit, toGap)]
             : noDescription());
       },
       skills: function () {

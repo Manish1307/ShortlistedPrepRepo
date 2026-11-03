@@ -14,6 +14,7 @@ const { signedInCustomer } = require('./accounts');
 const { completeJson, SCORING_MODELS } = require('./careerai');
 const sources = require('./jobsources');
 const { CATALOGUE, SECTOR_COMPANIES, SECTORS, SEARCH_ELSEWHERE, companyDomain } = require('./jobcatalogue');
+const { INDIA_COMPANIES } = require('./jobcatalogue-india');   // Indian employers found by scripts/probe-companies.js: found by name, never fetched unless asked for
 const { logActivity } = require('./activity');
 const jobprep = require('./jobprep');
 const aiTokens = require('./tokens');
@@ -203,7 +204,7 @@ function addRoutes(ctx) {
   const fetchOpts = { base: ctx.jobSourceBase || {} };
   const catalogue = ctx.jobCatalogue || CATALOGUE;
   const budget = ctx.jobFetchBudget || FETCH_BUDGET;
-  const sectorCompanies = ctx.jobSectorCompanies || SECTOR_COMPANIES;
+  const sectorCompanies = ctx.jobSectorCompanies || SECTOR_COMPANIES.concat(INDIA_COMPANIES);
 
   /** Keep a Prepare plan in career_job_preps (the dashboard reads it from there), replacing an older one for the same job. */
   function savePrep(customerId, searchId, job, prep) {

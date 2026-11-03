@@ -902,6 +902,61 @@
       h('p', { class: 'ac-muted js-small' }, 'Every job comes from the company\'s own careers site and was open when we searched. Openings close quickly, so apply to the high-probability ones soon.'));
   }
 
+  // ---------- Recommended jobs: the best matches among the jobs the server already holds (no AI, instant) ----------
+  var recoFilter = { country: 'India', city: '', days: '' };
+  function matchBadge(n) { return h('span', { class: 'ac-badge js-fit ' + (n >= 65 ? 'good' : n >= 45 ? 'warn' : 'bad'), title: 'How well the job fits your resume' }, String(n)); }
+  function recoBlock() {
+    var SHOW_FIRST = 10;
+    var list = [], shown = SHOW_FIRST, gen = cardGen;   // (the AI search card below owns the counter: a re-render makes this stale too)
+    var body = h('div', {}, h('p', { class: 'ac-muted' }, 'Finding jobs for your resume…'));
+    var country = h('input', { type: 'text', maxlength: '80', list: 'js-countries', placeholder: 'Country, e.g. India', 'aria-label': 'Country for recommended jobs', value: recoFilter.country });
+    var city = h('input', { type: 'text', maxlength: '80', placeholder: 'City (optional)', 'aria-label': 'City for recommended jobs', value: recoFilter.city });
+    var days = h('select', { 'aria-label': 'Posted within' }, [['', 'Posted: any time'], ['7', 'Posted: last 7 days'], ['14', 'Posted: last 14 days'], ['30', 'Posted: last 30 days']].map(function (o) { return h('option', { value: o[0] }, o[1]); }));
+    days.value = recoFilter.days;
+    var update = h('button', { class: 'btn btn-sm', type: 'button' }, 'Update');
+
+    function draw(d) {
+      list = d.recommended || [];
+      var held = Number(d.held || 0).toLocaleString();
+      var basis = d.basedOn && (d.basedOn.roles || []).length ? ' Based on your resume: ' + d.basedOn.roles.slice(0, 2).join(', ') + (d.basedOn.skills && d.basedOn.skills.length ? ' · ' + d.basedOn.skills.slice(0, 5).join(', ') : '') + '.' : '';
+      var info = h('p', { class: 'ac-muted rc-info' }, list.length ? 'Picked from ' + Number(d.considered || 0).toLocaleString() + ' jobs we already hold (' + held + ' in all). Instant and free: no AI is used.' + basis : (d.message || 'No recommended jobs yet.'));
+      if (!list.length) { body.replaceChildren(info); return; }
+      var rows = list.slice(0, shown).map(function (j, i) {
+        return h('tr', {},
+          h('td', { class: 'js-num', 'data-label': '#' }, String(i + 1)),
+          h('td', { 'data-label': 'Role' }, h('b', {}, j.title)),
+          h('td', { 'data-label': 'Company' }, companyCell(j)),
+          h('td', { 'data-label': 'Location' }, j.location || j.country || '—'),
+          h('td', { 'data-label': 'Posted', title: j.postedAt ? new Date(j.postedAt).toLocaleString() : '' }, ago(j.postedAt)),
+          h('td', { 'data-label': 'Match' }, matchBadge(j.score)),
+          h('td', { 'data-label': 'Why' }, h('div', { class: 'jb-reason' }, [j.role ? 'Fits your role: ' + j.role : '', j.skills && j.skills.length ? 'Skills in common: ' + j.skills.join(', ') : ''].filter(Boolean).join(' · '))),
+          h('td', { class: 'jb-open' }, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗')));
+      });
+      var more = list.length > shown ? h('button', { class: 'btn btn-sm', type: 'button', onclick: function () { shown += 10; draw(d); } }, 'Show more (' + (list.length - shown) + ' left)') : null;
+      body.replaceChildren(info, h('div', { class: 'jb-scroll' }, h('table', { class: 'jb-table js-table' },
+        h('thead', {}, h('tr', {}, ['#', 'Role', 'Company', 'Location', 'Posted', 'Match', 'Why', ''].map(function (t) { return h('th', {}, t); }))), h('tbody', {}, rows))), more);
+    }
+    function load() {
+      recoFilter = { country: country.value.trim(), city: city.value.trim(), days: days.value };
+      shown = SHOW_FIRST;
+      update.disabled = true;
+      body.replaceChildren(h('p', { class: 'ac-muted' }, 'Finding jobs for your resume…'));
+      call('GET', '/api/career/recommended?country=' + encodeURIComponent(recoFilter.country) + '&city=' + encodeURIComponent(recoFilter.city) + '&days=' + encodeURIComponent(recoFilter.days))
+        .then(function (d) { if (gen === cardGen) draw(d); })
+        .catch(function (e) { body.replaceChildren(h('p', { class: 'ac-muted' }, e.message)); })
+        .then(function () { update.disabled = false; });
+    }
+    update.addEventListener('click', load);
+    [country, city].forEach(function (el) { el.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); }); });
+    days.addEventListener('change', load);
+    setTimeout(load, 0);
+    return h('div', { class: 'rc-box' },
+      h('h3', { class: 'rc-title' }, '⭐ Recommended for you'),
+      h('div', { class: 'js-row actions rc-filters' }, h('div', { class: 'js-row two' }, country, city), days, update),
+      body,
+      h('p', { class: 'ac-muted rc-ai' }, 'Want a deeper match? Run an AI search below: it reads live openings from the companies you pick and scores each one against your resume.'));
+  }
+
   function jobsCard() {
     var f = searchForm;
     var status = h('div', { class: 'js-status', role: 'status', 'aria-live': 'polite' });
@@ -1031,9 +1086,10 @@
       }).catch(function (e) { showStatus(e.message, 'bad'); });
     }, 0);
 
-    return card('cr-jobs', 5, 'AI Job search',
-      'Tell us what you are looking for. We read live openings from the companies\' own career sites, and the AI matches each one to your resume and sorts them into high, medium and low-probability jobs.',
-      h('div', {}, !state.resume ? h('p', { class: 'ac-muted' }, 'Upload your resume first (step 1).') : null,
+    return card('cr-jobs', 5, 'Recommended jobs & AI search',
+      'Jobs picked for your resume from the ones we already hold, instantly. Or tell us what you are looking for: the AI reads live openings from the companies\' own career sites and sorts them into high, medium and low-probability jobs.',
+      h('div', {}, !state.resume ? h('p', { class: 'ac-muted' }, 'Upload your resume first (step 1).') : recoBlock(),
+        state.resume ? h('h3', { class: 'rc-title rc-ai-title' }, '🔎 Search with AI') : null,
         h('datalist', { id: 'js-countries' }, COUNTRIES.map(function (c) { return h('option', { value: c }); })),
         h('div', { class: 'js-form' },
           h('div', { class: 'js-row three' }, resumeSel, levelSel, sectorSel),
@@ -1044,7 +1100,7 @@
   }
 
   // ---------- one tab per step (the address keeps the step: career.html#cr-jobs) ----------
-  var STEPS = [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match & cover letter'], ['cr-jobs', 'AI Job search']];
+  var STEPS = [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match & cover letter'], ['cr-jobs', 'Jobs & AI search']];
   var activeStep = null;
   function stepIndex(id) { for (var i = 0; i < STEPS.length; i++) if (STEPS[i][0] === id) return i; return -1; }
   /** Where to start: the step in the address, else the first one not done yet. */

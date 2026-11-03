@@ -490,3 +490,13 @@
 .jb-pager { position: relative; }
 
 .cr-perfect { margin: 0 0 20px; padding: 14px 16px; border-radius: 14px; background: #e3f6ec; color: #08603f; font-weight: 700; }
+
+/* Recommended jobs (Career toolkit step 5) */
+.rc-box { margin-bottom: 26px; padding-bottom: 20px; border-bottom: 1px dashed var(--bd, #e7e1f5); }
+.rc-title { margin: 0 0 10px; font-size: 1.1rem; }
+.rc-ai-title { margin-top: 4px; }
+.rc-filters { margin-bottom: 8px; }
+.rc-filters input, .rc-filters select { padding: 9px 12px; font-size: 15px; }
+.rc-info { margin: 6px 0 10px; }
+.rc-ai { margin: 14px 0 0; }
+@media (max-width: 720px) { .rc-filters, .rc-filters .js-row.two { grid-template-columns: 1fr; } }

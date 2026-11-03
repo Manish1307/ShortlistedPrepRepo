@@ -22,6 +22,7 @@ const demos = require('./demos');
 const atscheck = require('./atscheck');
 const strength = require('./strength');
 const badminton = require('./badminton');
+const recommended = require('./recommended');
 const { ApiError, text, email, integer, likeTerm } = require('./http');
 
 const TOPICS = ['Support', 'Schools and teams', 'AI-included plan', 'Billing', 'Feedback'];
@@ -92,6 +93,7 @@ function buildRoutes(ctx) {
   interviewprep.addRoutes({ ...ctx, add, one, all });          // Virtual Interview: personalised questions from the candidate's resume
   logos.addRoutes({ ...ctx, add });                            // company logos next to the jobs
   candidates.addRoutes({ ...ctx, add, audit, one, all });      // Candidates: progress, documents and activity in the Career toolkit
+  recommended.addRoutes({ ...ctx, add, one, all });             // Recommended jobs: the best cached jobs for a resume, found without the AI
   badminton.addRoutes({ ...ctx, add, audit, one, all });        // Badminton tournaments: private; the team sees the live scores with a keyword
   aiTokens.addRoutes({ ...ctx, add, audit, one, all });
   pricing.addRoutes({ ...ctx, add, audit, one, all });          // Pricing: plans master, active plans, payment settings, plan orders          // AI tokens: daily allowance per customer, packs and requests for more

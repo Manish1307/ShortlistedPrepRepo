@@ -262,7 +262,7 @@ async function checkBrowser(session, shotsDir) {
       if (n !== 5) throw new Error(`expected 5 steps, found ${n}`);
       await shot('03-career');
     });
-    for (const [anchor, label] of [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match'], ['cr-jobs', 'AI Job search']]) {
+    for (const [anchor, label] of [['cr-resume', 'Upload resume'], ['cr-ats', 'ATS check'], ['cr-versions', 'Role-based resumes'], ['cr-match', 'Job match'], ['cr-jobs', 'Jobs & AI search']]) {
       await step(`Step "${label}" renders`, async () => {
         await page.click(`.cr-steps a[href="#${anchor}"]`);
         await page.waitForTimeout(600);
@@ -272,6 +272,14 @@ async function checkBrowser(session, shotsDir) {
         await shot('04-' + anchor);
       });
     }
+    await step('Recommended jobs show for the signed-in resume (or say why not)', async () => {
+      await page.click('.cr-steps a[href="#cr-jobs"]');
+      await page.waitForSelector('.rc-box', { timeout: 15000 });
+      await page.waitForFunction(() => !/Finding jobs for your resume/.test(document.querySelector('.rc-box').innerText), null, { timeout: 20000 });
+      const text = await page.locator('.rc-box').innerText();
+      if (/undefined|\[object|NaN/.test(text)) throw new Error('the recommended jobs show a raw value');
+      await shot('04-recommended');
+    });
     await step('AI Job search shows a form with a Search button', async () => {
       await page.click('.cr-steps a[href="#cr-jobs"]');
       await page.waitForTimeout(600);

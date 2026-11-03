@@ -153,23 +153,74 @@ async function testResume(s, session) {
   const cov = res.coverage;
   if (cov.failed && cov.failed.length > 5) note('warn', `${cov.failed.length} career sites failed to load`);
 
-  // relevance of the best 20 jobs: titles that fit the field, and titles from a different field (leaks)
-  const top = await call('GET', `${API}/api/career/jobsearch/${id}/jobs?bucket=all&page=1&size=20`, { token });
-  const list = top.ok ? top.data.jobs : [];
+  // every job of the search (all pages), so the report can list each one
+  const list = [];
+  for (let page = 1; page <= 10; page++) {
+    const g = await call('GET', `${API}/api/career/jobsearch/${id}/jobs?bucket=all&page=${page}&size=20`, { token });
+    if (!g.ok) { note('warn', `Could not read page ${page} of the results: ${apiError(g)}`); break; }
+    list.push(...g.data.jobs);
+    if (page >= g.data.pages) break;
+  }
+  res.allJobs = list.map(j => ({ id: j.id, title: j.title, company: j.company, location: j.location, score: j.score, bucket: j.bucket, why: j.why, gap: j.gap, url: j.url, resume: j.resume }));
   res.top = list.slice(0, 5).map(j => ({ title: j.title, company: j.company, score: j.score, bucket: j.bucket, url: j.url }));
   if (list.length) {
-    const fits = list.filter(j => s.field.test(j.title));
-    res.relevance = Math.round(100 * fits.length / list.length);
-    res.leaks = list.filter(j => s.off.test(j.title)).map(j => `${j.title} (${j.company}, score ${j.score})`);
-    if (res.relevance < 40) note('warn', `Only ${res.relevance}% of the top ${list.length} job titles look like ${s.title} work`);
-    if (res.leaks.length) note('warn', `${res.leaks.length} job(s) from another field in the top ${list.length}: ${res.leaks.slice(0, 3).join('; ')}`);
+    // relevance of the best 20 jobs: titles that fit the field, and titles from a different field (leaks)
+    const sample = list.slice(0, 20);
+    const fits = sample.filter(j => s.field.test(j.title));
+    res.relevance = Math.round(100 * fits.length / sample.length);
+    res.leaks = sample.filter(j => s.off.test(j.title)).map(j => `${j.title} (${j.company}, score ${j.score})`);
+    if (res.relevance < 40) note('warn', `Only ${res.relevance}% of the top ${sample.length} job titles look like ${s.title} work`);
+    if (res.leaks.length) note('warn', `${res.leaks.length} job(s) from another field in the top ${sample.length}: ${res.leaks.slice(0, 3).join('; ')}`);
     const noLink = list.filter(j => !/^https?:\/\//.test(j.url || '')).length;
     if (noLink) note('fail', `${noLink} job(s) have no apply link`);
     const noWhy = list.filter(j => !j.why).length;
     if (noWhy > list.length / 2) note('warn', 'Most jobs have no "why this fits" text');
   }
+
+  // Insight (the skill matrix and gaps) for the best jobs; each one is 2 AI calls and one Insight plan of the account
+  const wantInsight = process.env.INSIGHT === undefined ? 1 : Number(process.env.INSIGHT);
+  res.insights = [];
+  for (const j of [...list].sort((a, b) => b.score - a.score).slice(0, wantInsight > 0 ? wantInsight + 3 : 0)) {
+    if (res.insights.filter(x => x.ok).length >= wantInsight) break;
+    res.insights.push(await testInsight(id, token, j, note));
+    if (res.insights[res.insights.length - 1].blocked) break;
+  }
+  if (wantInsight > 0 && !res.insights.some(x => x.ok) && !res.insights.some(x => x.blocked)) note('fail', 'Insight did not work for any of the top jobs');
+
   await cleanup(id, token);   // keeps the QA account under its job-search quota
   return res;
+}
+
+/** The Insight button for one job: the skill matrix, the gaps, revision topics, plan and the 20 practice questions. */
+async function testInsight(searchId, token, job, note) {
+  const out = { job: { id: job.id, title: job.title, company: job.company, score: job.score, url: job.url }, ok: false, issues: [] };
+  const bad = (sev, msg) => { out.issues.push({ sev, msg }); if (sev === 'fail') out.failed = true; };
+  const r = await call('POST', `${API}/api/career/jobsearch/${searchId}/prep`, { token, body: { jobId: job.id }, timeout: 240000 });
+  out.seconds = Math.round(r.ms / 100) / 10;
+  if (r.status === 422) { out.skipped = 'The careers site gives no readable description for this job, so Insight asks for a pasted one (this is expected sometimes).'; return out; }
+  if (r.status === 429 || /limit|allowance|plan|upgrade/i.test(apiError(r))) { out.blocked = true; out.skipped = 'Plan or token limit: ' + apiError(r); return out; }
+  if (!r.ok) { bad('fail', `Insight request failed: ${apiError(r)}`); note('fail', `Insight for "${job.title}": ${apiError(r)}`); return out; }
+  const p = r.data.prep || {};
+  const m = p.matrix;
+  out.fit = p.fit; out.summary = p.summary; out.matrix = m; out.gaps = p.gaps || []; out.gapPoints = p.gapPoints; out.matched = p.matched || [];
+  out.revise = p.revise || []; out.plan = p.plan || []; out.tips = p.tips || []; out.questions = p.interviewQuestions || [];
+  if (!m || !m.rows || !m.rows.length) bad('fail', 'No skill matrix');
+  else {
+    if (m.rows.length < 3) bad('warn', `Skill matrix has only ${m.rows.length} requirement(s)`);
+    const w = m.rows.reduce((n, x) => n + x.weight, 0);
+    if (Math.abs(w - 100) > 1) bad('warn', `Matrix weights add up to ${w}, not 100`);
+    if (typeof p.fit === 'number' && Math.abs(m.score - p.fit) > 25) bad('warn', `Matrix score ${m.score} is far from the search fit score ${p.fit}`);
+  }
+  if (!out.gaps.length && m && m.counts && (m.counts.missing + m.counts.partial) > 0) bad('warn', 'The matrix shows missing skills but no gaps are listed');
+  if (out.gaps.some(g => !g.howToClose)) bad('warn', 'Some gaps have no "how to close" advice');
+  if (out.gaps.some(g => !(g.links || []).length)) bad('warn', 'Some gaps have no learning links');
+  if (!out.plan.length) bad('warn', 'No study plan');
+  if (out.questions.length < 20) bad('warn', `${out.questions.length} practice questions (expected 20)`);
+  if (out.questions.some(q => q.type === 'mcq' && (!q.options || q.options.length < 2))) bad('warn', 'A multiple-choice question has no options');
+  if (out.questions.some(q => !q.answer && q.type !== 'mcq')) bad('warn', 'Some practice questions have no answer');
+  for (const i of out.issues) note(i.sev, `Insight "${job.title}": ${i.msg}`);
+  out.ok = !out.failed;
+  return out;
 }
 const cleanup = (id, token) => call('POST', `${API}/api/career/jobsearch/${id}/delete`, { token });
 

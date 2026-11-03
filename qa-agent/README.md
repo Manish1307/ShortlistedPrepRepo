@@ -6,6 +6,8 @@ Signs in like a candidate and checks, in order:
 2. **Sign-in** and, with Playwright, the real login form, My account and **Career toolkit** (all 5 steps render, no console errors, mobile layout).
 3. **AI Job search with 20 resumes**: 10 IT / infrastructure / security variations (Java, data science, DevOps, security, QA, frontend, Android, data engineering, network admin, SAP) and 10 engineering branches (electronics, civil, mechanical, electrical, chemical, aerospace, biotech, instrumentation, automobile, production). For each: upload → ATS score → job search → checks the detected field, jobs found, high/medium split, how many top-20 titles fit the field, jobs from another field, apply links, time taken.
 
+For each resume it also lists **every job** (high / medium / low) and clicks **Insight** on the best job (`INSIGHT=1` by default, `INSIGHT=0` to skip, `INSIGHT=3` for three jobs): it checks the skill matrix (weights add to 100, requirements, your status), the gaps (points, how to close, links), the study plan and the 20 practice questions. Each Insight is 2 AI calls and uses one Insight plan of the QA account. Open a resume in the report to see the details.
+
 The result is `reports/<time>/report.html` (also `reports/latest.html`) with a **Feedback to incorporate** list at the top, plus `report.json` and screenshots.
 
 ## Run on your PC (local site)

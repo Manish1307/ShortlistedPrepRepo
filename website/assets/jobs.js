@@ -65,13 +65,40 @@
     img.addEventListener('error', function () { img.replaceWith(badge); });
     return img;
   }
+  /** "Show job details": the description is read from the server the first time it is opened, then kept on the page. */
+  function details(j) {
+    var panel = h('div', { class: 'jb-details', hidden: '' });
+    var btn = h('button', { class: 'jb-more', type: 'button', 'aria-expanded': 'false' }, 'Show job details ▾');
+    var loaded = false;
+    function show(d) {
+      var note = d.source === 'snippet' ? 'Only the start of the description is available here. Open the job on the company\'s site to read all of it.' : '';
+      panel.replaceChildren(
+        d.text ? h('div', { class: 'jb-jd' }, d.text) : h('p', { class: 'muted' }, 'The company has not published a readable description for this job here. Open it on the company\'s site.'),
+        note ? h('p', { class: 'muted small' }, note) : null,
+        d.truncated ? h('p', { class: 'muted small' }, 'This is the first part of the description.') : null,
+        h('p', {}, h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply on the company site ↗')));
+    }
+    function load() {
+      panel.replaceChildren(h('p', { class: 'muted' }, 'Loading the job details…'));
+      get('/api/jobs/' + j.id + '/description').then(function (d) { loaded = true; show(d); })
+        .catch(function (e) { panel.replaceChildren(h('p', { class: 'muted' }, e.status === 404 ? 'This job is no longer listed.' : e.message), h('p', {}, h('a', { class: 'btn btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open on the company site ↗'))); });
+    }
+    btn.addEventListener('click', function () {
+      var closed = panel.hasAttribute('hidden');
+      if (closed) { panel.removeAttribute('hidden'); btn.setAttribute('aria-expanded', 'true'); btn.textContent = 'Hide job details ▴'; if (!loaded) load(); }
+      else { panel.setAttribute('hidden', ''); btn.setAttribute('aria-expanded', 'false'); btn.textContent = 'Show job details ▾'; }
+    });
+    return { btn: btn, panel: panel };
+  }
   function row(j, extra) {
+    var more = details(j);
     var meta = [j.company, j.location || j.country, j.type, ago(j)].filter(Boolean).join(' · ');
     return h('div', { class: 'jb-row' }, [
       logo(j.company, j.domain),
-      h('div', {}, [h('div', { class: 't' }, j.title), h('div', { class: 'm' }, meta), extra || null]),
+      h('div', {}, [h('div', { class: 't' }, j.title), h('div', { class: 'm' }, meta), extra || null, h('div', {}, more.btn)]),
       h('div', { class: 'jb-side' }, [j.score !== undefined ? h('span', { class: 'jb-score ' + (j.score >= 65 ? 'good' : j.score < 45 ? 'low' : ''), title: 'How well the job fits your resume' }, String(j.score)) : null,
-        h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗')])]);
+        h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗')]),
+      more.panel]);
   }
 
   // ---------- the live AI search: members go to the toolkit, guests sign in or choose a plan ----------

@@ -37,6 +37,11 @@
 .jb-logo, .jb-initials { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; background: #fff; border: 1px solid var(--line); }
 .jb-initials { display: grid; place-items: center; font-weight: 800; color: var(--purple); background: var(--purple-l); }
 @media (max-width: 600px) { .jb-row { grid-template-columns: 40px 1fr; } .jb-side { grid-column: 1 / -1; justify-content: space-between; } }
+.jb-more { background: none; border: 0; padding: 4px 0; margin-top: 4px; font: inherit; font-weight: 700; color: var(--purple); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.jb-more:hover { color: var(--purple-d); }
+.jb-details { grid-column: 1 / -1; border-top: 1px dashed var(--bd); padding-top: 12px; }
+.jb-details[hidden] { display: none; }
+.jb-jd { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 30rem; overflow: auto; line-height: 1.6; font-size: .95rem; color: var(--body); background: var(--tint); border-radius: 12px; padding: 14px 16px; }
 .jb-pager { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 16px 0 10px; }
 .jb-pager button { min-width: 38px; }
 .jb-pager .cur { background: var(--grad); color: #fff; border-color: transparent; }

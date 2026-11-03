@@ -13,6 +13,7 @@ const { now, transaction } = require('./db');
 const { signedInCustomer } = require('./accounts');
 const { completeJson, SCORING_MODELS } = require('./careerai');
 const sources = require('./jobsources');
+const { descriptionOf } = require('./jobtext');
 const { CATALOGUE, SECTOR_COMPANIES, SECTORS, SEARCH_ELSEWHERE, companyDomain } = require('./jobcatalogue');
 const { INDIA_COMPANIES } = require('./jobcatalogue-india');   // Indian employers found by scripts/probe-companies.js: found by name, never fetched unless asked for
 const { logActivity } = require('./activity');
@@ -33,7 +34,6 @@ const KEEP_SEARCHES = 20;         // per candidate
 const BUCKETS = ['high', 'medium', 'stretch'];
 const MIN_SCORE = 20;             // a job scored below this is from another field: not shown
 const PAGE_SIZE = 5;              // jobs per page of a group on the website
-const DESCRIPTION_FRESH = 7 * DAY;  // a job's full description, read for Insight, is kept this long
 const DESCRIPTION_BUDGET = 25000;   // a search waits at most this long for the descriptions of the jobs it scores
 
 /** The part of a description that says what the job needs (from "Requirements", "Skills"… when there is such a heading), n characters. */
@@ -325,19 +325,7 @@ function addRoutes(ctx) {
    * A job's description for its Insight: the whole description from the job's own page on the careers board (kept a
    * week), else the start of it from the job list. '' when the careers site gives none.
    */
-  async function jobDescription(jobId) {
-    const j = one(`SELECT j.external_id, j.url, j.description, j.full_description, j.full_fetched_at, c.provider, c.board, c.extra
-                   FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE j.id = ?`, jobId);
-    if (!j) return '';
-    if (j.full_fetched_at && Date.now() - Date.parse(j.full_fetched_at) < DESCRIPTION_FRESH) return j.full_description || j.description || '';
-    let full = null;
-    try {
-      full = await sources.fetchDescription({ ...(parse(j.extra) || {}), provider: j.provider, board: j.board }, { externalId: j.external_id, url: j.url }, fetchOpts);
-    } catch (_) { full = null; }   // the board did not answer: use the start of the description we have
-    const text = full && full.length > String(j.description || '').length ? full : (j.description || '');
-    if (full != null) db.prepare('UPDATE jobs SET full_description = ?, full_fetched_at = ? WHERE id = ?').run(text, now(), jobId);
-    return text;
-  }
+  const jobDescription = jobId => descriptionOf(db, jobId, fetchOpts);
 
   /** The whole search, in the background. Errors are saved on the search; nothing is counted unless it succeeds. */
   async function runSearch(id, customerId, p, resumes) {

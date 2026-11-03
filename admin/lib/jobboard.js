@@ -7,12 +7,14 @@
 const { ApiError, likeTerm } = require('./http');
 const auth = require('./auth');
 const { companyDomain, CATALOGUE, SECTORS } = require('./jobcatalogue');
+const { descriptionOf } = require('./jobtext');
 const { INDIA_COMPANIES } = require('./jobcatalogue-india');
 
 const DAY = 86400000;
 const MAX_SIZE = 50;
 const MAX_PAGES = 200;
 const FILTERS_FOR = 5 * 60000;
+const MAX_TEXT = 15000;   // characters of a job description sent to the page
 
 /** The employers of a sector (the same lists AI Job search uses by default), and every employer that is in some sector. */
 const sectorNames = id => (id === 'it' ? CATALOGUE.map(c => c.name) : ((SECTORS.find(x => x.id === id) || {}).companies || [])).concat(INDIA_COMPANIES.filter(c => c.sector === id).map(c => c.name));
@@ -23,6 +25,8 @@ const WHEN = 'MIN(COALESCE(j.posted_at, j.first_seen), ?)';
 function addRoutes(ctx) {
   const { db, add, one, all } = ctx;
   const limiter = new auth.Limiter({ max: 120, windowMs: 60000 });   // per address: a person browsing, not a scraper
+  const readLimiter = new auth.Limiter({ max: 40, windowMs: 60000 });   // reading a description can ask the career site, so it is limited more
+  const fetchOpts = { base: ctx.jobSourceBase || {} };
   let filtersAt = 0, filtersData = null;
 
   // (a missing value is the fallback: Number(null) would be 0)
@@ -48,6 +52,25 @@ function addRoutes(ctx) {
       count: x.id === 'other' ? filtersData.total - sum(LISTED) : sum(sectorNames(x.id)) }));
     filtersAt = Date.now();
     return filtersData;
+  });
+
+  /**
+   * "Show job details": the description of one job, read from the company's own career page the first time (and kept for a
+   * week), else the start of it that the job list gave. Plain text. source: 'full', 'snippet' (only the start) or 'none'.
+   */
+  add('GET', '/api/jobs/:id/description', { public: true }, async (req, res, { params, ip }) => {
+    if (readLimiter.blocked(ip)) throw new ApiError(429, 'Too many requests. Please try again in a minute.');
+    readLimiter.hit(ip);
+    const id = Number(params.id);
+    const job = Number.isInteger(id) && one(`SELECT j.id, j.title, j.url, c.name AS company FROM jobs j JOIN job_companies c ON c.id = j.company_id
+                                                WHERE j.id = ? AND j.active = 1 AND c.enabled = 1`, id);
+    if (!job) throw new ApiError(404, 'This job is no longer listed.');
+    const text = String(await descriptionOf(db, id, fetchOpts) || '')
+      .replace(/&nbsp;|&#160;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&')   // entities some boards leave in
+      .replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();   // shown as plain text by the page, never as HTML
+    const row = one('SELECT description, full_description, full_fetched_at FROM jobs WHERE id = ?', id);
+    const full = !!(row && row.full_fetched_at && String(row.full_description || '').length > String(row.description || '').length);
+    return { id: job.id, title: job.title, company: job.company, url: job.url, text: text.slice(0, MAX_TEXT), truncated: text.length > MAX_TEXT, source: !text ? 'none' : full ? 'full' : 'snippet' };
   });
 
   /**

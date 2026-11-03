@@ -6,13 +6,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const http = require('http');
 const { createApp } = require('../admin/server');
 
 const listen = server => new Promise(r => server.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${server.address().port}`)));
 const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString();
 
-async function start() {
-  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-board-')) });
+async function start(options = {}) {
+  const app = createApp({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'cc-board-')), ...options });
   const base = await listen(app.server);
   const get = async url => { const r = await fetch(base + url); return { status: r.status, json: await r.json() }; };
   const co = (name, enabled = 1) => Number(app.db.prepare("INSERT INTO job_companies (name, careers_url, provider, board, enabled, created_at) VALUES (?,?,'greenhouse',?,?,datetime('now'))")
@@ -154,5 +155,81 @@ test('browse: a sector shows only the employers of that sector, and the filters 
     assert.equal(count('pharma'), 2);
     assert.equal(count('other'), f.total - 3, 'the rest');
     assert.deepEqual(f.sectors.map(x => x.id).sort(), ['agri', 'biotech', 'finance', 'fmcg', 'it', 'manufacturing', 'other', 'pharma']);
+  } finally { await s.close(); }
+});
+
+// ---------------------------------------------------------------- "Show job details"
+
+/** A fake Greenhouse: GET /gh/<board>/jobs/<id> answers with the job's page. */
+function fakeBoard(content) {
+  const hits = [];
+  const server = http.createServer((req, res) => {
+    hits.push(req.url);
+    res.setHeader('Content-Type', 'application/json');
+    if (/\/jobs\/[^/]+$/.test(req.url) && content !== null) return res.end(JSON.stringify({ content }));
+    res.statusCode = 404; res.end('{}');
+  });
+  return new Promise(r => server.listen(0, '127.0.0.1', () => r({ hits, base: 'http://127.0.0.1:' + server.address().port + '/gh', close: () => new Promise(x => { server.closeAllConnections(); server.close(x); }) })));
+}
+
+test('details: the whole description is read from the career page once, then kept', async () => {
+  const board = await fakeBoard('&lt;h2&gt;About the role&lt;/h2&gt;&lt;p&gt;Build payment services with Java and Kafka.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;5+ years of Java&lt;/li&gt;&lt;li&gt;Kafka&lt;/li&gt;&lt;/ul&gt;');
+  const s = await start({ jobSourceBase: { greenhouse: board.base } });
+  try {
+    s.put(s.acme, 'Payments Engineer', { description: 'Short start of the description.' });
+    const id = s.app.db.prepare("SELECT id FROM jobs WHERE title = 'Payments Engineer'").get().id;
+    const r = await s.get('/api/jobs/' + id + '/description');
+    assert.equal(r.status, 200);
+    assert.equal(r.json.source, 'full');
+    assert.match(r.json.text, /About the role/);
+    assert.match(r.json.text, /5\+ years of Java/);
+    assert.ok(!/<[a-z]/i.test(r.json.text), 'plain text, no tags');
+    assert.deepEqual([r.json.title, r.json.company, r.json.truncated], ['Payments Engineer', 'Acme', false]);
+    assert.match(r.json.url, /^https:\/\//);
+    assert.equal(board.hits.length, 1);
+    await board.close();   // the career site goes away: the kept copy still answers (and nothing is asked)
+    const again = await s.get('/api/jobs/' + id + '/description');
+    assert.equal(again.status, 200);
+    assert.equal(again.json.text, r.json.text);
+    assert.equal(again.json.source, 'full');
+    assert.equal(board.hits.length, 1, 'not asked again');
+  } finally { await s.close(); }
+});
+
+test('details: when the career site does not answer, the start of the description is shown; with none, say so', async () => {
+  const s = await start({ jobSourceBase: { greenhouse: 'http://127.0.0.1:9/gh' } });   // nothing listens there
+  try {
+    s.put(s.acme, 'Has A Start', { description: 'Only the start of the description.' });
+    s.put(s.acme, 'Has Nothing');
+    s.app.db.prepare("UPDATE jobs SET description = '' WHERE title = 'Has Nothing'").run();   // (put gives every job a default text)
+    const idOf = title => s.app.db.prepare('SELECT id FROM jobs WHERE title = ?').get(title).id;
+    const start1 = await s.get('/api/jobs/' + idOf('Has A Start') + '/description');
+    assert.deepEqual([start1.status, start1.json.source, start1.json.text], [200, 'snippet', 'Only the start of the description.']);
+    const none = await s.get('/api/jobs/' + idOf('Has Nothing') + '/description');
+    assert.deepEqual([none.status, none.json.source, none.json.text], [200, 'none', '']);
+  } finally { await s.close(); }
+});
+
+test('details: a closed job, a switched-off company and a made-up id are not found; long text is cut', async () => {
+  const s = await start({ jobSourceBase: { greenhouse: 'http://127.0.0.1:9/gh' } });
+  try {
+    const idOf = title => s.app.db.prepare('SELECT id FROM jobs WHERE title = ?').get(title).id;
+    assert.equal((await s.get('/api/jobs/' + idOf('Closed Java Role') + '/description')).status, 404);
+    assert.equal((await s.get('/api/jobs/' + idOf('Java Developer at a switched-off company') + '/description')).status, 404);
+    assert.equal((await s.get('/api/jobs/999999/description')).status, 404);
+    assert.equal((await s.get('/api/jobs/abc/description')).status, 404);
+    s.put(s.acme, 'Very Long', { description: 'x'.repeat(20000) });
+    const long = (await s.get('/api/jobs/' + idOf('Very Long') + '/description')).json;
+    assert.deepEqual([long.text.length, long.truncated], [15000, true]);
+  } finally { await s.close(); }
+});
+
+test('details: reading descriptions is limited per address', async () => {
+  const s = await start({ jobSourceBase: { greenhouse: 'http://127.0.0.1:9/gh' } });
+  try {
+    const id = s.app.db.prepare("SELECT id FROM jobs WHERE title = 'Staff Nurse'").get().id;
+    let last;
+    for (let i = 0; i < 45; i++) last = await s.get('/api/jobs/' + id + '/description');
+    assert.equal(last.status, 429);
   } finally { await s.close(); }
 });

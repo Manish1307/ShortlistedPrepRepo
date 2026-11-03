@@ -11,7 +11,9 @@ const UPSTREAM = {
   gemini: 'https://generativelanguage.googleapis.com/v1beta/models',
 };
 const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];   // tried in this order when one is busy
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+// scoring jobs against a profile is a simpler, repeated task than reading the resume: the fast model first, the others if it is busy
+const SCORING_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
+const GROQ_MODEL ='llama-3.3-70b-versatile';
 const MAX_OUTPUT = 32000;     // a reply cut off at its token limit is asked for again with up to this many tokens
 const WAIT_LIMIT = 15000;     // when a model is briefly over its rate, Gemini says "retry in Ns": wait at most this long, once
 
@@ -38,7 +40,7 @@ async function post(url, headers, body) {
  * Thinking for a JSON answer: a little. Gemini counts thinking tokens against maxOutputTokens, so with the model's own
  * (high) default a long answer is cut off before its JSON is finished. Gemini 3 models take a level, 2.5 a budget.
  */
-const thinkingFor = model => (/^gemini-2\.5/.test(model) ? { thinkingBudget: 1024 } : { thinkingLevel: 'low' });
+const thinkingFor = (model, level = 'low') => (/^gemini-2\.5/.test(model) ? { thinkingBudget: level === 'minimal' ? 128 : 1024 } : { thinkingLevel: level });
 /** How long a 429 asks us to wait ("retryDelay": "7s"), in ms, or null. */
 function retryDelay(json) {
   const info = ((json && json.error && json.error.details) || []).find(d => d && d.retryDelay);
@@ -53,11 +55,11 @@ const dailyQuota = json => /per ?day|PerDay/i.test(JSON.stringify((json && json.
  * refused key: go to Groq). A cut-off answer is asked for again with more room, a refused thinking option without it,
  * and a short rate limit after the wait Gemini asks for.
  */
-async function askGemini(base, key, { system, user, maxTokens }, model) {
+async function askGemini(base, key, { system, user, maxTokens, thinking: level }, model) {
   let limit = maxTokens, thinking = true, waited = false;
   for (let attempt = 0; attempt < 5; attempt++) {
     const generationConfig = { temperature: 0.3, maxOutputTokens: limit, responseMimeType: 'application/json' };
-    if (thinking) generationConfig.thinkingConfig = thinkingFor(model);
+    if (thinking) generationConfig.thinkingConfig = thinkingFor(model, level);
     const res = await post(`${base}/${model}:generateContent`, { 'x-goog-api-key': key }, {
       systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig,
     });
@@ -88,7 +90,7 @@ async function askGemini(base, key, { system, user, maxTokens }, model) {
  * Ask the AI for a JSON object. ctx: { db, vault, upstream?, meter? } (meter(tokens): the customer's AI tokens, tokens.js). Throws ApiError when no key is set up or the
  * service fails, with a message that can be shown to the customer. Why a call failed is written to the server log.
  */
-async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
+async function completeJson(ctx, { system, user, maxTokens = 6000, models = GEMINI_MODELS, thinking }) {
   const { db, vault } = ctx;
   const upstream = { ...UPSTREAM, ...(ctx.upstream || {}) };
   const gemini = defaultKey(db, 'gemini');
@@ -100,8 +102,8 @@ async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
 
   if (gemini) {
     const key = vault.decrypt(gemini.key_enc);
-    for (const model of GEMINI_MODELS) {
-      const r = await askGemini(upstream.gemini, key, { system, user, maxTokens }, model);
+    for (const model of models) {
+      const r = await askGemini(upstream.gemini, key, { system, user, maxTokens, thinking }, model);
       if (r.out) {
         db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(now(), gemini.id);
         spend(r.tokens, r.reply);
@@ -134,4 +136,4 @@ async function completeJson(ctx, { system, user, maxTokens = 6000 }) {
   throw new ApiError(502, busy ? 'The AI service is busy right now. Please try again in a minute.' : 'The AI service could not complete this. Please try again.', 'ai');
 }
 
-module.exports = { completeJson, parseJson, UPSTREAM };
+module.exports = { completeJson, parseJson, UPSTREAM, SCORING_MODELS };

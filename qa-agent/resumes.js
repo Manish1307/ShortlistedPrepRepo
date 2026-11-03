@@ -1,0 +1,110 @@
+'use strict';
+// Test resumes for the QA agent: 10 IT / infra / security skill variations and 10 engineering branches.
+// Each is generated from a few facts so the text looks like a real resume. TEST DATA only: the people are made up.
+//   field: words a relevant job title or the AI's detected field should contain (any one is enough)
+//   off:   words that mean a job is from another field (a "leak")
+
+const IT_OFF = /\b(civil|mechanical|nurse|chemical|site engineer|plant|pharmacist|teacher|accountant)\b/i;
+const ENG_OFF = /\b(software|developer|devops|front[- ]?end|back[- ]?end|full[- ]?stack|data scientist|machine learning|cloud engineer|qa automation)\b/i;
+
+const SPECS = [
+  // ---- IT, infrastructure and security ----
+  { id: 'it-java', group: 'IT', sector: 'it', name: 'Aarav Mehta', title: 'Java Backend Developer', years: 4, edu: 'B.Tech Computer Science, VIT Vellore, 2020',
+    skills: ['Java 17', 'Spring Boot', 'Hibernate', 'Microservices', 'Kafka', 'PostgreSQL', 'Docker', 'REST APIs', 'JUnit', 'AWS'],
+    work: ['Built payment microservices in Spring Boot handling 2 million requests a day', 'Cut API latency by 38% with Redis caching and query tuning', 'Led migration of a monolith to 12 Kafka-driven services'],
+    field: /java|backend|software|developer/i, off: IT_OFF },
+  { id: 'it-python-data', group: 'IT', sector: 'it', name: 'Diya Nair', title: 'Data Scientist', years: 3, edu: 'M.Sc Statistics, University of Pune, 2021',
+    skills: ['Python', 'Pandas', 'scikit-learn', 'TensorFlow', 'SQL', 'Power BI', 'NLP', 'Feature engineering', 'A/B testing', 'Airflow'],
+    work: ['Built a churn model that lifted retention by 11%', 'Deployed NLP ticket classifier with 92% accuracy', 'Automated weekly reporting with Airflow and Power BI'],
+    field: /data|machine learning|ml|analytics|ai|scientist/i, off: IT_OFF },
+  { id: 'it-devops', group: 'IT', sector: 'it', name: 'Rohan Iyer', title: 'DevOps Engineer', years: 5, edu: 'B.E. Information Technology, Anna University, 2019',
+    skills: ['AWS', 'Kubernetes', 'Terraform', 'Jenkins', 'GitHub Actions', 'Docker', 'Ansible', 'Prometheus', 'Grafana', 'Linux'],
+    work: ['Reduced deployment time from 45 to 6 minutes with CI/CD pipelines', 'Managed 3 EKS clusters with Terraform and Helm', 'Built monitoring and alerting that cut incident time by 40%'],
+    field: /devops|sre|site reliability|cloud|platform|infrastructure/i, off: IT_OFF },
+  { id: 'it-security', group: 'Security', sector: 'it', name: 'Kabir Sharma', title: 'Cyber Security Analyst', years: 4, edu: 'B.Tech Computer Science (Cyber Security), Amity University, 2020',
+    skills: ['SIEM (Splunk)', 'Incident response', 'Vulnerability assessment', 'Nessus', 'Burp Suite', 'OWASP Top 10', 'Firewalls', 'ISO 27001', 'Threat hunting', 'Python scripting'],
+    work: ['Triaged 300+ SOC alerts a week in Splunk with a 95% SLA', 'Ran penetration tests on 25 web applications', 'Led ISO 27001 audit preparation'],
+    field: /security|soc|cyber|threat|penetration|infosec|compliance/i, off: IT_OFF },
+  { id: 'it-qa', group: 'IT', sector: 'it', name: 'Sneha Reddy', title: 'QA Automation Engineer', years: 3, edu: 'B.Tech Information Technology, JNTU Hyderabad, 2021',
+    skills: ['Selenium', 'Cypress', 'Java', 'TestNG', 'Postman', 'REST Assured', 'Jenkins', 'JIRA', 'API testing', 'BDD Cucumber'],
+    work: ['Built a Selenium framework that automated 800 regression tests', 'Reduced release testing from 3 days to 6 hours', 'Added API test suites with REST Assured in the CI pipeline'],
+    field: /qa|test|quality|automation|sdet/i, off: IT_OFF },
+  { id: 'it-frontend', group: 'IT', sector: 'it', name: 'Ishaan Kapoor', title: 'Frontend Developer', years: 3, edu: 'B.Tech Computer Science, NIT Warangal, 2021',
+    skills: ['React', 'TypeScript', 'Next.js', 'Redux', 'HTML5', 'CSS3', 'Tailwind', 'Jest', 'Webpack', 'Web accessibility'],
+    work: ['Rebuilt a dashboard in React and cut load time by 45%', 'Created a reusable component library used by 6 teams', 'Raised Lighthouse performance score from 62 to 95'],
+    field: /front[- ]?end|react|ui|web|javascript|developer|software/i, off: IT_OFF },
+  { id: 'it-android', group: 'IT', sector: 'it', name: 'Meera Joshi', title: 'Android Developer', years: 4, edu: 'B.E. Computer Engineering, Mumbai University, 2020',
+    skills: ['Kotlin', 'Java', 'Android SDK', 'Jetpack Compose', 'MVVM', 'Room', 'Retrofit', 'Firebase', 'Coroutines', 'Play Store release'],
+    work: ['Shipped a banking app with 1M+ downloads and a 4.6 rating', 'Migrated screens to Jetpack Compose and cut crashes by 30%', 'Built offline sync with Room and WorkManager'],
+    field: /android|mobile|kotlin|app|developer|software/i, off: IT_OFF },
+  { id: 'it-data-eng', group: 'IT', sector: 'it', name: 'Vikram Singh', title: 'Data Engineer', years: 5, edu: 'B.Tech Computer Science, IIIT Hyderabad, 2019',
+    skills: ['Apache Spark', 'PySpark', 'Databricks', 'Snowflake', 'Airflow', 'Kafka', 'SQL', 'Python', 'Azure Data Factory', 'Data modelling'],
+    work: ['Built a Spark pipeline processing 4 TB a day on Databricks', 'Designed a Snowflake warehouse used by 200 analysts', 'Cut pipeline cost by 28% with partitioning and autoscaling'],
+    field: /data|etl|pipeline|analytics|engineer/i, off: IT_OFF },
+  { id: 'it-network', group: 'Infra', sector: 'it', name: 'Farhan Ali', title: 'Network and Systems Administrator', years: 6, edu: 'B.Sc IT, Delhi University, 2018; CCNA, RHCSA',
+    skills: ['Cisco routing and switching', 'Windows Server', 'Active Directory', 'Linux', 'VMware vSphere', 'Firewall (Fortinet)', 'VPN', 'DNS/DHCP', 'Backup (Veeam)', 'ITIL'],
+    work: ['Managed network for 4 offices and 600 users with 99.9% uptime', 'Migrated 40 servers to VMware with zero downtime', 'Set up Fortinet site-to-site VPN between branches'],
+    field: /network|system|infrastructure|administrator|sysadmin|it support|cloud/i, off: IT_OFF },
+  { id: 'it-sap', group: 'IT', sector: 'it', name: 'Pooja Desai', title: 'SAP Consultant', years: 7, edu: 'MBA Systems, Symbiosis, 2017; B.Com',
+    skills: ['SAP FICO', 'SAP S/4HANA', 'ABAP basics', 'Business process mapping', 'UAT', 'Data migration', 'Fiori', 'Stakeholder management', 'Agile', 'Documentation'],
+    work: ['Led S/4HANA finance rollout for a 2,000-user manufacturer', 'Mapped 60 business processes and ran UAT with 5 teams', 'Cut month-end close from 9 days to 5'],
+    field: /sap|erp|consultant|finance|functional|s\/4/i, off: IT_OFF },
+
+  // ---- engineering branches ----
+  { id: 'eng-electronics', group: 'Electronics', sector: 'manufacturing', name: 'Nikhil Rao', title: 'Electronics Design Engineer', years: 3, edu: 'B.E. Electronics and Communication, RV College of Engineering, 2021',
+    skills: ['Embedded C', 'ARM Cortex-M', 'PCB design (Altium)', 'Analog circuits', 'RTOS', 'I2C/SPI/UART', 'Oscilloscope and logic analyser', 'Power electronics', 'MATLAB', 'EMI/EMC'],
+    work: ['Designed a 4-layer PCB for a motor controller shipped in 20,000 units', 'Wrote firmware for STM32 with FreeRTOS', 'Reduced board cost by 14% by redesigning the power stage'],
+    field: /electronic|embedded|hardware|pcb|firmware|vlsi|design/i, off: ENG_OFF },
+  { id: 'eng-civil', group: 'Civil', sector: 'manufacturing', name: 'Suresh Patil', title: 'Civil Site Engineer', years: 5, edu: 'B.E. Civil Engineering, COEP Pune, 2019',
+    skills: ['AutoCAD', 'Revit', 'STAAD.Pro', 'Quantity surveying', 'Site supervision', 'Primavera P6', 'RCC design', 'IS codes', 'Billing and estimation', 'Quality control'],
+    work: ['Supervised construction of a 14-storey residential tower', 'Prepared BOQ and billing for a Rs 40 crore project', 'Cut material wastage by 9% with site planning'],
+    field: /civil|construction|site|structural|project|quantity/i, off: ENG_OFF },
+  { id: 'eng-mechanical', group: 'Mechanical', sector: 'manufacturing', name: 'Arjun Verma', title: 'Mechanical Design Engineer', years: 4, edu: 'B.Tech Mechanical Engineering, NIT Trichy, 2020',
+    skills: ['SolidWorks', 'CATIA', 'ANSYS', 'GD&T', 'Sheet metal design', 'Manufacturing processes', 'FMEA', 'Six Sigma Green Belt', 'CFD basics', 'BOM management'],
+    work: ['Designed a gearbox housing and cut weight by 12%', 'Ran FEA in ANSYS to validate a pressure vessel', 'Led a Six Sigma project that reduced rejections by 22%'],
+    field: /mechanical|design|cad|manufacturing|product|r&d|engineer/i, off: ENG_OFF },
+  { id: 'eng-electrical', group: 'Electrical', sector: 'manufacturing', name: 'Priya Menon', title: 'Electrical Engineer', years: 4, edu: 'B.Tech Electrical and Electronics, NIT Calicut, 2020',
+    skills: ['Power systems', 'PLC and SCADA', 'ETAP', 'Switchgear', 'Transformer testing', 'Motor control', 'AutoCAD Electrical', 'Load flow analysis', 'Protection relays', 'Substation commissioning'],
+    work: ['Commissioned a 33/11 kV substation', 'Cut downtime by 18% through preventive maintenance of switchgear', 'Prepared single-line diagrams and load calculations'],
+    field: /electrical|power|substation|plc|scada|maintenance|energy/i, off: ENG_OFF },
+  { id: 'eng-chemical', group: 'Chemical', sector: 'manufacturing', name: 'Rahul Gupta', title: 'Process Engineer', years: 3, edu: 'B.Tech Chemical Engineering, ICT Mumbai, 2021',
+    skills: ['Aspen HYSYS', 'P&ID', 'HAZOP', 'Mass and energy balance', 'Distillation', 'Heat exchangers', 'Process safety', 'Plant operations', 'GMP', 'Root cause analysis'],
+    work: ['Raised distillation yield by 6% through optimisation', 'Led HAZOP studies for a new reactor unit', 'Reduced steam consumption by 11%'],
+    field: /process|chemical|plant|production|operations|refinery/i, off: ENG_OFF },
+  { id: 'eng-aerospace', group: 'Aerospace', sector: 'manufacturing', name: 'Ananya Das', title: 'Aerospace Engineer', years: 2, edu: 'B.Tech Aerospace Engineering, IIT Madras, 2022',
+    skills: ['CATIA V5', 'ANSYS Fluent', 'Aerodynamics', 'Composite materials', 'MATLAB and Simulink', 'Flight dynamics', 'Structural analysis', 'GD&T', 'Systems engineering', 'Python'],
+    work: ['Ran CFD on a UAV wing and improved lift-to-drag by 8%', 'Designed a composite fuselage section in CATIA', 'Simulated flight control loops in Simulink'],
+    field: /aerospace|aviation|aircraft|aero|structur|design|mechanical/i, off: ENG_OFF },
+  { id: 'eng-biotech', group: 'Biotech', sector: 'biotech', name: 'Kavya Krishnan', title: 'Research Associate, Biotechnology', years: 3, edu: 'M.Tech Biotechnology, IIT Bombay, 2021',
+    skills: ['PCR and qPCR', 'Cell culture', 'ELISA', 'CRISPR basics', 'Protein purification', 'HPLC', 'Western blot', 'Lab documentation (GLP)', 'R for statistics', 'Assay development'],
+    work: ['Developed an ELISA assay with a 15% better detection limit', 'Maintained mammalian cell lines for 8 projects', 'Co-authored 2 peer-reviewed papers'],
+    field: /bio|research|lab|scientist|assay|life science|r&d/i, off: ENG_OFF },
+  { id: 'eng-instrumentation', group: 'Instrumentation', sector: 'manufacturing', name: 'Sanjay Kulkarni', title: 'Instrumentation and Control Engineer', years: 6, edu: 'B.E. Instrumentation Engineering, Pune University, 2018',
+    skills: ['DCS (Honeywell)', 'PLC (Siemens S7)', 'Calibration', 'Control valves', 'HART and Modbus', 'P&ID reading', 'Loop checking', 'SIL', 'Flow and pressure instruments', 'FAT/SAT'],
+    work: ['Commissioned control loops for a 600 TPD plant', 'Calibrated 300+ field instruments a quarter', 'Reduced process trips by 20% by retuning PID loops'],
+    field: /instrument|control|automation|plc|dcs|commissioning|maintenance/i, off: ENG_OFF },
+  { id: 'eng-automobile', group: 'Automobile', sector: 'manufacturing', name: 'Harsh Thakur', title: 'Automotive Engineer', years: 4, edu: 'B.Tech Automobile Engineering, VIT Chennai, 2020',
+    skills: ['Vehicle dynamics', 'CATIA', 'CAN protocol', 'EV powertrain basics', 'AUTOSAR basics', 'Homologation', 'DFMEA', 'Test rig setup', 'NVH', 'Supplier quality'],
+    work: ['Validated suspension changes that cut road noise by 3 dB', 'Ran EV battery pack thermal tests', 'Handled supplier PPAP for 15 parts'],
+    field: /automotive|vehicle|auto|ev|powertrain|mechanical|design|quality/i, off: ENG_OFF },
+  { id: 'eng-production', group: 'Industrial', sector: 'manufacturing', name: 'Neha Bhatt', title: 'Production and Industrial Engineer', years: 5, edu: 'B.E. Industrial and Production Engineering, SGSITS, 2019',
+    skills: ['Lean manufacturing', 'Kaizen', '5S', 'Line balancing', 'Time and motion study', 'SAP PP', 'OEE improvement', 'Supply chain basics', 'ISO 9001', 'Root cause analysis'],
+    work: ['Raised OEE from 68% to 81% on an assembly line', 'Cut changeover time by 35% with SMED', 'Led 20 kaizen events saving Rs 55 lakh a year'],
+    field: /production|manufacturing|industrial|lean|operations|quality|supply/i, off: ENG_OFF },
+];
+
+function buildText(s) {
+  return [
+    s.name.toUpperCase(), `${s.title} | ${s.years} years of experience | Bengaluru, India`,
+    `Email: ${s.name.toLowerCase().replace(/\s+/g, '.')}@example.com | Phone: +91 98765 43210`, '',
+    'PROFESSIONAL SUMMARY',
+    `${s.title} with ${s.years} years of hands-on experience delivering reliable results. Strong in ${s.skills.slice(0, 4).join(', ')}. Looking for a role that grows my skills in ${s.title.toLowerCase()} work.`, '',
+    'SKILLS', s.skills.join(', '), '',
+    'EXPERIENCE', `${s.title}, Example Technologies Pvt Ltd (${2024 - s.years} - Present)`, ...s.work.map(w => '- ' + w),
+    '- Worked with cross-functional teams to meet delivery deadlines and quality targets.', '',
+    'EDUCATION', s.edu, '',
+    'CERTIFICATIONS', `Professional certification in ${s.skills[0]}`,
+  ].join('\n');
+}
+
+module.exports = SPECS.map(s => ({ ...s, text: buildText(s), role: s.title }));

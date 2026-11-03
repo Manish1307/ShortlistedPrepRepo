@@ -1,0 +1,38 @@
+name: QA agent
+
+on:
+  schedule:
+    - cron: '30 2 * * *'      # every day, 08:00 India time
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Test only the first N resumes (empty = all 20)'
+        required: false
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install the agent and its browser
+        working-directory: qa-agent
+        run: npm install && npx playwright install --with-deps chromium
+      - name: Run the QA agent against the live site
+        working-directory: qa-agent
+        env:
+          SITE_URL: ${{ vars.QA_SITE_URL || 'https://shortlistprep.com' }}
+          API_URL: ${{ vars.QA_API_URL }}
+          QA_EMAIL: ${{ secrets.QA_EMAIL }}
+          QA_PASSWORD: ${{ secrets.QA_PASSWORD }}
+          LIMIT: ${{ github.event.inputs.limit }}
+        run: node agent.js
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: qa-agent/reports/
+          retention-days: 30

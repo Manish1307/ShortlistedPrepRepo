@@ -11,7 +11,7 @@
 const { ApiError, text, likeTerm } = require('./http');
 const { now, transaction } = require('./db');
 const { signedInCustomer } = require('./accounts');
-const { completeJson } = require('./careerai');
+const { completeJson, SCORING_MODELS } = require('./careerai');
 const sources = require('./jobsources');
 const { CATALOGUE, SECTOR_COMPANIES, SECTORS, SEARCH_ELSEWHERE, companyDomain } = require('./jobcatalogue');
 const { logActivity } = require('./activity');
@@ -451,7 +451,7 @@ function addRoutes(ctx) {
         const out = await completeJson({ ...ai, meter: aiTokens.meter(db, customerId) }, {
           system: prompt + '\n\n' + SCORING_RULES,
           user: `CANDIDATE'S SEARCH PREFERENCES:\n${wishes}\n\nCANDIDATE PROFILE: ${profile.level}. ${profile.summary}\n\nCANDIDATE RESUME(S) (labels: ${labels.join(' | ')}):\n${resumeBlock}\n\nJOB POSTINGS (one JSON object per line):\n${group.map(jobLine).join('\n')}`,
-          maxTokens: 12000,
+          maxTokens: 6000, models: SCORING_MODELS, thinking: 'minimal',   // a cut-off answer is asked for again with more room
         });
         const byId = new Map(group.map(j => [j.id, j]));
         const seen = new Set();

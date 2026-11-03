@@ -6,3 +6,6 @@ website/site/
 website/previews/
 website/designs/previews/
 dist/
+
+qa-agent/reports/
+qa-agent/node_modules/

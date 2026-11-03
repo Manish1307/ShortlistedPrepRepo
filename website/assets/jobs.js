@@ -81,9 +81,31 @@
     return { btn: btn, panel: panel };
   }
 
+  /**
+   * For a visitor who is not signed in, a locked fit score on each job: a click explains that the score is for members
+   * (free sign-up gives it, a plan adds the Live Search with AI scores, skill gaps and Insight).
+   */
+  function lockedScore() {
+    var panel = h('div', { class: 'jb-lockbox', hidden: '' }, [
+      h('p', {}, [h('b', {}, '🔒 Your fit score is for members. '), 'Sign in free, upload your resume, and we show how well you match this job and every job below.']),
+      h('p', { class: 'muted' }, 'Want the full picture? A plan adds Live Search (AI enabled): live openings scored against your resume, the skill gaps to close, and Insight with interview questions for each job.'),
+      h('p', { class: 'jb-ai-actions' }, [
+        h('a', { class: 'btn btn-primary btn-sm', href: 'signup.html?next=jobs.html%3Ftab%3Dreco' }, 'Start free'),
+        h('a', { class: 'btn btn-sm', href: 'login.html?next=jobs.html%3Ftab%3Dreco' }, 'Sign in'),
+        h('a', { class: 'btn btn-sm', href: 'pricing.html' }, 'See plans')])]);
+    var btn = h('button', { class: 'jb-lock', type: 'button', 'aria-expanded': 'false', title: 'Sign in to see your fit score for this job' }, '🔒 Fit score');
+    btn.addEventListener('click', function () {
+      var closed = panel.hasAttribute('hidden');
+      if (closed) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+      btn.setAttribute('aria-expanded', closed ? 'true' : 'false');
+    });
+    return { btn: btn, panel: panel };
+  }
+
   /** One job card: logo, title, company, place and date, tags, the details link, the match (recommended) and Apply. */
   function row(j, tags) {
     var more = details(j);
+    var lock = !member && j.score === undefined ? lockedScore() : null;
     var meta = [j.location || j.country ? '📍 ' + (j.location || j.country) : '', j.type ? '💼 ' + j.type : '', ago(j) ? '🕒 ' + ago(j) : ''].filter(Boolean);
     var chips = (tags || []).filter(Boolean);
     return h('div', { class: 'jb-row' }, [
@@ -96,8 +118,10 @@
         h('div', {}, more.btn)]),
       h('div', { class: 'jb-side' }, [
         j.score !== undefined ? h('span', { class: 'jb-score ' + (j.score >= 65 ? 'good' : j.score < 45 ? 'low' : ''), title: 'How well the job fits your resume' }, j.score + '% match') : null,
+        lock ? lock.btn : null,
         h('a', { class: 'btn btn-primary btn-sm', href: j.url, target: '_blank', rel: 'noopener noreferrer' }, 'Apply ↗')]),
-      more.panel]);
+      more.panel,
+      lock ? lock.panel : null]);
   }
 
   // ---------- the tabs ----------
@@ -147,8 +171,8 @@
     var box = $('jb-for-you');
     if (!member) {
       box.appendChild(h('div', { class: 'jb-teaser' }, [
-        h('p', {}, [h('b', {}, '⭐ Jobs picked from your resume. '), 'Create a free account, upload your resume, and we show the jobs that fit your role and skills first.']),
-        h('span', { class: 'jb-ai-actions' }, [h('a', { class: 'btn btn-primary btn-sm', href: 'signup.html?next=jobs.html%3Ftab%3Dreco' }, 'Start free'), h('a', { class: 'btn btn-sm', href: 'login.html?next=jobs.html%3Ftab%3Dreco' }, 'Sign in')])]));
+        h('p', {}, [h('b', {}, '🔒 Jobs picked from your resume, with your fit score. '), 'Create a free account, upload your resume, and we unlock your fit score and show the jobs that fit your role and skills first. A plan adds Live Search with AI scores, skill gaps and Insight.']),
+        h('span', { class: 'jb-ai-actions' }, [h('a', { class: 'btn btn-primary btn-sm', href: 'signup.html?next=jobs.html%3Ftab%3Dreco' }, 'Start free'), h('a', { class: 'btn btn-sm', href: 'login.html?next=jobs.html%3Ftab%3Dreco' }, 'Sign in'), h('a', { class: 'btn btn-sm', href: 'pricing.html' }, 'See plans')])]));
       return;
     }
     var list = h('div', { class: 'jb-list' }, h('p', { class: 'muted' }, 'Finding jobs for your resume…'));

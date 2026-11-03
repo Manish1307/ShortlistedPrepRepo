@@ -96,3 +96,12 @@
 .jb-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .jb-steps li { display: flex; gap: 10px; align-items: center; color: var(--body); }
 .jb-steps b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--purple-l); color: var(--purple); flex: 0 0 auto; }
+
+/* the locked fit score (visitors who are not signed in) */
+.jb-lock { background: var(--sun-l); color: var(--warn); border: 1.5px dashed #e3b04b; border-radius: 999px; padding: 4px 12px; font: inherit; font-weight: 800; font-size: .85rem; cursor: pointer; white-space: nowrap; }
+.jb-lock:hover, .jb-lock[aria-expanded="true"] { background: #ffe9a8; }
+.jb-lockbox { grid-column: 1 / -1; background: var(--sun-l); border: 1px dashed #e3b04b; border-radius: 12px; padding: 12px 16px; }
+.jb-lockbox[hidden] { display: none; }
+.jb-lockbox p { margin: 0 0 8px; color: var(--ink); }
+.jb-lockbox p.muted { color: var(--body); }
+.jb-lockbox p:last-child { margin-bottom: 0; }

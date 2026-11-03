@@ -23,7 +23,7 @@ const HOUR = 3600000, DAY = 24 * HOUR;
 const FRESH_FOR = 6 * HOUR;       // a company's jobs fetched within this time are used as they are
 const RETRY_FAILED = HOUR;        // a career site that failed is tried again after this
 const FETCH_BUDGET = 90000;       // a search waits at most this long for career sites (the rest keep loading)
-const PARALLEL = 6;               // career sites fetched at the same time
+const PARALLEL = 8;               // career sites fetched at the same time
 const AI_BATCH = 60;              // jobs the AI scores per search
 const scoreParallel = () => Math.max(1, Number(process.env.JOB_SCORE_PARALLEL) || 2);   // groups scored at the same time (free AI keys have rate limits: raise with a paid key; 1 = one after the other)
 const SCORE_GROUP = 30;           // scored in groups this size, so the first jobs appear while the rest are still being scored
@@ -202,7 +202,8 @@ function addRoutes(ctx) {
   const { db, add, audit, one, all } = ctx;
   const ai = { db, vault: ctx.vault, upstream: ctx.upstream };
   const fetchOpts = { base: ctx.jobSourceBase || {} };
-  const catalogue = ctx.jobCatalogue || CATALOGUE;
+  const indiaFor = sector => INDIA_COMPANIES.filter(c => c.sector === sector);
+  const catalogue = ctx.jobCatalogue || CATALOGUE.concat(indiaFor('it'));   // the IT sector's default list: the built-in firms and the Indian IT ones found by the probe
   const budget = ctx.jobFetchBudget || FETCH_BUDGET;
   const sectorCompanies = ctx.jobSectorCompanies || SECTOR_COMPANIES.concat(INDIA_COMPANIES);
 
@@ -369,7 +370,7 @@ function addRoutes(ctx) {
         const sector = (p.sector !== 'other' && SECTORS.find(x => x.id === p.sector)) || SECTORS.find(x => x.id === (String(a.sector || '').trim() || 'it'));   // no sector given at all: the IT list, as before
         const all2 = catalogue.concat(sectorCompanies);
         const fromSector = !sector ? [] : sector.companies === null ? builtIn()
-          : sector.companies.map(n => all2.find(c => c.name === n)).filter(Boolean).map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url) }));
+          : sector.companies.concat(indiaFor(sector.id).map(c => c.name)).map(n => all2.find(c => c.name === n)).filter(Boolean).map(c => ({ name: c.name, row: boardRow(c.name, catalogueBoard(c), c.url) }));
         resolved = [...fromSector, ...named];
       }
       const rows = [...new Map(resolved.filter(r => r.row).map(r => [r.row.id, r.row])).values()];

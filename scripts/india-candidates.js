@@ -20,4 +20,13 @@ const BY_SECTOR = {
   other: `Infosys, TCS, Wipro, HCLTech, Tech Mahindra, Cognizant India, IBM India, Oracle India, SAP India, Microsoft India, Google India, Amazon India, Apple India, Meta India, Adobe India, Intel India, AMD India, NVIDIA India, Cisco India, VMware India, Dell India, HP India, Lenovo India, Accenture India, Deloitte India, EY India, PwC India, McKinsey India, BCG India, Bain India, Kearney India, Oliver Wyman India, ZS India, Axtria, Beghou, Indegene, Sapient, Genpact India, Wells Fargo India, JPMorgan India, Goldman Sachs India, Morgan Stanley India, Citi India, Barclays India, Standard Chartered India, American Express India, Visa India, Mastercard India, PayPal India, Walmart Global Tech India, Target India, Lowe's India, Best Buy India, Home Depot India, Tesco India, Marks and Spencer India, Ikea India, Decathlon India, Nike India, Adidas India, Levi's India, Unilever India, P&G India, Nestle, Coca-Cola, PepsiCo, Mars India, Mondelez, Danone India, Reckitt India, Colgate-Palmolive India, Johnson and Johnson India, Abbott India, AstraZeneca India, GSK India, MSD India, Roche India, Novartis India, Sanofi India, Pfizer India, Bayer India, Syngenta, Corteva, Cargill, Shell India, BP India, ExxonMobil India, Schlumberger India, Halliburton India, Siemens India, ABB India, Bosch India, Honeywell India, GE India, 3M India, Caterpillar India, Cummins India, John Deere India, CNH India, AGCO India, Mahindra Tractors, TAFE, Sonalika, Escorts Tractors, VST Tillers, Kubota India, Yanmar India`,
 };
 
-module.exports = { BY_SECTOR };
+// Boards the probe found by a guessed name that belong to ANOTHER company (or hold only test postings), checked by reading a
+// job from each (2026-11-03). Left out of the list, also when the probe is run again.
+const WRONG_MATCH = ['Analog Devices India', 'Applied Materials India', 'Ashoka Buildcon', 'India Cements', 'India Post', 'Metropolis',
+  'Metropolis Healthcare', 'Novo Nordisk India', 'Parker Hannifin', 'Whatfix'];
+
+// The sector each verified company belongs to (the one it was listed under can be wrong, e.g. "provided"). 'it' ones are
+// searched by default for the IT sector; the others when a candidate picks that sector. Not listed here: 'it'.
+const SECTOR_OF = { 'Narayana Health': 'pharma', Veeva: 'pharma', Wabtec: 'manufacturing', Statiq: 'manufacturing', Mavenir: 'it', 'Parallel Wireless': 'it' };
+
+module.exports = { BY_SECTOR, WRONG_MATCH, SECTOR_OF };

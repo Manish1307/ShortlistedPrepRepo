@@ -6,12 +6,19 @@
 
 const { ApiError, likeTerm } = require('./http');
 const auth = require('./auth');
-const { companyDomain } = require('./jobcatalogue');
+const { companyDomain, CATALOGUE, SECTORS } = require('./jobcatalogue');
+const { INDIA_COMPANIES } = require('./jobcatalogue-india');
 
 const DAY = 86400000;
 const MAX_SIZE = 50;
 const MAX_PAGES = 200;
 const FILTERS_FOR = 5 * 60000;
+
+/** The employers of a sector (the same lists AI Job search uses by default), and every employer that is in some sector. */
+const sectorNames = id => (id === 'it' ? CATALOGUE.map(c => c.name) : ((SECTORS.find(x => x.id === id) || {}).companies || [])).concat(INDIA_COMPANIES.filter(c => c.sector === id).map(c => c.name));
+const LISTED = [...new Set(SECTORS.filter(x => x.id !== 'other').flatMap(x => sectorNames(x.id)))];
+/** A job's date for ordering and "posted within": when it was posted, else when we first saw it; never later than now. */
+const WHEN = 'MIN(COALESCE(j.posted_at, j.first_seen), ?)';
 
 function addRoutes(ctx) {
   const { db, add, one, all } = ctx;
@@ -35,6 +42,10 @@ function addRoutes(ctx) {
       companies: all(`SELECT c.name AS name, COUNT(*) AS n ${live} GROUP BY c.id ORDER BY n DESC, c.name LIMIT 150`).map(r => ({ name: r.name, count: r.n })),
       types: all(`SELECT j.employment_type AS name, COUNT(*) AS n ${live} AND j.employment_type <> '' GROUP BY j.employment_type ORDER BY n DESC LIMIT 12`).map(r => ({ name: r.name, count: r.n })),
     };
+    const perCompany = new Map(all(`SELECT c.name AS name, COUNT(*) AS n ${live} GROUP BY c.id`).map(r => [r.name, r.n]));
+    const sum = names => [...new Set(names)].reduce((n, name) => n + (perCompany.get(name) || 0), 0);
+    filtersData.sectors = SECTORS.map(x => ({ id: x.id, label: x.label,
+      count: x.id === 'other' ? filtersData.total - sum(LISTED) : sum(sectorNames(x.id)) }));
     filtersAt = Date.now();
     return filtersData;
   });
@@ -60,8 +71,14 @@ function addRoutes(ctx) {
     if (company) { where.push('c.name = ?'); params.push(company); }
     const type = String(query.get('type') || '').trim().slice(0, 40);
     if (type) { where.push('j.employment_type = ?'); params.push(type); }
+    const sector = String(query.get('sector') || '').trim();
+    if (sector && SECTORS.some(x => x.id === sector)) {
+      const names = sector === 'other' ? LISTED : sectorNames(sector);
+      if (names.length) { where.push(`c.name ${sector === 'other' ? 'NOT IN' : 'IN'} (${names.map(() => '?').join(',')})`); params.push(...names); }
+    }
+    const nowIso = new Date().toISOString();
     const days = [7, 14, 30].includes(Number(query.get('days'))) ? Number(query.get('days')) : 0;
-    if (days) { where.push('j.posted_at >= ?'); params.push(new Date(Date.now() - days * DAY).toISOString()); }
+    if (days) { where.push(`${WHEN} >= ?`); params.push(nowIso, new Date(Date.now() - days * DAY).toISOString()); }
     if (query.get('remote') === '1') where.push("(j.location LIKE '%remote%' OR j.country = 'Remote')");
 
     const from = `FROM jobs j JOIN job_companies c ON c.id = j.company_id WHERE ${where.join(' AND ')}`;
@@ -69,13 +86,13 @@ function addRoutes(ctx) {
     const total = one(`SELECT COUNT(*) AS n ${from}`, ...params).n;
     const pages = Math.max(1, Math.ceil(total / size));
     const page = intIn(query.get('page'), 1, Math.min(pages, MAX_PAGES), 1);
-    const order = query.get('sort') === 'oldest' ? 'j.posted_at IS NULL, j.posted_at ASC' : 'j.posted_at IS NULL, j.posted_at DESC';
-    const rows = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.employment_type, j.posted_at, j.url, c.name AS company, c.careers_url
-                      ${from} ORDER BY ${order}, j.id DESC LIMIT ? OFFSET ?`, ...params, size, (page - 1) * size);
+    const order = `${WHEN} ${query.get('sort') === 'oldest' ? 'ASC' : 'DESC'}`;   // the latest first
+    const rows = all(`SELECT j.id, j.title, j.location, j.country, j.department, j.employment_type, j.posted_at, j.first_seen, j.url, c.name AS company, c.careers_url
+                      ${from} ORDER BY ${order}, j.id DESC LIMIT ? OFFSET ?`, ...params, nowIso, size, (page - 1) * size);
     return {
       total, page, pages, size,
       jobs: rows.map(r => ({ id: r.id, title: r.title, company: r.company, location: r.location, country: r.country, department: r.department, type: r.employment_type,
-        postedAt: r.posted_at, url: r.url, domain: companyDomain(r.company, r.careers_url) })),
+        postedAt: r.posted_at, addedAt: r.first_seen, url: r.url, domain: companyDomain(r.company, r.careers_url) })),
     };
   });
 }

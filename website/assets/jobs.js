@@ -22,6 +22,19 @@
   }
   var member = !!session();
 
+  // ---------- the sector the visitor wants to explore (asked of a visitor who is not signed in) ----------
+  var SECTOR_KEY = 'sp_jobs_sector';   // the choice is kept in this browser; 'all' = every sector
+  var SHORT = { it: 'IT & software', agri: 'Agriculture', biotech: 'Biotech & research', pharma: 'Pharma & healthcare', fmcg: 'FMCG & food', manufacturing: 'Engineering & manufacturing', finance: 'Banking & finance', other: 'Other sectors' };
+  function stored() { try { return localStorage.getItem(SECTOR_KEY); } catch (e) { return null; } }
+  function keep(v) { try { localStorage.setItem(SECTOR_KEY, v); } catch (e) { /* private mode */ } }
+  var urlSector = new URLSearchParams(location.search).get('sector');
+  var sector = '';                                   // '' = all sectors
+  var chosen = false;                                // said what to explore (now, earlier in this browser, or in the address)
+  var pick = urlSector !== null ? urlSector : stored();
+  if (pick !== null && pick !== undefined && pick !== '') { chosen = true; sector = pick === 'all' ? '' : pick; }
+  var sectorList = [];
+  var memberSector = null, memberAsked = false;       // the candidate's own sector, from their profile
+
   function h(tag, attrs, children) {
     var e = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (k) { if (attrs[k] !== null && attrs[k] !== undefined && attrs[k] !== false) e.setAttribute(k, attrs[k]); });
@@ -38,11 +51,13 @@
       return r.json().then(function (d) { if (!r.ok) { var e = new Error(d.error || 'Something went wrong'); e.status = r.status; e.code = d.code; throw e; } return d; });
     });
   }
-  function ago(s) {
+  /** "Posted 3 days ago"; when the career site gives no date, the day we first saw the job ("Added 3 days ago"). */
+  function ago(j) {
+    var s = j.postedAt || j.addedAt, word = j.postedAt ? 'Posted' : 'Added';
     if (!s) return '';
     var d = Math.floor((Date.now() - Date.parse(s)) / 86400000);
     if (isNaN(d)) return '';
-    return d <= 0 ? 'Posted today' : d === 1 ? 'Posted yesterday' : d < 30 ? 'Posted ' + d + ' days ago' : 'Posted ' + new Date(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return d <= 0 ? word + ' today' : d === 1 ? word + ' yesterday' : d < 30 ? word + ' ' + d + ' days ago' : word + ' ' + new Date(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   }
   function logo(name, domain) {
     var badge = h('span', { class: 'jb-initials', 'aria-hidden': 'true' }, String(name || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase());
@@ -51,7 +66,7 @@
     return img;
   }
   function row(j, extra) {
-    var meta = [j.company, j.location || j.country, j.type, ago(j.postedAt)].filter(Boolean).join(' · ');
+    var meta = [j.company, j.location || j.country, j.type, ago(j)].filter(Boolean).join(' · ');
     return h('div', { class: 'jb-row' }, [
       logo(j.company, j.domain),
       h('div', {}, [h('div', { class: 't' }, j.title), h('div', { class: 'm' }, meta), extra || null]),
@@ -82,6 +97,7 @@
     var list = h('div', { class: 'jb-list' }, h('p', { class: 'muted' }, 'Finding jobs for your resume…'));
     box.appendChild(h('div', { class: 'jb-foryou' }, [h('h2', {}, '⭐ Recommended for you'), h('p', { class: 'muted', id: 'jb-fy-note' }, 'Picked from your resume among the jobs we hold. Instant and free.'), list]));
     get('/api/career/recommended?country=India', true).then(function (d) {
+      memberSector = d.sector || null; memberAsked = true; useMemberSector();
       var jobs = d.recommended || [];
       if (!jobs.length) {
         list.replaceChildren(h('div', { class: 'jb-empty' }, [d.message || 'No recommended jobs yet. ', ' ', h('a', { href: 'career.html#cr-jobs' }, 'Open the Career toolkit')]));
@@ -91,6 +107,7 @@
         return row(j, h('div', { class: 'why' }, [j.role ? 'Fits your role: ' + j.role : '', j.skills && j.skills.length ? 'Skills in common: ' + j.skills.slice(0, 4).join(', ') : ''].filter(Boolean).join(' · ')));
       }).concat([h('p', {}, h('a', { href: 'career.html#cr-jobs' }, 'See all ' + jobs.length + ' recommended jobs and change the filters →'))]));
     }).catch(function (e) {
+      memberAsked = true;
       if (e.code === 'no-resume') list.replaceChildren(h('div', { class: 'jb-empty' }, [h('a', { href: 'career.html#cr-resume' }, 'Upload your resume'), ' to see jobs picked for you.']));
       else if (e.status === 401) list.replaceChildren(h('div', { class: 'jb-empty' }, [h('a', { href: 'login.html?next=jobs.html' }, 'Sign in again'), ' to see jobs picked for you.']));
       else list.replaceChildren(h('div', { class: 'jb-empty' }, e.message));
@@ -99,6 +116,7 @@
 
   // ---------- browse all the jobs we hold ----------
   var FIELDS = ['q', 'country', 'city', 'company', 'type', 'days', 'sort'];
+  var sectorBox = $('jb-sector');
   var state = { page: 1 };
   var pager = $('jb-pager'), results = $('jb-results'), count = $('jb-count');
 
@@ -110,6 +128,7 @@
     var v = {};
     FIELDS.forEach(function (k) { v[k] = form.elements[k].value.trim(); });
     v.remote = form.elements.remote.checked ? '1' : '';
+    v.sector = sector;
     return v;
   }
   function queryOf(v, page) {
@@ -121,6 +140,12 @@
 
   function load(page) {
     state.page = page || 1;
+    if (!member && !chosen) {   // a visitor first says which sector to explore
+      count.textContent = '';
+      results.replaceChildren(h('div', { class: 'jb-ask' }, 'Choose a sector above to see its latest jobs.'));
+      pager.replaceChildren();
+      return;
+    }
     var v = readForm(), q = queryOf(v, state.page);
     history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : ''));
     count.textContent = 'Loading jobs…';
@@ -147,6 +172,30 @@
     pager.appendChild(btn('Next ›', page + 1, '', page >= pages));
   }
 
+  function drawSectors() {
+    var all = [h('button', { class: 'jb-chip', type: 'button', 'aria-pressed': chosen && !sector ? 'true' : 'false', 'data-sector': 'all' }, 'All sectors')]
+      .concat(sectorList.filter(function (x) { return x.count > 0; }).map(function (x) {
+        return h('button', { class: 'jb-chip', type: 'button', 'aria-pressed': sector === x.id ? 'true' : 'false', 'data-sector': x.id, title: x.label }, SHORT[x.id] || x.label);
+      }));
+    all.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-sector');
+        var first = !chosen;
+        sector = id === 'all' ? '' : id; chosen = true; keep(id);
+        drawSectors(); load(1);
+        if (first) $('jb-browse-title').scrollIntoView({ behavior: 'smooth', block: 'start' });   // the first choice shows its jobs
+      });
+    });
+    sectorBox.replaceChildren(h('h2', {}, chosen ? 'Sector' : 'Which sector do you want to explore?'),
+      h('p', { class: 'muted' }, chosen ? 'Showing the latest jobs first. Change the sector any time.' : 'Pick one and we show its latest jobs first. Choose "All sectors" to see everything.'),
+      h('div', { class: 'jb-chips', role: 'group', 'aria-label': 'Sector' }, all));
+  }
+  // a signed-in candidate's own sector is the starting point, unless they already chose one
+  function useMemberSector() {
+    if (!member || chosen || !memberAsked || !sectorList.length) return;
+    if (memberSector && sectorList.some(function (x) { return x.id === memberSector; })) { sector = memberSector; chosen = true; drawSectors(); load(1); }
+  }
+
   form.addEventListener('submit', function (e) { e.preventDefault(); load(1); });
   form.elements.remote.addEventListener('change', function () { load(1); });
   ['country', 'company', 'type', 'days', 'sort'].forEach(function (k) { form.elements[k].addEventListener('change', function () { load(1); }); });
@@ -162,10 +211,13 @@
     options(form.elements.country, 'Any country', f.countries);
     options(form.elements.company, 'Any company', f.companies);
     options(form.elements.type, 'Any job type', f.types);
-    $('jb-lead').textContent = f.total.toLocaleString() + ' jobs from ' + f.companyCount.toLocaleString() + ' companies' + (f.updatedAt ? ', updated ' + new Date(f.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '') + '. Browse free, no sign-in needed.';
+    sectorList = f.sectors || [];
+    drawSectors();
+    $('jb-lead').textContent = f.total.toLocaleString() + ' jobs from ' + f.companyCount.toLocaleString() + ' companies' + (f.updatedAt ? ', updated ' + new Date(f.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '') + '. The latest jobs come first. Browse free, no sign-in needed.';
     FIELDS.forEach(function (k) { if (params.get(k)) form.elements[k].value = params.get(k); });
     if (!params.has('country') && f.countries.some(function (c) { return c.name === 'India'; })) form.elements.country.value = 'India';
     form.elements.remote.checked = params.get('remote') === '1';
     load(Math.max(1, Number(params.get('page')) || 1));
+    useMemberSector();
   }).catch(function (e) { count.textContent = e.message; });
 })();

@@ -20,15 +20,15 @@ async function start() {
   const acme = co('Acme'), beta = co('Beta'), gone = co('Gone', 0);
   const n = { v: 0 };
   const put = (company, title, o = {}) => app.db.prepare(`INSERT INTO jobs (company_id, external_id, title, location, country, department, employment_type, posted_at, url, description, active, first_seen, last_seen)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))`).run(company, 'x' + (++n.v), title, o.location === undefined ? 'Bengaluru, India' : o.location, o.country === undefined ? 'India' : o.country,
-    o.department || '', o.type || 'Full time', o.postedAt === undefined ? daysAgo(2) : o.postedAt, 'https://jobs.example.com/' + n.v, o.description || 'SECRET DESCRIPTION TEXT', o.active === undefined ? 1 : o.active);
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))`).run(company, 'x' + (++n.v), title, o.location === undefined ? 'Bengaluru, India' : o.location, o.country === undefined ? 'India' : o.country,
+    o.department || '', o.type || 'Full time', o.postedAt === undefined ? daysAgo(2) : o.postedAt, 'https://jobs.example.com/' + n.v, o.description || 'SECRET DESCRIPTION TEXT', o.active === undefined ? 1 : o.active, o.firstSeen || daysAgo(30));
   put(acme, 'Java Backend Developer', { department: 'Engineering' });
-  put(acme, 'Staff Nurse', { department: 'Care', location: 'Pune, India' });
+  put(acme, 'Staff Nurse', { department: 'Care', location: 'Pune, India', postedAt: daysAgo(3) });
   put(beta, 'Senior Java Engineer', { location: 'Remote', country: 'India', postedAt: daysAgo(20), type: 'Contract' });
   put(beta, 'Java Developer', { location: 'Austin, TX', country: 'United States', postedAt: daysAgo(40) });
   put(beta, 'Closed Java Role', { active: 0 });
   put(gone, 'Java Developer at a switched-off company');
-  put(beta, 'Data Analyst', { postedAt: null });
+  put(beta, 'Data Analyst', { postedAt: null, firstSeen: daysAgo(1) });   // no posted date: the day we first saw it counts
   return { app, get, close: app.close, put, acme, beta };
 }
 
@@ -38,10 +38,11 @@ test('browse: anyone can list jobs without signing in, and the description is ne
     const r = await s.get('/api/jobs');
     assert.equal(r.status, 200);
     assert.equal(r.json.total, 5, 'closed jobs and jobs of a switched-off company are left out');
-    assert.deepEqual(Object.keys(r.json.jobs[0]).sort(), ['company', 'country', 'department', 'domain', 'id', 'location', 'postedAt', 'title', 'type', 'url']);
+    assert.deepEqual(Object.keys(r.json.jobs[0]).sort(), ['addedAt', 'company', 'country', 'department', 'domain', 'id', 'location', 'postedAt', 'title', 'type', 'url']);
     assert.ok(!JSON.stringify(r.json).includes('SECRET DESCRIPTION'));
     assert.deepEqual([r.json.page, r.json.pages, r.json.size], [1, 1, 20]);
-    assert.equal(r.json.jobs[r.json.jobs.length - 1].title, 'Data Analyst', 'newest first, jobs without a date last');
+    assert.deepEqual(r.json.jobs.map(j => j.title), ['Data Analyst', 'Java Backend Developer', 'Staff Nurse', 'Senior Java Engineer', 'Java Developer'],
+      'the latest first: a job with no posted date counts from the day it was first seen, so it is not pushed to the end');
     assert.match(r.json.jobs[0].url, /^https:\/\/jobs\.example\.com\//);
   } finally { await s.close(); }
 });
@@ -61,12 +62,12 @@ test('browse: every word of the search, the country, city, company, type, date, 
     assert.deepEqual(await titles('?city=pune'), ['Staff Nurse']);
     assert.deepEqual(await titles('?company=Acme'), ['Java Backend Developer', 'Staff Nurse']);
     assert.deepEqual(await titles('?type=Contract'), ['Senior Java Engineer']);
-    assert.deepEqual(await titles('?days=7'), ['Java Backend Developer', 'Staff Nurse']);
-    assert.deepEqual(await titles('?days=30'), ['Java Backend Developer', 'Senior Java Engineer', 'Staff Nurse']);
+    assert.deepEqual(await titles('?days=7'), ['Data Analyst', 'Java Backend Developer', 'Staff Nurse'], 'no posted date: first seen yesterday');
+    assert.deepEqual(await titles('?days=30'), ['Data Analyst', 'Java Backend Developer', 'Senior Java Engineer', 'Staff Nurse']);
     assert.deepEqual(await titles('?remote=1'), ['Senior Java Engineer']);
     assert.deepEqual(await titles('?q=java&country=India&days=30&company=Beta'), ['Senior Java Engineer'], 'filters work together');
     const oldest = (await s.get('/api/jobs?sort=oldest')).json.jobs.map(j => j.title);
-    assert.equal(oldest[0], 'Java Developer', 'the oldest dated job first');
+    assert.equal(oldest[0], 'Java Developer', 'the oldest first');
   } finally { await s.close(); }
 });
 
@@ -114,4 +115,44 @@ test('the website has a Jobs page in the menu, not hidden from search engines', 
   const page = fs.readFileSync(path.join(__dirname, '..', 'website', 'pages', 'jobs.html'), 'utf8');
   assert.ok(!/noindex/.test(page.split('\n')[0]), 'the Jobs page can be found by search engines');
   for (const id of ['jb-form', 'jb-results', 'jb-pager', 'jb-ai-actions', 'jb-for-you', 'jb-lead']) assert.ok(page.includes(`id="${id}"`), id);
+});
+
+test('browse: a job dated in the future is not put above the jobs of today', async () => {
+  const s = await start();
+  try {
+    s.put(s.acme, 'Future Dated Job', { postedAt: new Date(Date.now() + 30 * 86400000).toISOString(), firstSeen: daysAgo(0) });
+    const first = (await s.get('/api/jobs')).json.jobs.map(j => j.title);
+    assert.ok(first.indexOf('Future Dated Job') <= 1, 'treated as today, not as a month from now');
+    assert.equal(first[0] === 'Future Dated Job' || first[1] === 'Future Dated Job', true);
+    // and a job posted today comes before one posted yesterday even when both are in the future-capped range
+    s.put(s.acme, 'Posted Today', { postedAt: daysAgo(0) });
+    const again = (await s.get('/api/jobs?size=3')).json.jobs.map(j => j.title);
+    assert.ok(again.includes('Posted Today'));
+  } finally { await s.close(); }
+});
+
+test('browse: a sector shows only the employers of that sector, and the filters count them', async () => {
+  const s = await start();
+  try {
+    const co = name => Number(s.app.db.prepare("INSERT INTO job_companies (name, careers_url, provider, board, created_at) VALUES (?,?,'greenhouse',?,datetime('now'))").run(name, 'https://boards.greenhouse.io/' + name, name.toLowerCase()).lastInsertRowid);
+    const stripe = co('Stripe'), pfizer = co('Pfizer'), unknown = co('Zeta Unknown Co');
+    s.put(stripe, 'Payments Engineer');
+    s.put(pfizer, 'Clinical Research Associate');
+    s.put(pfizer, 'Quality Chemist');
+    s.put(unknown, 'Odd Job');
+    const titles = async q => (await s.get('/api/jobs' + q)).json.jobs.map(j => j.title).sort();
+    assert.deepEqual(await titles('?sector=it&q=engineer'), ['Payments Engineer'], 'Stripe is in the IT list');
+    assert.deepEqual(await titles('?sector=pharma'), ['Clinical Research Associate', 'Quality Chemist']);
+    assert.ok(!(await titles('?sector=pharma')).includes('Payments Engineer'));
+    const other = await titles('?sector=other');
+    assert.ok(other.includes('Odd Job') && other.includes('Data Analyst') && !other.includes('Payments Engineer') && !other.includes('Quality Chemist'), 'other: the employers in no sector list');
+    assert.equal((await s.get('/api/jobs?sector=nonsense')).json.total, (await s.get('/api/jobs')).json.total, 'an unknown sector is ignored');
+    assert.deepEqual(await titles('?sector=pharma&q=chemist'), ['Quality Chemist'], 'with the other filters');
+    const f = (await s.get('/api/jobs/filters')).json;
+    const count = id => f.sectors.find(x => x.id === id).count;
+    assert.equal(count('it'), 1);
+    assert.equal(count('pharma'), 2);
+    assert.equal(count('other'), f.total - 3, 'the rest');
+    assert.deepEqual(f.sectors.map(x => x.id).sort(), ['agri', 'biotech', 'finance', 'fmcg', 'it', 'manufacturing', 'other', 'pharma']);
+  } finally { await s.close(); }
 });

@@ -169,7 +169,8 @@ function addRoutes(ctx) {
 
     const key = [c.id, crypto.createHash('sha1').update(r.source_text).digest('hex').slice(0, 12), extra.join('|'), country, city, days].join('~');
     const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
+    const withSector = d => ({ ...d, sector: c.sector || '' });   // the candidate's sector (the Jobs page opens on it); not cached
+    if (hit && Date.now() - hit.at < CACHE_MS) return withSector(hit.data);
 
     const profile = profileOf(r.source_text, extra);
     const held = one('SELECT COUNT(*) AS n FROM jobs WHERE active = 1').n;
@@ -192,7 +193,7 @@ function addRoutes(ctx) {
     }
     if (cache.size > 500) cache.clear();
     cache.set(key, { at: Date.now(), data });
-    return data;
+    return withSector(data);
   });
 }
 

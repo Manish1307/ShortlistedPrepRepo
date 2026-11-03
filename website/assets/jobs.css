@@ -1,6 +1,14 @@
 /* Jobs page: browse the jobs we hold (everyone), recommendations (signed in), live AI search (signed in or a plan). */
 .jb-section { padding: 12px 0 56px; }
 .jb-h2 { margin: 30px 0 12px; font-size: 1.3rem; }
+.jb-sector { margin: 16px 0 6px; }
+.jb-sector h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.jb-sector p { margin: 0 0 12px; }
+.jb-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.jb-chip { border: 1.5px solid var(--bd); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+.jb-chip:hover { border-color: var(--purple); }
+.jb-chip[aria-pressed="true"] { background: var(--grad); color: #fff; border-color: transparent; }
+.jb-ask { padding: 26px; text-align: center; color: var(--body); background: var(--tint); border-radius: 14px; font-weight: 600; }
 .jb-ai { display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 18px 0 6px; }
 .jb-ai h2 { margin: 0 0 4px; font-size: 1.15rem; }
 .jb-ai p { margin: 0; max-width: 62ch; }

@@ -78,7 +78,7 @@ async function probe({ name }) {
       else if (done % 50 === 0) console.log(`[${done}/${todo.length}] ...`);
     }
   };
-  await Promise.all(Array.from({ length: 16 }, worker));
+  await Promise.all(Array.from({ length: Number(process.env.PROBE_WORKERS) || 40 }, worker));
   hits.sort((a, b) => a.name.localeCompare(b.name));
   console.log(`\n${hits.length} of ${todo.length} candidates have a readable board`);
   if (limit) return;

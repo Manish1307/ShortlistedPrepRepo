@@ -24,6 +24,7 @@ const RETRY_FAILED = HOUR;        // a career site that failed is tried again af
 const FETCH_BUDGET = 90000;       // a search waits at most this long for career sites (the rest keep loading)
 const PARALLEL = 6;               // career sites fetched at the same time
 const AI_BATCH = 60;              // jobs the AI scores per search
+const scoreParallel = () => Math.max(1, Number(process.env.JOB_SCORE_PARALLEL) || 2);   // groups scored at the same time (free AI keys have rate limits: raise with a paid key; 1 = one after the other)
 const SCORE_GROUP = 30;           // scored in groups this size, so the first jobs appear while the rest are still being scored
 const MAX_COMPANIES = 30;         // typed by the candidate
 const KEEP_SEARCHES = 20;         // per candidate
@@ -465,20 +466,28 @@ function addRoutes(ctx) {
         }).filter(j => j.score >= MIN_SCORE);
       };
       const jobs = [];
-      let limited = false;
-      for (let i = 0; i < batch.length; i += SCORE_GROUP) {
-        const to = Math.min(batch.length, i + SCORE_GROUP);
-        step(5, batch.length > SCORE_GROUP ? `Scoring jobs ${i + 1} to ${to} of ${batch.length} against your resume…` : `Scoring the ${batch.length} most relevant of ${pool.length.toLocaleString('en-IN')} live jobs against your resume…`);
-        try { jobs.push(...await scoreGroup(batch.slice(i, to))); }
-        catch (err) {
-          if (!jobs.length || !(err instanceof ApiError)) throw err;
-          limited = true;   // a later group failed: keep the jobs already scored, and say so
-          break;
+      let limited = false, failure = null, scored = 0, nextGroup = 0;
+      const groups = [];
+      for (let i = 0; i < batch.length; i += SCORE_GROUP) groups.push(batch.slice(i, i + SCORE_GROUP));
+      step(5, groups.length > 1 ? `Scoring ${batch.length} jobs against your resume…` : `Scoring the ${batch.length} most relevant of ${pool.length.toLocaleString('en-IN')} live jobs against your resume…`);
+      // scoreParallel() groups are scored at the same time (the search takes about as long as its slowest group); each is saved as it finishes
+      const worker = async () => {
+        while (!failure && nextGroup < groups.length) {
+          const group = groups[nextGroup++];
+          try { jobs.push(...await scoreGroup(group)); }
+          catch (err) { failure = failure || err; return; }
+          jobs.sort((x, y) => y.score - x.score);
+          scored += group.length;
+          partial.jobs = jobs;
+          partial.coverage.scored = scored;
+          savePartial();
+          if (groups.length > 1 && scored < batch.length) step(5, `Scoring jobs against your resume: ${scored} of ${batch.length} done…`);
         }
-        jobs.sort((x, y) => y.score - x.score);
-        partial.jobs = jobs;
-        partial.coverage.scored = to;
-        savePartial();
+      };
+      await Promise.all(Array.from({ length: Math.min(scoreParallel(), groups.length) }, worker));
+      if (failure) {
+        if (!jobs.length || !(failure instanceof ApiError)) throw failure;
+        limited = true;   // some group failed: keep the jobs already scored, and say so
       }
       lap('scoring');
       // nothing usable (e.g. the AI answered with made-up ids only): an error, not counted against today's limit

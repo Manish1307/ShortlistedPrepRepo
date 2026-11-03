@@ -119,11 +119,16 @@ async function fakeBoards() {
 /** Fake Gemini: the analysis step returns a profile; the scoring step scores every job id it is shown, plus one made-up id that must be ignored. */
 async function fakeGemini() {
   const seen = [];
-  let onlyMadeUp = false, delay = 0, scoringCalls = 0, failScoringAfter = Infinity;
+  let onlyMadeUp = false, delay = 0, scoringCalls = 0, failScoringAfter = Infinity, active = 0, maxActive = 0;
   const server = http.createServer((req, res) => {
     let raw = '';
     req.on('data', c => { raw += c; });
-    req.on('end', () => setTimeout(() => {
+    req.on('end', () => {
+    // scoring requests waiting at the same time (they overlap when the search scores its groups in parallel)
+    const scoringReq = !/expert career coach|expert interviewer|This step only analyses the candidate/.test(raw);
+    if (scoringReq) { active++; maxActive = Math.max(maxActive, active); }
+    setTimeout(() => {
+      if (scoringReq) active--;
       const body = JSON.parse(raw);
       seen.push(body);
       const system = body.systemInstruction.parts[0].text, user = body.contents[0].parts[0].text;
@@ -160,10 +165,11 @@ async function fakeGemini() {
       }
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }));
-    }, delay));
+    }, delay);
+  });
   });
   const base = await listen(server);
-  return { base, seen, madeUpOnly: v => { onlyMadeUp = v; }, failScoringAfter: n => { failScoringAfter = n; scoringCalls = 0; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
+  return { base, seen, scoringAtOnce: () => maxActive, madeUpOnly: v => { onlyMadeUp = v; }, failScoringAfter: n => { failScoringAfter = n; scoringCalls = 0; }, slow: ms => { delay = ms; }, close: () => new Promise(r => server.close(r)) };
 }
 
 async function start() {
@@ -633,7 +639,9 @@ test('Sector: the candidate sets it in My account, the admin can set it, and AI 
   });
 });
 
-test('AI Job search: steps are numbered, results appear while it runs, and the finished search keeps its timings', async () => {
+test('AI Job search: steps are numbered, results appear while it runs, and the finished search keeps its timings', async tc => {
+  process.env.JOB_SCORE_PARALLEL = '1';   // one group after the other: the first group shows while the second is scored
+  tc.after(() => { delete process.env.JOB_SCORE_PARALLEL; });
   await withServer(async s => {
     s.addResume();
     s.ai.slow(80);
@@ -686,4 +694,26 @@ test('AI Job search: when the first group cannot be scored the search fails and 
     assert.equal(r.json.search.status, 'failed');
     assert.equal(r.json.usage.used, 0);   // not counted
   });
+});
+
+test('AI Job search: the groups of jobs are scored at the same time, or one by one when JOB_SCORE_PARALLEL is 1', async () => {
+  await withServer(async s => {
+    s.addResume();
+    s.ai.slow(60);
+    const web = await s.site();
+    const r = await web.search({ country: 'India', sector: 'it' });
+    assert.equal(r.json.search.status, 'done');
+    assert.ok(r.json.search.result.total > 30, 'there is more than one group');
+    assert.equal(s.ai.scoringAtOnce(), 2, 'two groups were being scored together');
+  });
+  process.env.JOB_SCORE_PARALLEL = '1';
+  try {
+    await withServer(async s => {
+      s.addResume();
+      s.ai.slow(60);
+      const web = await s.site();
+      await web.search({ country: 'India', sector: 'it' });
+      assert.equal(s.ai.scoringAtOnce(), 1, 'one group at a time');
+    });
+  } finally { delete process.env.JOB_SCORE_PARALLEL; }
 });

@@ -1,6 +1,6 @@
 # ShortlistPrep introduction: voice-over (about 45 seconds)
 
-Play `shortlistprep-intro.webm` and read along. The times match the scenes.
+Play `shortlistprep-intro.mp4` and read along. The times match the scenes.
 
 **0:00 – 0:06**
 Applying everywhere, but getting no interview calls? Most resumes are filtered out by software before a person ever reads them.

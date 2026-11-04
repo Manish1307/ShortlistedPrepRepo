@@ -39,7 +39,7 @@
 
     // 1. the sentence, then the promise of more
     var head = el('div', 'sp-head');
-    head.appendChild(el('h2', '', (name ? name + ', you' : 'You') + ' have used ' + d.percent + '% of our features.'));
+    head.appendChild(el('div', 'sp-title', (name ? name + ', you' : 'You') + ' have used ' + d.percent + '% of our features.'));
     head.appendChild(bar(d.percent, 100));
     head.appendChild(el('p', 'sp-more', d.percent >= 100 ? 'You have tried every tool. Keep practising.' : 'But wait, we have more tools that will help you during your interview.'));
     frag.appendChild(head);
@@ -90,6 +90,7 @@
   }
 
   function show(d) {
+    try { if (sessionStorage.getItem('sp_strength_off') === '1') return; } catch (e) { /* storage blocked */ }   // hidden for this visit
     if (!box) {
       var open = false;
       try { open = localStorage.getItem(KEY) === '1'; } catch (e) { /* storage blocked */ }
@@ -104,7 +105,9 @@
         try { localStorage.setItem(KEY, now ? '1' : '0'); } catch (e) { /* storage blocked */ }
       });
       box.addEventListener('keydown', function (e) { if (e.key === 'Escape' && box.classList.contains('open')) tab.click(); });
-      box.appendChild(tab); box.appendChild(body);
+      var hide = el('button', 'sp-x', '×'); hide.type = 'button'; hide.setAttribute('aria-label', 'Hide this panel for now'); hide.title = 'Hide for now';
+      hide.addEventListener('click', function () { try { sessionStorage.setItem('sp_strength_off', '1'); } catch (e) { /* storage blocked */ } box.remove(); box = null; });
+      box.appendChild(tab); box.appendChild(body); box.appendChild(hide);
       document.body.appendChild(box);
     }
     var before = tabPct.textContent;

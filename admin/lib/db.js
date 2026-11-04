@@ -302,6 +302,10 @@ function open(file) {
   addColumn(db, 'jobs', 'full_description', 'TEXT');      // Insight: a job's whole description, read when a candidate opens it
   addColumn(db, 'jobs', 'full_fetched_at', 'TEXT');
   addColumn(db, 'customers', 'sector', "TEXT NOT NULL DEFAULT ''");   // the candidate's sector (domain): decides which employers Live Search reads
+  // plan texts written before "AI job search" was renamed Live Search
+  for (const col of ['features_json', 'tagline', 'description']) {
+    db.exec(`UPDATE pricing_plans SET ${col} = REPLACE(REPLACE(REPLACE(${col}, 'an AI job search', 'a Live Search'), 'AI job searches', 'Live Searches'), 'AI job search', 'Live Search') WHERE ${col} LIKE '%AI job search%'`);
+  }
   return db;
 }
 

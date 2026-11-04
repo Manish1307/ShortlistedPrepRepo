@@ -23,7 +23,7 @@
 .sp-tab:focus-visible { outline: 3px solid var(--sky); outline-offset: 2px; }
 .sp-body { width: min(350px, 94vw); max-height: min(74vh, 600px); overflow: auto; background: #fff; border: 1px solid var(--bd); border-right: 0; border-radius: 18px 0 0 18px; box-shadow: var(--shadow-l); padding: 18px; margin-bottom: 8px; order: -1; display: grid; gap: 14px; }
 .sp-body[hidden] { display: none; }
-.sp-head h2 { margin: 0 0 10px; font-size: 19px; line-height: 1.3; }
+.sp-head .sp-title { margin: 0 0 10px; font-size: 19px; line-height: 1.3; font-weight: 700; }
 .sp-more { margin: 10px 0 0; font-size: 14.5px; font-weight: 600; color: var(--purple-d); }
 .sp-h3 { margin: 2px 0 0; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 
@@ -61,3 +61,5 @@
 .sp-tab.bump { animation: sp-bump 1.4s ease; }
 @keyframes sp-bump { 0%, 100% { transform: none; } 25% { transform: translateX(-8px); box-shadow: 0 0 0 6px rgba(125, 42, 232, .25); } }
 @media (prefers-reduced-motion: reduce) { .sp-tab.bump { animation: none; } }
+.sp-x { position: absolute; top: -12px; left: -12px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--bd); background: #fff; color: var(--body); font: 700 18px/1 system-ui, sans-serif; cursor: pointer; box-shadow: var(--shadow-s); display: grid; place-items: center; padding: 0; }
+.sp-x:hover { color: #b3261e; }

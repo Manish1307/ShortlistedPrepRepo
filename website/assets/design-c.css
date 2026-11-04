@@ -8,7 +8,7 @@
   --purple-l: #eaf0f7; --teal-l: #e6f0ee; --pink-l: #f7ebe7; --sun-l: #fbf1de; --sky-l: #e8eff8;
   --grad: linear-gradient(#0f2742, #0f2742);
   --good: #12805c; --warn: #8a5a00; --warn-bg: #fbf1de;
-  --action: #e4570f; --action-d: #c74a0a;
+  --action: #c2410c; --action-d: #9a3412;
   --radius: 10px;
   --shadow-s: none; --shadow: 0 1px 2px rgba(15, 39, 66, .08), 0 8px 24px -12px rgba(15, 39, 66, .18); --shadow-l: 0 1px 2px rgba(15, 39, 66, .1), 0 16px 40px -16px rgba(15, 39, 66, .25);
 }

@@ -1,0 +1,31 @@
+/* Design-review quick wins: plan cards, touch targets on phones, and the sticky call to action for phones. */
+
+/* plan cards on the home page: the full width of the column, a badge and a button on each */
+.hp-plans { max-width: none; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.hp-plan { display: flex; flex-direction: column; position: relative; }
+.hp-plan .hp-feat { margin-bottom: 18px; }
+.hp-plan > .btn { margin-top: auto; justify-content: center; text-align: center; }
+.hp-badge { position: absolute; top: 16px; right: 16px; margin: 0; padding: 3px 11px; border-radius: 999px; background: var(--action, #c2410c); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .03em; }
+
+/* capability numbers 01 to 04 (the order most candidates use the tools) */
+.cap-pct { letter-spacing: .04em; }
+
+/* touch targets of at least 44 px on a phone: a bigger tap area that does not move the text */
+@media (max-width: 1180px) { .nav-toggle { min-width: 44px; min-height: 44px; } }
+@media (max-width: 680px) {
+  main p a:not(.btn), main li a:not(.btn), .cap > a, .hj-more, .footer a:not(.btn) { display: inline-block; padding-block: 12px; margin-block: -12px; }
+  .tok-foot .btn, #tok-foot .btn { min-height: 44px; }
+}
+
+/* the sticky call to action: phones only, after the first screen has scrolled away */
+.m-cta { display: none; }
+@media (max-width: 680px) {
+  .m-cta:not([hidden]) { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 54; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: rgba(255, 255, 255, .97); border-top: 1px solid var(--line, #eee9f8); box-shadow: 0 -8px 24px -16px rgba(20, 10, 60, .4); }
+  .m-cta .btn { width: 100%; justify-content: center; min-height: 48px; }
+  body.has-mcta { padding-bottom: 76px; }
+  body.has-mcta .sp-strength { bottom: 132px; }
+}
+@media print { .m-cta { display: none !important; } }
+
+/* a few more 44 px targets on a phone */
+@media (max-width: 680px) { .brand { min-height: 44px; } main form button, main form .btn { min-height: 44px; } }

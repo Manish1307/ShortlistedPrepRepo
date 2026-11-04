@@ -233,3 +233,19 @@ test('details: reading descriptions is limited per address', async () => {
     assert.equal(last.status, 429);
   } finally { await s.close(); }
 });
+
+test('the main menu: the key pages stay on top, the rest are grouped, and a signed-in user can sign out', () => {
+  const layout = fs.readFileSync(path.join(__dirname, '..', 'website', 'layout.html'), 'utf8');
+  const menu = layout.slice(layout.indexOf('<nav id="menu"'), layout.indexOf('</nav>', layout.indexOf('<nav id="menu"')));
+  const top = [...menu.replace(/<details[\s\S]*?<\/details>/g, '<details/>').matchAll(/<a [^>]*href="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(top.slice(0, 4), ['index.html', 'ats-checker.html', 'jobs.html', 'pricing.html'], 'Home, Free ATS check, Jobs and Pricing come first');
+  const group = name => { const m = new RegExp('<summary>' + name + '</summary>([\\s\\S]*?)</details>').exec(menu); return m ? [...m[1].matchAll(/href="([^"]+)"/g)].map(x => x[1]) : null; };
+  assert.deepEqual(group('Product'), ['features.html', 'how-it-works.html', 'use-cases.html', 'download.html']);
+  assert.ok(['blog.html', 'faq.html', 'help.html', 'trust.html'].every(p => group('Resources').includes(p)));
+  const topLevelCount = (menu.replace(/<details[\s\S]*?<\/details>/g, '<details/>').match(/<a |<details\/>/g) || []).length;
+  assert.ok(topLevelCount <= 8, 'a short menu: ' + topLevelCount + ' items');
+  const site = fs.readFileSync(path.join(__dirname, '..', 'website', 'assets', 'site.js'), 'utf8');
+  assert.match(site, /nav-logout/);
+  assert.match(site, /\/api\/account\/logout/);
+  assert.match(site, /removeItem\('sp_account'\)/);
+});

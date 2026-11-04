@@ -22,12 +22,39 @@
       a.href = l[0]; a.setAttribute('data-page', l[1]); a.className = l[3]; a.textContent = l[2];
       menu.appendChild(a);
     });
+    if (menu) {   // sign out: an icon on a computer, "Sign out" in the phone menu
+      var out = document.createElement('button');
+      out.type = 'button'; out.className = 'nav-logout'; out.setAttribute('aria-label', 'Sign out'); out.title = 'Sign out';
+      out.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/></svg><span class="lbl">Sign out</span>';   // (fixed markup, no user text)
+      out.addEventListener('click', function () {
+        var s = null;
+        for (var i = 0; i < 2; i++) { try { var v = JSON.parse((i ? localStorage : sessionStorage).getItem('sp_account') || 'null'); if (v && v.token) { s = v; break; } } catch (e) { /* blocked */ } }
+        var done = function () {
+          try { sessionStorage.removeItem('sp_account'); } catch (e) { /* blocked */ }
+          try { localStorage.removeItem('sp_account'); } catch (e) { /* blocked */ }
+          location.href = 'index.html';
+        };
+        if (!s || !API) return done();
+        fetch(API + '/api/account/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: '{}' }).catch(function () { /* signed out here anyway */ }).then(done);
+      });
+      menu.appendChild(out);
+    }
   }
 
   // highlight the current page in the menu
   var page = (location.pathname.split('/').pop() || 'index.html').replace('.html', '') || 'index';
   document.querySelectorAll('.menu a[data-page]').forEach(function (a) {
     if (a.getAttribute('data-page') === page) { a.classList.add('current'); a.setAttribute('aria-current', 'page'); }
+  });
+
+  document.querySelectorAll('.menu .dropdown').forEach(function (d) {
+    if (d.querySelector('a.current')) d.classList.add('current');
+    d.addEventListener('toggle', function () {
+      if (d.open) document.querySelectorAll('.menu .dropdown[open]').forEach(function (o) { if (o !== d) o.removeAttribute('open'); });
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('.menu .dropdown[open]').forEach(function (d) { d.removeAttribute('open'); });
   });
 
   // signed in (see the script in <head>): calls to action go straight into the toolkit

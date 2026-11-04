@@ -6,6 +6,14 @@
 .dropdown summary::-webkit-details-marker { display: none; }
 .dropdown summary::after { content: " ▾"; font-size: 12px; }
 .dropdown summary:hover { color: var(--purple); }
+.dropdown summary { border-bottom: 3px solid transparent; }
+.dropdown.current summary, .dropdown[open] summary { color: var(--purple); }
+.dropdown.current summary { border-bottom-color: var(--purple); }
+.dropdown-panel a.current { background: var(--purple-l); color: var(--purple-d); border-bottom-color: transparent; }
+.menu .dropdown-panel a:not(.btn) { border-bottom: 0; padding: 9px 12px; }
+.nav-logout { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--bd); background: #fff; color: var(--body); cursor: pointer; flex: none; }
+.nav-logout:hover { color: #b3261e; border-color: #e7b4b0; background: #fff5f4; }
+.nav-logout .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dropdown-panel { position: absolute; top: 38px; left: -14px; min-width: 190px; background: #fff; border: 1px solid var(--bd); border-radius: 14px; box-shadow: var(--shadow); padding: 8px; display: grid; z-index: 30; }
 .dropdown-panel a { padding: 9px 12px; border-radius: 9px; color: var(--ink); font-weight: 600; font-size: 15px; }
 .dropdown-panel a:hover { background: var(--tint); text-decoration: none; }
@@ -566,3 +574,10 @@ html:not([data-auth="member"]) [data-member] { display: none !important; }
 .home-app h3 { font-size: 18px; margin: 0 0 4px; } .home-app p { margin: 0; font-size: 14.5px; color: var(--muted); }
 .home-apps-note { margin: 16px 0 0; font-size: 14.5px; color: var(--muted); }
 @media (max-width: 720px) { .home-apps-grid { grid-template-columns: 1fr; } .home-app { flex-wrap: wrap; } .home-app > div { flex: 1 1 160px; } .home-app .btn { width: 100%; text-align: center; } }
+
+/* the phone menu: drop-down links and the sign-out button */
+@media (max-width: 1180px) {
+  .menu .dropdown-panel a:not(.btn) { padding: 10px 0 10px 12px; border-bottom: 1px solid var(--line); }
+  .nav-logout { width: auto; height: auto; border-radius: 10px; margin-top: 12px; padding: 10px 14px; gap: 8px; justify-content: flex-start; }
+  .nav-logout .lbl { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-weight: 700; }
+}

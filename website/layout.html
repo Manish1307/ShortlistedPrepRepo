@@ -32,7 +32,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap"></noscript>
   <link rel="stylesheet" href="assets/styles.css?v=4">
-  <link rel="stylesheet" href="assets/home.css?v=16">
+  <link rel="stylesheet" href="assets/home.css?v=17">
   <link rel="stylesheet" href="assets/design-c.css?v=7">
   <link rel="stylesheet" href="assets/demo-slots.css?v=3">
   <link rel="stylesheet" href="assets/offer-bar.css?v=1">
@@ -59,20 +59,26 @@
       <button class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
       <nav id="menu" class="menu">
         <a href="index.html" data-page="index">Home</a>
-        <a href="features.html" data-page="features">Features</a>
-        <a href="how-it-works.html" data-page="how-it-works">How it works</a>
         <a href="ats-checker.html" data-page="ats-checker">Free ATS check</a>
         <a href="jobs.html" data-page="jobs">Jobs</a>
         <a href="pricing.html" data-page="pricing">Pricing</a>
-        <a href="download.html" data-page="download">Download</a>
+        <details class="dropdown">
+          <summary>Product</summary>
+          <div class="dropdown-panel">
+            <a href="features.html" data-page="features">Features</a>
+            <a href="how-it-works.html" data-page="how-it-works">How it works</a>
+            <a href="use-cases.html" data-page="use-cases">Who it's for</a>
+            <a href="download.html" data-page="download">Download the apps</a>
+          </div>
+        </details>
         <details class="dropdown">
           <summary>Resources</summary>
           <div class="dropdown-panel">
-            <a href="blog.html">Blog</a>
-            <!-- if:reviews --><a href="reviews.html">Reviews</a><!-- endif:reviews -->
-            <a href="faq.html">FAQ</a>
-            <a href="help.html">Help centre</a>
-            <a href="trust.html">Privacy and trust</a>
+            <a href="blog.html" data-page="blog">Blog</a>
+            <!-- if:reviews --><a href="reviews.html" data-page="reviews">Reviews</a><!-- endif:reviews -->
+            <a href="faq.html" data-page="faq">FAQ</a>
+            <a href="help.html" data-page="help">Help centre</a>
+            <a href="trust.html" data-page="trust">Privacy and trust</a>
           </div>
         </details>
         <a class="btn btn-sm" href="login.html" data-page="login" data-guest>Sign in</a>
@@ -143,7 +149,7 @@
       <p class="form-result" role="status" aria-live="polite"></p>
     </form>
   </dialog>
-  <script src="assets/site.js?v=5"></script>
+  <script src="assets/site.js?v=6"></script>
   <script src="assets/demo-slots.js?v=1"></script>
   <script src="assets/offer-bar.js?v=1"></script>
   <script src="assets/ats-check.js?v=2"></script>

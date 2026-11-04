@@ -2,7 +2,6 @@
 (function () {
   'use strict';
   var form = document.getElementById('ats-form');
-  if (!form) return;
   var meta = document.querySelector('meta[name="api-url"]');
   var API = meta ? meta.getAttribute('content').replace(/\/+$/, '') : '';
   var $ = function (id) { return document.getElementById(id); };
@@ -93,6 +92,9 @@
     if (name.endsWith('.doc')) return Promise.reject(new Error('Old .doc files cannot be read. Save it as .docx or PDF and upload that.'));
     return Promise.reject(new Error('Choose a PDF, Word (.docx) or text file'));
   }
+  // the home-page drop-zone (home-ats.js) reads and sends a resume the same way
+  window.SPAts = { fileToText: fileToText, call: call, visitorId: visitorId };
+  if (!form) return;
 
   fileEl.addEventListener('change', function () {
     var f = fileEl.files && fileEl.files[0];

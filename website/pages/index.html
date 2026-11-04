@@ -5,6 +5,22 @@
     <div class="dc-hero-copy">
       <h1>Find out why you are not getting interview calls, and fix it.</h1>
       <p class="lead">For freshers and job seekers in India. Check your resume the way an employer’s ATS does, see the skills each job expects that your resume does not show, and get ready for the interview.</p>
+      <div class="hz" id="hz">
+        <label class="hz-drop" id="hz-drop">
+          <input class="hz-file" type="file" id="hz-file" accept=".pdf,.docx,.txt,.md,.text">
+          <b>Drop your resume here, or choose a file</b>
+          <span>PDF, Word or text, up to 6 MB. Your free ATS score in about 10 seconds.</span>
+        </label>
+        <label class="hz-consent"><input type="checkbox" id="hz-consent"> <span>I agree that ShortlistPrep saves the name, email and mobile number in my resume, and may contact me about my result and how to improve it.</span></label>
+        <div class="hz-need" id="hz-need" hidden>
+          <input type="email" id="hz-email" placeholder="Your email" autocomplete="email" aria-label="Your email">
+          <input type="tel" id="hz-phone" placeholder="Mobile (optional)" autocomplete="tel" aria-label="Mobile number">
+          <button type="button" class="btn btn-primary" id="hz-go">See my score</button>
+        </div>
+        <input type="text" id="hz-hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
+        <p class="hz-msg" id="hz-msg" role="status" aria-live="polite"></p>
+        <div class="hz-result" id="hz-result" hidden></div>
+      </div>
       <div class="btn-row">
         <a class="btn btn-primary btn-lg" href="ats-checker.html" data-member-href="career.html" data-member-text="Continue my journey">Check my resume free</a>
         <a class="btn btn-lg" href="#skill-gap">See a sample report</a>
@@ -266,3 +282,4 @@
 <div class="m-cta" id="m-cta" hidden><a class="btn btn-primary" href="ats-checker.html" data-member-href="career.html" data-member-text="Continue my journey">Check my resume free</a></div>
 <script src="assets/home-jobs.js?v=1"></script>
 <script src="assets/polish.js?v=1"></script>
+<script src="assets/home-ats.js?v=1"></script>

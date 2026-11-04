@@ -78,3 +78,21 @@ test('database: plan texts written before the rename say Live Search after the s
   assert.equal(row.description, 'Run a Live Search', 'the article follows');
   again.close();
 });
+
+test('home hero: a resume drop-zone that asks consent and reuses the free ATS checker', () => {
+  const home = site('pages/index.html');
+  assert.match(home, /<input class="hz-file" type="file" id="hz-file" accept="\.pdf,\.docx/);
+  assert.match(home, /id="hz-consent"/, 'a visible consent box');
+  assert.match(home, /saves the name, email and mobile number in my resume/);
+  assert.match(home, /id="hz-hp"/, 'the spam trap');
+  assert.match(home, /assets\/home-ats\.js/);
+  const js = site('assets/home-ats.js');
+  assert.match(js, /\/api\/ats-check'/);
+  assert.match(js, /consent: true/);
+  assert.match(js, /if \(!consent\.checked\)/, 'nothing is sent until the box is ticked');
+  assert.match(js, /needEmail/);
+  const shared = site('assets/ats-check.js');
+  assert.match(shared, /window\.SPAts = \{ fileToText: fileToText, call: call, visitorId: visitorId \}/);
+  assert.ok(shared.indexOf('window.SPAts') < shared.indexOf('if (!form) return;'), 'exported before the checker page guard');
+  assert.match(site('assets/polish.css'), /\.hz-drop/);
+});

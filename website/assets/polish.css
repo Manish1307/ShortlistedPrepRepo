@@ -29,3 +29,30 @@
 
 /* a few more 44 px targets on a phone */
 @media (max-width: 680px) { .brand { min-height: 44px; } main form button, main form .btn { min-height: 44px; } }
+
+/* hero resume drop-zone: an instant ATS score */
+.hz { margin: 0 0 20px; max-width: 560px; }
+.hz-drop { position: relative; display: grid; gap: 4px; justify-items: center; text-align: center; padding: 22px 18px; border: 2px dashed var(--action, #c2410c); border-radius: 12px; background: #fff; cursor: pointer; transition: background .15s, border-color .15s; }
+.hz-drop b { font-size: 17px; color: var(--ink, #1b1740); }
+.hz-drop span { font-size: 14px; color: var(--muted, #5b5873); }
+.hz-drop:hover, .hz-drop.over { background: #fff7f2; border-style: solid; }
+.hz-drop:focus-within { outline: 3px solid var(--action-d, #9a3412); outline-offset: 2px; }
+.hz-file { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.hz-consent { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted, #5b5873); }
+.hz-consent input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.hz-need { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.hz-need[hidden] { display: none; }
+.hz-need input { padding: 11px 12px; border: 1px solid var(--bd, #d9d6e8); border-radius: 8px; font: inherit; min-height: 44px; }
+.hz-need .btn { grid-column: 1 / -1; justify-content: center; }
+.hz-msg { min-height: 1.4em; margin: 8px 0 0; font-size: 14px; color: var(--muted, #5b5873); }
+.hz-msg.bad { color: #b42318; } .hz-msg.ok { color: #0f6b46; }
+.hz-result { margin-top: 10px; padding: 16px; background: #fff; border: 1px solid var(--bd, #d9d6e8); border-radius: 12px; }
+.hz-result[hidden] { display: none; }
+.hz-head { display: flex; gap: 16px; align-items: center; }
+.hz-head h3 { margin: 0 0 4px; font-size: 19px; } .hz-head p { margin: 0; font-size: 14px; }
+.hz-head .ats-ring { flex: none; width: 96px; height: 96px; }
+.hz-head .ats-ring-in { width: 74px; height: 74px; } .hz-head .ats-ring-in b { font-size: 26px; }
+.hz-sub { margin: 14px 0 4px; font-weight: 700; font-size: 14px; }
+.hz-fix { margin: 0 0 12px; padding-left: 20px; font-size: 14px; }
+.hz-result .btn-row { margin: 8px 0 0; }
+@media (max-width: 680px) { .hz-need { grid-template-columns: 1fr; } .hz-head { flex-direction: column; text-align: center; } }

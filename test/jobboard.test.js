@@ -266,3 +266,19 @@ test('the home page has a strong Jobs section: 100% Genuine, Live and Trusted wi
   assert.ok(home.includes('assets/home-jobs.js') && home.includes('assets/home-jobs.css'));
   assert.ok(!/innerHTML/.test(script), 'text only');
 });
+
+test('Live Search results are in tabs: best matches, profile (with the resume fixes) and other job sites', () => {
+  const career = fs.readFileSync(path.join(__dirname, '..', 'website', 'assets', 'career.js'), 'utf8');
+  assert.match(career, /function resultTabs\(tabs\)/);
+  for (const id of ["'matches'", "'profile'", "'sites'"]) assert.ok(career.includes('id: ' + id), id);
+  assert.ok(career.includes("label: '🎯 Your best matches'") && career.includes('Your profile'), 'tab names');
+  // the long blocks live inside the tabs now, not one after the other under the table
+  const result = career.slice(career.indexOf('function searchResult(s)'), career.indexOf('function jobsCard()'));
+  assert.match(result, /resultTabs\(tabs\)/);
+  assert.ok(!/companyFilter\(s, groups\),\s*\n\s*groups,\s*\n\s*profileCard/.test(result), 'no more one long page');
+  assert.match(career, /role: 'tablist'/);
+  assert.match(career, /ArrowRight/, 'arrow keys move between tabs');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'website', 'assets', 'account.css'), 'utf8');
+  assert.match(css, /\.rt-tab\[aria-selected="true"\]/);
+  assert.match(css, /\.rt-panel\[hidden\]\s*\{\s*display:\s*none/);
+});

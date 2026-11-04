@@ -876,6 +876,41 @@
       p.targetRoles.length ? h('div', { class: 'js-line' }, h('span', { class: 'ac-muted' }, 'Best-fit roles: '), chips(p.targetRoles.map(function (t, i) { return (i + 1) + '. ' + t; }))) : null);
   }
 
+  /**
+   * Tabs for the results of a search (like browser tabs): only one panel is shown, so the page stays short.
+   * tabs: [{ id, label, count?, node }]. The tab last used is kept while the page is open.
+   */
+  var resultTab = 'matches';
+  function resultTabs(tabs) {
+    var bar = h('div', { class: 'rt-bar', role: 'tablist', 'aria-label': 'Search results' });
+    var panels = h('div', { class: 'rt-panels' });
+    var btns = {}, panes = {};
+    tabs.forEach(function (t, i) {
+      btns[t.id] = h('button', { class: 'rt-tab', type: 'button', role: 'tab', id: 'rt-' + t.id, 'aria-controls': 'rtp-' + t.id, 'aria-selected': 'false', tabindex: '-1' },
+        t.label, t.count !== undefined ? h('span', { class: 'rt-count' }, String(t.count)) : null);
+      panes[t.id] = h('div', { class: 'rt-panel', role: 'tabpanel', id: 'rtp-' + t.id, 'aria-labelledby': 'rt-' + t.id, hidden: true }, t.node);
+      btns[t.id].addEventListener('click', function () { select(t.id); });
+      btns[t.id].addEventListener('keydown', function (e) {
+        var to = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i + tabs.length - 1) % tabs.length : -1;
+        if (to >= 0) { e.preventDefault(); select(tabs[to].id, true); }
+      });
+      bar.appendChild(btns[t.id]);
+      panels.appendChild(panes[t.id]);
+    });
+    function select(id, focus) {
+      resultTab = id;
+      tabs.forEach(function (t) {
+        var on = t.id === id;
+        btns[t.id].setAttribute('aria-selected', on ? 'true' : 'false');
+        btns[t.id].tabIndex = on ? 0 : -1;
+        panes[t.id].hidden = !on;
+      });
+      if (focus) btns[id].focus();
+    }
+    select(tabs.some(function (t) { return t.id === resultTab; }) ? resultTab : tabs[0].id);
+    return h('div', { class: 'rt' }, bar, panels);
+  }
+
   function searchResult(s) {
     var r = s.result, p = r.profile, cov = r.coverage;
     var withResume = s.params.resume === 'all';
@@ -888,16 +923,18 @@
     if (r.total < 20) notes.push('Fewer than 20 matches: try a wider location, another role, a longer date range or more companies.');
     var groups = h('div', { class: 'js-groups' });
     showGroups(groups, r, s, withResume);
+    var other = searchElsewhere(s.params, p);
+    var tabs = [
+      { id: 'matches', label: '🎯 Your best matches', count: r.total, node: h('div', {}, companyFilter(s, groups), groups) },
+      { id: 'profile', label: p.resumeFixes.length ? '👤 Your profile & resume fixes' : '👤 Your profile', node: h('div', {}, profileCard(p),
+        p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),
+          h('ol', { class: 'cr-list' }, p.resumeFixes.map(function (f) { return h('li', {}, f); }))) : null) }];
+    if (other) tabs.push({ id: 'sites', label: '🔎 Other job sites', node: other });
     return h('div', { class: 'js-result' },
       h('p', { class: 'jb-info' }, r.total + ' matches from ' + cov.live.toLocaleString() + ' live jobs at ' + cov.companies + ' compan' + (cov.companies === 1 ? 'y' : 'ies') +
         ' · searched ' + dateTime(s.finishedAt) + ' · ' + paramsLine(s.params)),
       h('p', { class: 'ac-muted js-small' }, 'Press 💡 Insight on a job for its skill gap matrix, its technical and functional requirements, how to close each gap, and what to revise before the interview.'),
-      companyFilter(s, groups),
-      groups,
-      profileCard(p),
-      searchElsewhere(s.params, p),
-      p.resumeFixes.length ? h('div', { class: 'js-fixes' }, h('div', { class: 'ac-subhead' }, '⚠️ Fix your resume before you apply'),
-        h('ol', { class: 'cr-list' }, p.resumeFixes.map(function (f) { return h('li', {}, f); }))) : null,
+      resultTabs(tabs),
       notes.length ? h('ul', { class: 'js-notes' }, notes.map(function (x) { return h('li', {}, x); })) : null,
       h('p', { class: 'ac-muted js-small' }, 'Every job comes from the company\'s own careers site and was open when we searched. Openings close quickly, so apply to the high-probability ones soon.'));
   }

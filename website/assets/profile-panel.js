@@ -52,6 +52,7 @@
   while (main.firstChild) body.appendChild(main.firstChild);
   layout.appendChild(side); layout.appendChild(body); main.appendChild(layout);
   main.classList.add('pp-wide');
+  var hero = document.querySelector('.ac-hero'); if (hero) hero.classList.add('pp-on');   // name, email and buttons now live in the panel
 
   var collapsed = false;
   try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) { /* storage blocked */ }
@@ -89,10 +90,14 @@
     card.replaceChildren();
 
     var av = el('div', 'pp-ring'); av.style.setProperty('--p', pct + '%');
-    var face = el('div', 'pp-face', initials(name)); av.appendChild(face);
+    var face = el('div', 'pp-face');
+    if (c.photo) { var img = el('img'); img.src = c.photo; img.alt = 'Your photo'; face.appendChild(img); } else face.textContent = initials(name);
+    av.appendChild(face);
     var tag = el('span', 'pp-pct', pct + '%'); tag.title = 'How much of ShortlistPrep you have used';
     var top = el('div', 'pp-top'); top.appendChild(av); top.appendChild(tag);
+    if (c.verified) { var vf = el('span', 'pp-verified'); vf.title = 'Verified member'; vf.setAttribute('role', 'img'); vf.setAttribute('aria-label', 'Verified member'); vf.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3 1 3-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3-1-3 2.6-1.9 1-3 3.2.1z"/><path d="M8 12.2l2.7 2.7L16.2 9.4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'; top.appendChild(vf); }
     card.appendChild(top);
+    card.appendChild(photoControls(c));
     card.appendChild(el('h2', 'pp-name', name));
     var line = [c.organisation, c.country].filter(Boolean).join(' · ');
     if (line) card.appendChild(el('p', 'pp-line', line));
@@ -119,6 +124,54 @@
     }
     card.appendChild(perf);
   }
+
+  // a photo with the Verified badge: paid members only
+  function post(path, body) {
+    return fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sess.token }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) throw new Error(j.error || 'Something went wrong. Please try again.'); return j; }); });
+  }
+  // a square 256 px JPEG, cropped from the middle, so the upload stays small
+  function squared(file) {
+    return new Promise(function (resolve, reject) {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error('Choose a JPG, PNG or WebP picture'));
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var n = Math.min(img.width, img.height), cv = document.createElement('canvas'); cv.width = cv.height = 256;
+        cv.getContext('2d').drawImage(img, (img.width - n) / 2, (img.height - n) / 2, n, n, 0, 0, 256, 256);
+        URL.revokeObjectURL(url); resolve(cv.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('That picture could not be read')); };
+      img.src = url;
+    });
+  }
+  var photoMsg = '';
+  function photoControls(c) {
+    var box = el('div', 'pp-photo');
+    if (!c.paid) {
+      var up = el('a', 'pp-photo-link', 'Add a photo (paid members)'); up.href = 'pricing.html'; up.title = 'A profile photo with the Verified badge is for paid members';
+      box.appendChild(up);
+    } else {
+      var label = el('label', 'pp-photo-link', c.photo ? 'Change photo' : 'Add photo');
+      var input = el('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; input.className = 'pp-file';
+      input.addEventListener('change', function () {
+        var f = input.files && input.files[0]; if (!f) return;
+        setMsg('Uploading…');
+        squared(f).then(function (data) { return post('/api/account/photo', { image: data }); })
+          .then(function () { setMsg(''); return refresh(); })
+          .catch(function (err) { setMsg(String(err.message || err), true); });
+      });
+      label.appendChild(input); box.appendChild(label);
+      if (c.photo) {
+        var rm = el('button', 'pp-photo-link pp-rm', 'Remove'); rm.type = 'button';
+        rm.addEventListener('click', function () { post('/api/account/photo/delete').then(refresh).catch(function (err) { setMsg(String(err.message || err), true); }); });
+        box.appendChild(rm);
+      }
+    }
+    var m = el('p', 'pp-photo-msg'); m.id = 'pp-photo-msg'; m.setAttribute('role', 'status'); m.textContent = photoMsg; box.appendChild(m);
+    return box;
+  }
+  function setMsg(t, bad) { photoMsg = t; var m = document.getElementById('pp-photo-msg'); if (m) { m.textContent = t; m.className = 'pp-photo-msg' + (bad ? ' bad' : ''); } }
+  function refresh() { return Promise.all([get('/api/account/me'), get('/api/strength'), get('/api/career')]).then(function (r) { paint(r[0], r[1], r[2]); }); }
 
   paint(null, null, null);
   Promise.all([get('/api/account/me'), get('/api/strength'), get('/api/career')]).then(function (r) { paint(r[0], r[1], r[2]); });

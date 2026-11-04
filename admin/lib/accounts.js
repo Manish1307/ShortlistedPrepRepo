@@ -220,7 +220,7 @@ function addRoutes(ctx) {
     }));
     const p = profiles.profileOf(db, c.id);
     return {
-      customer: { email: c.email, name: c.name, organisation: c.organisation, country: c.country, sector: c.sector || '', since: c.created_at },
+      customer: { email: c.email, name: c.name, organisation: c.organisation, country: c.country, sector: c.sector || '', since: c.created_at, ...photoOf(c.id) },
       sectors: SECTORS.map(x => ({ id: x.id, label: x.label })),
       account: { lastLogin: c.last_login, passwordSetAt: c.password_set_at },
       licences: lics,
@@ -233,6 +233,32 @@ function addRoutes(ctx) {
           (SELECT question FROM conversation_items i WHERE i.conversation_id = v.id ORDER BY position LIMIT 1) AS first_question
           FROM conversations v JOIN licences l ON l.id = v.licence_id WHERE l.customer_id = ? ORDER BY v.started_at DESC LIMIT 100`, c.id),
     };
+  });
+
+  // a profile photo with a Verified badge: for paid members only, so a photo saved earlier is not shown after the plan ends
+  const photoOf = customerId => {
+    const paid = !require('./entitlements').forCustomer(db, customerId).plan.free;
+    const p = paid ? one('SELECT mime, data FROM customer_photos WHERE customer_id = ?', customerId) : null;
+    return { paid, photo: p ? 'data:' + p.mime + ';base64,' + p.data : '', verified: !!p };
+  };
+  add('POST', '/api/account/photo', { public: true, maxBody: 400 * 1024 }, (req, res, { body }) => {
+    const { customer } = customerOf(req);
+    if (!photoOf(customer.id).paid) throw new ApiError(402, 'A profile photo with the Verified badge is for paid members. See the plans to upgrade.');
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+\/=]+)$/.exec(String(body.image || ''));
+    if (!m) throw new ApiError(400, 'Choose a JPG, PNG or WebP picture');
+    const bytes = Buffer.from(m[2], 'base64');
+    if (bytes.length < 200 || bytes.length > 200 * 1024) throw new ApiError(400, 'The picture is too large. Choose a smaller one.');
+    const ok = (m[1] === 'image/jpeg' && bytes[0] === 0xff && bytes[1] === 0xd8) || (m[1] === 'image/png' && bytes.subarray(1, 4).toString() === 'PNG') || (m[1] === 'image/webp' && bytes.subarray(0, 4).toString() === 'RIFF');
+    if (!ok) throw new ApiError(400, 'That file is not a valid picture');
+    db.prepare('INSERT INTO customer_photos (customer_id, mime, data, updated_at) VALUES (?,?,?,?) ON CONFLICT (customer_id) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at')
+      .run(customer.id, m[1], m[2], new Date().toISOString());
+    logActivity(db, customer.id, 'profile.photo', '');
+    return { ok: true, ...photoOf(customer.id) };
+  });
+  add('POST', '/api/account/photo/delete', { public: true }, req => {
+    const { customer } = customerOf(req);
+    db.prepare('DELETE FROM customer_photos WHERE customer_id = ?').run(customer.id);
+    return { ok: true, ...photoOf(customer.id) };
   });
 
   // the candidate's sector: required, and the one Live Search uses

@@ -113,3 +113,14 @@ test('profile side panel: on My account and the Career toolkit, collapsible, rem
   assert.match(css, /\.pp-layout\.collapsed \{ grid-template-columns: 64px/);
   assert.match(css, /@media \(max-width: 900px\)/, 'phones stack it above the page');
 });
+
+test('profile panel: the account page hero row is hidden, and the photo and Verified badge are for paid members', () => {
+  const css = site('assets/profile-panel.css');
+  assert.match(css, /\.ac-hero\.pp-on \.ac-hero-row \{ display: none; \}/);
+  const js = site('assets/profile-panel.js');
+  assert.match(js, /classList\.add\('pp-on'\)/);
+  assert.match(js, /\/api\/account\/photo/);
+  assert.match(js, /c\.verified/, 'the badge only when the server says verified');
+  assert.match(js, /Add a photo \(paid members\)/, 'free members are pointed to the plans');
+  assert.match(js, /toDataURL\('image\/jpeg'/, 'resized before upload');
+});

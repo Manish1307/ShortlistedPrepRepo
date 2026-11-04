@@ -118,6 +118,10 @@ CREATE TABLE IF NOT EXISTS customer_sessions (
   created_at TEXT NOT NULL, expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_customer_sessions ON customer_sessions(customer_id);
+CREATE TABLE IF NOT EXISTS customer_photos (
+  customer_id INTEGER PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+  mime TEXT NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS career_resumes (
   customer_id INTEGER PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL DEFAULT '', source_text TEXT NOT NULL,

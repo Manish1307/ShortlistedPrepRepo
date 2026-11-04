@@ -96,3 +96,20 @@ test('home hero: a resume drop-zone that asks consent and reuses the free ATS ch
   assert.ok(shared.indexOf('window.SPAts') < shared.indexOf('if (!form) return;'), 'exported before the checker page guard');
   assert.match(site('assets/polish.css'), /\.hz-drop/);
 });
+
+test('profile side panel: on My account and the Career toolkit, collapsible, remembered', () => {
+  for (const page of ['pages/account.html', 'pages/career.html']) {
+    const html = site(page);
+    assert.match(html, /assets\/profile-panel\.css/, page);
+    assert.match(html, /assets\/profile-panel\.js/, page);
+  }
+  const js = site('assets/profile-panel.js');
+  assert.match(js, /\/api\/account\/me/);
+  assert.match(js, /\/api\/strength/);
+  assert.match(js, /aria-expanded/, 'the toggle says whether it is open');
+  assert.match(js, /sp_profile_panel/, 'the choice is remembered');
+  for (const label of ['View profile', 'Profile performance', 'My home', 'Career toolkit', 'Jobs']) assert.ok(js.includes(label), label);
+  const css = site('assets/profile-panel.css');
+  assert.match(css, /\.pp-layout\.collapsed \{ grid-template-columns: 64px/);
+  assert.match(css, /@media \(max-width: 900px\)/, 'phones stack it above the page');
+});

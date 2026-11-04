@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ShortlistPrep Jobs: LinkedIn slides</title>
+<style>
+  /* One 1080 x 1350 slide per ?s=1..3. Rendered at 1.5x by render-jobs.js. The jobs shown are samples. */
+  :root { --ink:#1b1436; --body:#4b4668; --muted:#6a6388; --line:#e6def7; --purple:#7d2ae8; --purple-d:#5b21b6; --teal:#00a3aa;
+          --good:#0a7a55; --grad:linear-gradient(120deg,#00c4cc 0%,#7d2ae8 72%); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { width: 1080px; height: 1350px; overflow: hidden; font-family: "Segoe UI Variable Display","Segoe UI",Arial,sans-serif; color: var(--ink);
+         background: radial-gradient(900px 560px at 8% -4%, rgba(125,42,232,.16), transparent 62%), radial-gradient(900px 560px at 100% 104%, rgba(0,196,204,.2), transparent 62%), linear-gradient(165deg,#f8f3ff 0%,#ffffff 46%,#eefcfd 100%); }
+  .slide { display: none; position: relative; width: 1080px; height: 1350px; padding: 64px 72px; }
+  .slide.on { display: flex; flex-direction: column; }
+  .top { display: flex; align-items: center; gap: 14px; }
+  .mark { width: 54px; height: 54px; border-radius: 16px; background: var(--grad); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 30px; box-shadow: 0 8px 22px rgba(125,42,232,.4); }
+  .brand { font-weight: 800; font-size: 32px; letter-spacing: -.02em; }
+  .tag { margin-left: auto; font-weight: 800; font-size: 22px; color: var(--purple-d); background: #f0e6ff; padding: 8px 20px; border-radius: 999px; letter-spacing: .06em; }
+  .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; font-size: 24px; color: var(--muted); font-weight: 600; }
+  .foot b { color: var(--purple-d); font-size: 28px; }
+  h1 { font-size: 80px; line-height: 1.03; letter-spacing: -.035em; margin: 26px 0 18px; font-weight: 800; }
+  h1 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h2 { font-size: 64px; line-height: 1.06; letter-spacing: -.03em; margin: 26px 0 14px; font-weight: 800; }
+  h2 em { font-style: normal; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p.lead { font-size: 32px; line-height: 1.4; color: var(--body); margin: 0; }
+  .card { background: #fff; border: 2px solid #ddd0f7; border-radius: 34px; box-shadow: 0 30px 70px -34px rgba(125,42,232,.5); }
+
+  /* the trusted badge */
+  .trust { display: inline-flex; align-items: center; gap: 16px; align-self: flex-start; margin-top: 30px; padding: 14px 34px 14px 20px; border-radius: 999px; background: linear-gradient(120deg,#1b1436,#3b1a8a); color: #fff; font-weight: 800; font-size: 34px; letter-spacing: -.01em; box-shadow: 0 18px 40px -16px rgba(60,26,138,.7); }
+  .trust svg { flex: none; width: 52px; height: 52px; color: #7ff0d4; }
+  .trust i { font-style: normal; opacity: .55; }
+
+  /* job cards */
+  .board { margin-top: 36px; padding: 26px 30px 12px; }
+  .board .hd { display: flex; justify-content: space-between; align-items: center; font-size: 30px; font-weight: 800; padding-bottom: 14px; }
+  .dot { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #d92d20; margin-right: 12px; box-shadow: 0 0 0 7px rgba(217,45,32,.16); }
+  .chip { display: inline-flex; align-items: center; gap: 8px; background: #d9f5ea; color: var(--good); border-radius: 999px; padding: 8px 20px 8px 14px; font-size: 24px; font-weight: 800; }
+  .chip svg { width: 28px; height: 28px; }
+  .job { display: grid; grid-template-columns: 78px 1fr auto; gap: 22px; align-items: center; padding: 20px 0; border-top: 2px dashed var(--line); }
+  .job .lg { width: 78px; height: 78px; border-radius: 20px; background: #f0e6ff; color: var(--purple); font-weight: 800; font-size: 34px; display: grid; place-items: center; }
+  .job b { display: block; font-size: 34px; line-height: 1.15; }
+  .job small { display: block; font-size: 25px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+  .lock { background: #fff1c2; color: #8a5a00; border: 3px dashed #e3b04b; border-radius: 999px; padding: 8px 22px; font-weight: 800; font-size: 25px; white-space: nowrap; }
+  .note { font-size: 22px; color: var(--muted); font-weight: 600; }
+  .pts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 30px; }
+  .pts > div { background: #fff; border: 2px solid #e8def9; border-radius: 26px; padding: 22px 22px 20px; border-top: 8px solid var(--teal); }
+  .pts .p2 { border-top-color: #d92d20; } .pts .p3 { border-top-color: var(--purple); }
+  .pts b { display: block; font-size: 31px; line-height: 1.1; margin-bottom: 8px; }
+  .pts span { display: block; font-size: 22px; line-height: 1.32; color: var(--body); font-weight: 600; }
+
+  /* slide 2: the portal */
+  .tabs { display: flex; gap: 0; margin-top: 34px; border-bottom: 4px solid var(--line); }
+  .tabs > span { padding: 14px 16px; font-size: 23px; font-weight: 800; color: var(--body); border-bottom: 6px solid transparent; margin-bottom: -4px; white-space: nowrap; }
+  .tabs > .on { color: var(--purple); border-bottom-color: var(--purple); }
+  .tabs .ai { display: inline-block; font-size: 15px; font-weight: 800; background: var(--grad); color: #fff; border-radius: 999px; padding: 3px 10px; vertical-align: middle; margin-left: 4px; letter-spacing: .02em; }
+  .search { display: grid; grid-template-columns: 1.6fr 1fr auto; align-items: center; margin-top: 28px; background: #fff; border: 3px solid #ddd0f7; border-radius: 999px; padding: 10px; box-shadow: 0 14px 34px -22px rgba(125,42,232,.6); }
+  .search span { padding: 12px 24px; font-size: 26px; color: var(--muted); font-weight: 600; }
+  .search span + span { border-left: 3px solid var(--line); }
+  .search b { background: linear-gradient(120deg,#ff7a1a,#e8590c); color: #fff; font-size: 26px; border-radius: 999px; padding: 16px 38px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .filters span { font-size: 25px; font-weight: 700; color: var(--purple-d); background: #f0e6ff; border-radius: 999px; padding: 10px 22px; }
+  .filters span.on { background: var(--grad); color: #fff; }
+  .jobbox { margin-top: 28px; padding: 8px 30px 22px; }
+  .jd { margin: 4px 0 10px; padding: 22px 26px; background: #f7f3ff; border-radius: 22px; }
+  .jd p { margin: 0 0 8px; font-size: 25px; line-height: 1.4; color: var(--body); font-weight: 600; }
+  .jd .sk { height: 14px; border-radius: 8px; background: #e6def7; margin: 10px 0; }
+  .more { font-size: 25px; font-weight: 800; color: var(--purple); text-decoration: underline; margin-top: 6px; display: inline-block; }
+
+  /* slide 3: three ways */
+  .way { display: grid; grid-template-columns: 96px 1fr; gap: 26px; align-items: center; background: #fff; border: 2px solid #e8def9; border-radius: 30px; padding: 26px 30px; margin-top: 22px; }
+  .way .ic { width: 96px; height: 96px; border-radius: 26px; display: grid; place-items: center; font-size: 52px; background: #f0e6ff; }
+  .way b { display: block; font-size: 37px; line-height: 1.12; }
+  .way .who { display: inline-block; font-size: 21px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 5px 16px; border-radius: 999px; margin: 8px 0 8px; }
+  .who.free { background: #d9f5ea; color: var(--good); } .who.acct { background: #e4eefc; color: #1e4fa3; } .who.plan { background: #fff1c2; color: #8a5a00; }
+  .way span.t { display: block; font-size: 27px; line-height: 1.35; color: var(--body); font-weight: 600; }
+  .way.hot { border: 3px solid var(--purple); background: linear-gradient(135deg,#fbf8ff,#e9fbfc); box-shadow: 0 16px 36px -20px rgba(125,42,232,.6); }
+  .banner { margin-top: 26px; padding: 22px 28px; border-radius: 26px; background: linear-gradient(120deg,#1b1436,#3b1a8a); color: #fff; font-size: 33px; font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; gap: 16px; }
+  .banner svg { width: 44px; height: 44px; color: #7ff0d4; }
+</style>
+</head>
+<body>
+
+<!-- 1. cover -->
+<section class="slide" data-s="1">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="tag">NEW · JOBS</div></div>
+  <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>100% Genuine <i>·</i> Live <i>·</i> Trusted</div>
+  <h1>Real jobs, straight from <em>company career pages</em></h1>
+  <p class="lead">Browse the latest openings free. You apply on the employer’s own page, and we never charge to apply.</p>
+  <div class="card board">
+    <div class="hd"><span><span class="dot"></span>Latest jobs</span><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>Trusted</span></div>
+    <div class="job"><div class="lg">N</div><div><b>Senior Backend Engineer</b><small>Northwind Tech · Pune · Posted today</small></div><span class="lock">🔒 Fit score</span></div>
+    <div class="job"><div class="lg">C</div><div><b>QA Automation Engineer</b><small>Contoso Labs · Bengaluru · Posted yesterday</small></div><span class="lock">🔒 Fit score</span></div>
+    <div class="job"><div class="lg">A</div><div><b>Process Engineer</b><small>Acme Industries · Chennai · Posted 3 days ago</small></div><span class="lock">🔒 Fit score</span></div>
+  </div>
+  <div class="pts">
+    <div class="p1"><b>100% Genuine</b><span>Read straight from the employer’s own career site</span></div>
+    <div class="p2"><b>Live</b><span>Latest jobs first, refreshed regularly</span></div>
+    <div class="p3"><b>Trusted</b><span>Apply on the company’s page. No fee to apply.</span></div>
+  </div>
+  <div class="foot" style="padding-top:18px"><span class="note">Sample jobs shown</span><b>shortlistprep.com/jobs.html</b></div>
+</section>
+
+<!-- 2. the portal -->
+<section class="slide" data-s="2">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="tag">2 / 3</div></div>
+  <h2>The <em>latest jobs first</em>, with the filters you expect</h2>
+  <div class="tabs"><span>⭐ Recommended for you</span><span>🔎 Live Search <span class="ai">AI Enabled</span></span><span class="on">🕒 Latest jobs</span></div>
+  <div class="search"><span>Skills, designation or company</span><span>Location</span><b>Search</b></div>
+  <div class="filters"><span class="on">IT &amp; software</span><span>India</span><span>Last 7 days</span><span>Remote only</span><span>Any company</span></div>
+  <div class="card jobbox">
+    <div class="job" style="border-top:0"><div class="lg">N</div><div><b>Senior Backend Engineer</b><small>Northwind Tech · Pune · Posted today</small><span class="more">Hide job details ▴</span></div><span class="lock">🔒 Fit score</span></div>
+    <div class="jd"><p>About the role</p><div class="sk" style="width:96%"></div><div class="sk" style="width:88%"></div><div class="sk" style="width:92%"></div><p style="margin-top:14px">Requirements</p><div class="sk" style="width:70%"></div><div class="sk" style="width:58%"></div></div>
+    <div class="job"><div class="lg">C</div><div><b>QA Automation Engineer</b><small>Contoso Labs · Bengaluru · Posted yesterday</small><span class="more">Show job details ▾</span></div><span class="lock">🔒 Fit score</span></div>
+  </div>
+  <div class="foot" style="padding-top:18px"><span class="note">Read the full job description before you apply</span><b>shortlistprep.com</b></div>
+</section>
+
+<!-- 3. three ways -->
+<section class="slide" data-s="3">
+  <div class="top"><div class="mark">S</div><div class="brand">ShortlistPrep</div><div class="tag">3 / 3</div></div>
+  <h2>Three ways to find your <em>next job</em></h2>
+  <div class="way"><div class="ic">🕒</div><div><b>Latest jobs</b><span class="who free">Free for everyone</span><span class="t">Browse by sector, country, city, company and freshness. Open the full job details. Apply on the company’s page.</span></div></div>
+  <div class="way"><div class="ic">⭐</div><div><b>Recommended for you</b><span class="who acct">Free account</span><span class="t">Upload your resume and see jobs picked for your role and skills, with your fit score.</span></div></div>
+  <div class="way hot"><div class="ic">🔎</div><div><b>Live Search (AI Enabled)</b><span class="who plan">With a plan</span><span class="t">Reads live openings from the career sites you pick and scores each one against your resume, with the skill gaps to close.</span></div></div>
+  <div class="banner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>100% Genuine · Live · Trusted</div>
+  <div class="foot" style="padding-top:18px"><span>Browse jobs free</span><b>shortlistprep.com/jobs.html</b></div>
+</section>
+
+<script>
+  var s = new URLSearchParams(location.search).get('s') || '1';
+  var el = document.querySelector('.slide[data-s="' + s + '"]');
+  if (el) el.classList.add('on');
+  var z = Number(new URLSearchParams(location.search).get('z')) || 1;
+  document.documentElement.style.zoom = z;
+</script>
+</body>
+</html>

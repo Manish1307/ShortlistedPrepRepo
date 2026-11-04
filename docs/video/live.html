@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ShortlistPrep live</title>
+<style>html,body{margin:0;background:#1b1740}canvas{display:block}</style>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+// A 45 second animated introduction, drawn on a canvas. record.js records it to docs/video/shortlistprep-intro.webm.
+const W = 1280, H = 720, DURATION = 38;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const NAVY = '#1b1740', ORANGE = '#c2410c', TINT = '#fbf7f2', INK = '#1b1740', MUTED = '#5b5873', GREEN = '#0f8a5f', RED = '#c2410c', LINE = '#e6e1f0';
+const SERIF = 'Georgia, "Times New Roman", serif', SANS = '"Segoe UI", Arial, sans-serif';
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = t => 1 - Math.pow(1 - clamp(t), 3);
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+function rr(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function text(s, x, y, size, color, o = {}) { g.font = (o.weight || 400) + ' ' + size + 'px ' + (o.font || SANS); g.fillStyle = color; g.textAlign = o.align || 'left'; g.textBaseline = 'alphabetic'; g.fillText(s, x, y); }
+function lines(arr, x, y, size, color, lh, o = {}) { arr.forEach((s, i) => text(s, x, y + i * lh, size, color, o)); }
+function card(x, y, w, h, o = {}) { g.save(); g.shadowColor = 'rgba(27,23,64,.16)'; g.shadowBlur = 28; g.shadowOffsetY = 10; rr(x, y, w, h, o.r || 16); g.fillStyle = o.fill || '#fff'; g.fill(); g.restore(); if (o.stroke) { rr(x, y, w, h, o.r || 16); g.strokeStyle = o.stroke; g.lineWidth = 2; g.stroke(); } }
+function pill(s, x, y, color, fg = '#fff', size = 22) { g.font = '700 ' + size + 'px ' + SANS; const w = g.measureText(s).width + 30; rr(x, y, w, size + 18, (size + 18) / 2); g.fillStyle = color; g.fill(); text(s, x + 15, y + size + 2, size, fg, { weight: 700 }); return w; }
+function fadeIn(t, a, d = 0.5) { return ease(seg(t, a, a + d)); }
+function logo(x, y, s = 1) { rr(x, y, 54 * s, 54 * s, 12 * s); g.fillStyle = '#fff'; g.fill(); text('S', x + 27 * s, y + 41 * s, 40 * s, NAVY, { font: SERIF, weight: 700, align: 'center' }); g.beginPath(); g.arc(x + 43 * s, y + 41 * s, 4.5 * s, 0, 7); g.fillStyle = ORANGE; g.fill(); }
+function caption(s, t, a, b) { const k = Math.min(fadeIn(t, a, .35), 1 - seg(t, b - .3, b)); if (k <= 0) return; g.globalAlpha = k; g.font = '600 30px ' + SANS; const w = g.measureText(s).width + 56; rr((W - w) / 2, H - 92, w, 58, 29); g.fillStyle = 'rgba(27,23,64,.92)'; g.fill(); text(s, W / 2, H - 53, 30, '#fff', { weight: 600, align: 'center' }); g.globalAlpha = 1; }
+function ring(cx, cy, r, p, score) { g.lineWidth = 16; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.strokeStyle = '#e5e7eb'; g.stroke(); g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + p * 2 * Math.PI); g.strokeStyle = score >= 70 ? GREEN : ORANGE; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt'; text(String(Math.round(score)), cx, cy + 16, 56, INK, { weight: 800, align: 'center' }); text('/ 100', cx, cy + 44, 18, MUTED, { align: 'center' }); }
+function bg(color) { g.fillStyle = color; g.fillRect(0, 0, W, H); }
+
+
+function wrap(s, maxW, size, weight) { g.font = (weight || 400) + ' ' + size + 'px ' + SANS; const out = []; let line = ''; s.split(' ').forEach(w => { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }); if (line) out.push(line); return out; }
+function typed(s, p) { return s.slice(0, Math.floor(s.length * clamp(p))); }
+function tick(x, y, ok) { g.beginPath(); g.arc(x, y, 16, 0, 7); g.fillStyle = ok ? GREEN : ORANGE; g.fill(); text(ok ? '✓' : '!', x, y + 7, 20, '#fff', { weight: 800, align: 'center' }); }
+function title(n, s, sub, t) { text(n, 70, 110, 60, ORANGE, { font: SERIF, weight: 700 }); text(s, 130, 110, 48, INK, { font: SERIF, weight: 700 }); if (sub) { g.globalAlpha = fadeIn(t, .2); text(sub, 70, 165, 27, MUTED); g.globalAlpha = 1; } }
+function cta(t, line1, line2, url, note) {
+  bg(NAVY); const a = fadeIn(t, .2, .7); g.globalAlpha = a; logo(W / 2 - 27, 90);
+  lines(line1, W / 2, 260, 60, '#fff', 74, { font: SERIF, weight: 700, align: 'center' }); text(line2, W / 2, 360, 28, '#cfc9ee', { align: 'center' }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 1.2, .6); g.font = '800 40px ' + SANS; const w = g.measureText(url).width + 90; rr((W - w) / 2, 410, w, 84, 42); g.fillStyle = ORANGE; g.fill(); text(url, W / 2, 466, 40, '#fff', { weight: 800, align: 'center' }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 2.2, .6); text(note, W / 2, 566, 26, '#cfc9ee', { align: 'center' }); g.globalAlpha = 1;
+}
+
+function l1(t) {
+  bg(NAVY); logo(60, 50); text('ShortlistPrep', 128, 90, 30, '#fff', { font: SERIF, weight: 700 });
+  const a = fadeIn(t, .3, .7); g.globalAlpha = a;
+  lines(['The real interview.', 'Your mind goes blank.'], 90, 280 + (1 - a) * 30, 74, '#fff', 90, { font: SERIF, weight: 700 }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 2.2, .6); text('What if you had help, based on your own resume?', 90, 500, 30, '#cfc9ee'); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 3.8, .6); pill('Meet the desktop apps', 90, 550, ORANGE, '#fff', 28); g.globalAlpha = 1;
+}
+function l2(t) {
+  bg(TINT); title('1', 'It listens', 'Speech is transcribed on your own PC.', t);
+  const k = ease(seg(t, .4, 1.1)); g.globalAlpha = k; card(70, 215, 1140, 300);
+  rr(100, 245, 70, 70, 35); g.fillStyle = '#eef0ff'; g.fill(); text('HR', 135, 290, 26, NAVY, { weight: 800, align: 'center' });
+  text('Interviewer', 195, 270, 20, MUTED, { weight: 700 });
+  lines(wrap(typed('Why should we hire you for this role?', seg(t, 1.2, 3.2)), 900, 36, 600), 195, 318, 36, INK, 46, { weight: 600 }); g.globalAlpha = 1;
+  // microphone level bars
+  const on = seg(t, 1, 1.4) * (1 - seg(t, 3.6, 4)); for (let i = 0; i < 28; i++) { const h = 8 + on * (10 + 26 * Math.abs(Math.sin(t * 7 + i * .9))); rr(195 + i * 16, 455 - h / 2, 8, h, 4); g.fillStyle = ORANGE; g.fill(); }
+  g.globalAlpha = fadeIn(t, 4.2, .5); pill('Question spotted', 195 + 0, 470, GREEN, '#fff', 22); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 6, .6); pill('Transcribed on your PC', 70, 560, NAVY, '#fff', 24); g.globalAlpha = 1;
+}
+function l3(t) {
+  bg('#fff'); title('2', 'It suggests an answer from your resume', 'Example only. Your answer is yours to say.', t);
+  card(70, 215, 1140, 130); text('Why should we hire you for this role?', 100, 292, 32, INK, { font: SERIF, weight: 700 });
+  const a = ease(seg(t, .6, 1)); g.globalAlpha = a; card(70, 370, 1140, 240, { stroke: ORANGE }); text('Suggested answer', 100, 412, 20, ORANGE, { weight: 800 });
+  const ans = 'I bring hands-on Java and Spring Boot experience from my Library App project, where I cut search time from two minutes to five seconds. I learn quickly, and I would like to bring that to your backend team.';
+  lines(wrap(typed(ans, seg(t, 1.2, 7)), 1040, 26, 500), 100, 456, 26, INK, 38, { weight: 500 }); g.globalAlpha = 1;
+}
+function l4(t) {
+  bg(TINT); title('3', 'Practise first, then go live', 'Use the same apps in a mock interview or the real one.', t);
+  const k = ease(seg(t, .5, 1.2)); g.globalAlpha = k; card(70, 225, 540, 280); text('Mock interview', 100, 290, 36, INK, { font: SERIF, weight: 700 }); lines(wrap('Practise with questions from your resume. No pressure.', 480, 24, 400), 100, 340, 24, MUTED, 34); pill('Start here', 100, 430, GREEN, '#fff', 22); g.globalAlpha = 1;
+  const k2 = ease(seg(t, 1.6, 2.3)); g.globalAlpha = k2; card(670, 225, 540, 280); text('Real interview', 700, 290, 36, INK, { font: SERIF, weight: 700 }); lines(wrap('Suggested answers on screen when you want them.', 480, 24, 400), 700, 340, 24, MUTED, 34); pill('When you are ready', 700, 430, ORANGE, '#fff', 22); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 3.6, .6); text('You stay in charge of what you say.', W / 2, 580, 30, INK, { weight: 700, align: 'center' }); g.globalAlpha = 1;
+}
+function l5(t) { cta(t, ['Get ready with', 'live support'], 'Download the ShortlistPrep desktop apps.', 'shortlistprep.com', 'Free to join. No card needed.'); }
+const scenes = [
+  { a: 0, b: 6, f: l1 },
+  { a: 6, b: 16, f: l2, cap: 'It listens and spots the question' },
+  { a: 16, b: 27, f: l3, cap: 'A suggested answer from your resume' },
+  { a: 27, b: 33, f: l4, cap: 'Practise first, then use it live' },
+  { a: 33, b: 38, f: l5 }
+];
+function draw(t) {
+  const sc = scenes.find(s => t >= s.a && t < s.b) || scenes[scenes.length - 1];
+  const lt = t - sc.a; sc.f(lt);
+  const fade = Math.min(seg(lt, 0, .35), 1 - seg(sc.b - t, 0, 0) ) ; // scene wipe in
+  if (lt < .35) { g.globalAlpha = 1 - seg(lt, 0, .35); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+  if (sc !== scenes[0] && sc !== scenes[scenes.length - 1]) caption(sc.cap, lt, .4, sc.b - sc.a);
+  if (sc === scenes[0] || sc === scenes[scenes.length - 1]) { /* no caption: the text is on screen */ }
+}
+
+let start = null, rec = null;
+function frame(now) {
+  if (start === null) start = now;
+  const t = (now - start) / 1000; draw(Math.min(t, DURATION - .01));
+  if (t < DURATION + .4) requestAnimationFrame(frame); else if (rec && rec.state !== 'inactive') rec.stop();
+}
+draw(0);
+window.startRecording = () => new Promise(res => {
+  const stream = cv.captureStream(30);
+  rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 6000000 });
+  const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
+  rec.onstop = async () => res(new Uint8Array(await new Blob(chunks, { type: 'video/webm' }).arrayBuffer()));
+  rec.start(); requestAnimationFrame(frame);
+});
+</script>

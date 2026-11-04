@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ShortlistPrep prep</title>
+<style>html,body{margin:0;background:#1b1740}canvas{display:block}</style>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+// A 45 second animated introduction, drawn on a canvas. record.js records it to docs/video/shortlistprep-intro.webm.
+const W = 1280, H = 720, DURATION = 40;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const NAVY = '#1b1740', ORANGE = '#c2410c', TINT = '#fbf7f2', INK = '#1b1740', MUTED = '#5b5873', GREEN = '#0f8a5f', RED = '#c2410c', LINE = '#e6e1f0';
+const SERIF = 'Georgia, "Times New Roman", serif', SANS = '"Segoe UI", Arial, sans-serif';
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = t => 1 - Math.pow(1 - clamp(t), 3);
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+function rr(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function text(s, x, y, size, color, o = {}) { g.font = (o.weight || 400) + ' ' + size + 'px ' + (o.font || SANS); g.fillStyle = color; g.textAlign = o.align || 'left'; g.textBaseline = 'alphabetic'; g.fillText(s, x, y); }
+function lines(arr, x, y, size, color, lh, o = {}) { arr.forEach((s, i) => text(s, x, y + i * lh, size, color, o)); }
+function card(x, y, w, h, o = {}) { g.save(); g.shadowColor = 'rgba(27,23,64,.16)'; g.shadowBlur = 28; g.shadowOffsetY = 10; rr(x, y, w, h, o.r || 16); g.fillStyle = o.fill || '#fff'; g.fill(); g.restore(); if (o.stroke) { rr(x, y, w, h, o.r || 16); g.strokeStyle = o.stroke; g.lineWidth = 2; g.stroke(); } }
+function pill(s, x, y, color, fg = '#fff', size = 22) { g.font = '700 ' + size + 'px ' + SANS; const w = g.measureText(s).width + 30; rr(x, y, w, size + 18, (size + 18) / 2); g.fillStyle = color; g.fill(); text(s, x + 15, y + size + 2, size, fg, { weight: 700 }); return w; }
+function fadeIn(t, a, d = 0.5) { return ease(seg(t, a, a + d)); }
+function logo(x, y, s = 1) { rr(x, y, 54 * s, 54 * s, 12 * s); g.fillStyle = '#fff'; g.fill(); text('S', x + 27 * s, y + 41 * s, 40 * s, NAVY, { font: SERIF, weight: 700, align: 'center' }); g.beginPath(); g.arc(x + 43 * s, y + 41 * s, 4.5 * s, 0, 7); g.fillStyle = ORANGE; g.fill(); }
+function caption(s, t, a, b) { const k = Math.min(fadeIn(t, a, .35), 1 - seg(t, b - .3, b)); if (k <= 0) return; g.globalAlpha = k; g.font = '600 30px ' + SANS; const w = g.measureText(s).width + 56; rr((W - w) / 2, H - 92, w, 58, 29); g.fillStyle = 'rgba(27,23,64,.92)'; g.fill(); text(s, W / 2, H - 53, 30, '#fff', { weight: 600, align: 'center' }); g.globalAlpha = 1; }
+function ring(cx, cy, r, p, score) { g.lineWidth = 16; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.strokeStyle = '#e5e7eb'; g.stroke(); g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + p * 2 * Math.PI); g.strokeStyle = score >= 70 ? GREEN : ORANGE; g.lineCap = 'round'; g.stroke(); g.lineCap = 'butt'; text(String(Math.round(score)), cx, cy + 16, 56, INK, { weight: 800, align: 'center' }); text('/ 100', cx, cy + 44, 18, MUTED, { align: 'center' }); }
+function bg(color) { g.fillStyle = color; g.fillRect(0, 0, W, H); }
+
+
+function wrap(s, maxW, size, weight) { g.font = (weight || 400) + ' ' + size + 'px ' + SANS; const out = []; let line = ''; s.split(' ').forEach(w => { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }); if (line) out.push(line); return out; }
+function typed(s, p) { return s.slice(0, Math.floor(s.length * clamp(p))); }
+function tick(x, y, ok) { g.beginPath(); g.arc(x, y, 16, 0, 7); g.fillStyle = ok ? GREEN : ORANGE; g.fill(); text(ok ? '✓' : '!', x, y + 7, 20, '#fff', { weight: 800, align: 'center' }); }
+function title(n, s, sub, t) { text(n, 70, 110, 60, ORANGE, { font: SERIF, weight: 700 }); text(s, 130, 110, 48, INK, { font: SERIF, weight: 700 }); if (sub) { g.globalAlpha = fadeIn(t, .2); text(sub, 70, 165, 27, MUTED); g.globalAlpha = 1; } }
+function cta(t, line1, line2, url, note) {
+  bg(NAVY); const a = fadeIn(t, .2, .7); g.globalAlpha = a; logo(W / 2 - 27, 90);
+  lines(line1, W / 2, 260, 60, '#fff', 74, { font: SERIF, weight: 700, align: 'center' }); text(line2, W / 2, 360, 28, '#cfc9ee', { align: 'center' }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 1.2, .6); g.font = '800 40px ' + SANS; const w = g.measureText(url).width + 90; rr((W - w) / 2, 410, w, 84, 42); g.fillStyle = ORANGE; g.fill(); text(url, W / 2, 466, 40, '#fff', { weight: 800, align: 'center' }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 2.2, .6); text(note, W / 2, 566, 26, '#cfc9ee', { align: 'center' }); g.globalAlpha = 1;
+}
+
+function p1(t) {
+  bg(NAVY); logo(60, 50); text('ShortlistPrep', 128, 90, 30, '#fff', { font: SERIF, weight: 700 });
+  const a = fadeIn(t, .3, .7); g.globalAlpha = a;
+  lines(['Interview coming up?'], 90, 290 + (1 - a) * 30, 78, '#fff', 90, { font: SERIF, weight: 700 }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 1.8, .6); lines(['Nervous about', '“Tell me about yourself”?'], 90, 380, 52, '#ffd9c7', 66, { font: SERIF, weight: 700 }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 3.6, .6); pill('Practise it first', 90, 540, ORANGE, '#fff', 28); g.globalAlpha = 1;
+}
+function p2(t) {
+  bg(TINT); title('1', 'A mock interview from your resume', 'Questions are made from your own resume, so practice feels real.', t);
+  const k = ease(seg(t, .5, 1.2)); g.globalAlpha = k; card(70, 215, 600, 330);
+  text('Question 1', 100, 262, 20, MUTED, { weight: 700 }); lines(wrap('Tell me about a project you built.', 540, 30, 700), 100, 305, 30, INK, 40, { weight: 700 });
+  rr(100, 360, 540, 150, 12); g.fillStyle = '#f4f2fb'; g.fill();
+  const ans = typed('I built a Library App in Java with Spring Boot. It handled 500 books and cut search time from 2 minutes to 5 seconds.', seg(t, 1.6, 4.4));
+  lines(wrap(ans, 500, 22, 400), 120, 398, 22, INK, 32); g.globalAlpha = 1;
+  const fb = [['Structure', true, 'Clear start, middle and end'], ['Examples', true, 'You gave real numbers'], ['Confidence', false, 'Cut the filler words']];
+  fb.forEach((r, i) => { const q = ease(seg(t, 5 + i * .9, 5.7 + i * .9)); g.globalAlpha = q; card(720 + (1 - q) * 60, 215 + i * 112, 490, 96, { r: 12 }); tick(762 + (1 - q) * 60, 263 + i * 112, r[1]); text(r[0], 795 + (1 - q) * 60, 255 + i * 112, 26, INK, { weight: 800 }); text(r[2], 795 + (1 - q) * 60, 286 + i * 112, 20, MUTED); }); g.globalAlpha = 1;
+}
+function p3(t) {
+  bg('#fff'); title('2', 'Your “Tell me about yourself”', 'Build your introduction, then check it against your resume.', t);
+  const k = ease(seg(t, .5, 1.2)); g.globalAlpha = k; card(70, 215, 620, 340);
+  text('Your introduction', 100, 262, 20, MUTED, { weight: 700 });
+  const intro = 'I am Neha, a junior Java developer. I built a Library App with Spring Boot and I am looking to grow in backend development.';
+  lines(wrap(typed(intro, seg(t, 1.2, 4.4)), 560, 26, 500), 100, 310, 26, INK, 38, { weight: 500 }); g.globalAlpha = 1;
+  const rows = [['Name and current role', true], ['Skills match your resume', true], ['Add one result with a number', false]];
+  text('Checked against your resume', 740, 250, 24, INK, { weight: 800 });
+  rows.forEach((r, i) => { const q = ease(seg(t, 4.6 + i * .9, 5.3 + i * .9)); g.globalAlpha = q; card(740 + (1 - q) * 60, 275 + i * 90, 470, 74, { r: 12 }); tick(780 + (1 - q) * 60, 312 + i * 90, r[1]); text(r[0], 812 + (1 - q) * 60, 321 + i * 90, 23, INK, { weight: 600 }); }); g.globalAlpha = 1;
+  g.globalAlpha = fadeIn(t, 8, .6); pill('A strong first answer sets the tone', 70, 566, NAVY, '#fff', 24); g.globalAlpha = 1;
+}
+function p4(t) {
+  bg(TINT); title('3', 'Feedback on every answer', 'Sharpen your weak topics until they feel easy.', t);
+  card(70, 215, 760, 330);
+  [['Structure', 82], ['Examples', 64], ['Confidence', 74]].forEach((r, i) => { const v = ease(seg(t, .8 + i * .5, 2.2 + i * .5)) * r[1]; text(r[0], 110, 290 + i * 90, 26, INK, { weight: 700 }); text(Math.round(v) + '%', 790, 290 + i * 90, 26, INK, { weight: 800, align: 'right' }); rr(110, 306 + i * 90, 680, 16, 8); g.fillStyle = '#eceaf5'; g.fill(); rr(110, 306 + i * 90, Math.max(16, 680 * v / 100), 16, 8); g.fillStyle = r[1] > 70 ? GREEN : ORANGE; g.fill(); });
+  g.globalAlpha = fadeIn(t, 3.2, .6); card(870, 215, 340, 330); text('Weak topic', 900, 262, 20, MUTED, { weight: 700 }); lines(['Examples with', 'numbers'], 900, 315, 32, INK, 42, { font: SERIF, weight: 700 }); pill('Practise again', 900, 440, ORANGE, '#fff', 22); g.globalAlpha = 1;
+}
+function p5(t) { cta(t, ['Practise before', 'the real thing'], 'Mock interviews and your introduction, made from your resume.', 'shortlistprep.com', 'Free to join. No card needed.'); }
+const scenes = [
+  { a: 0, b: 6, f: p1 },
+  { a: 6, b: 16, f: p2, cap: 'Mock interview questions from your own resume' },
+  { a: 16, b: 27, f: p3, cap: 'Build “Tell me about yourself” and check it' },
+  { a: 27, b: 34, f: p4, cap: 'Feedback on structure, examples and confidence' },
+  { a: 34, b: 40, f: p5 }
+];
+function draw(t) {
+  const sc = scenes.find(s => t >= s.a && t < s.b) || scenes[scenes.length - 1];
+  const lt = t - sc.a; sc.f(lt);
+  const fade = Math.min(seg(lt, 0, .35), 1 - seg(sc.b - t, 0, 0) ) ; // scene wipe in
+  if (lt < .35) { g.globalAlpha = 1 - seg(lt, 0, .35); g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+  if (sc !== scenes[0] && sc !== scenes[scenes.length - 1]) caption(sc.cap, lt, .4, sc.b - sc.a);
+  if (sc === scenes[0] || sc === scenes[scenes.length - 1]) { /* no caption: the text is on screen */ }
+}
+
+let start = null, rec = null;
+function frame(now) {
+  if (start === null) start = now;
+  const t = (now - start) / 1000; draw(Math.min(t, DURATION - .01));
+  if (t < DURATION + .4) requestAnimationFrame(frame); else if (rec && rec.state !== 'inactive') rec.stop();
+}
+draw(0);
+window.startRecording = () => new Promise(res => {
+  const stream = cv.captureStream(30);
+  rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 6000000 });
+  const chunks = []; rec.ondataavailable = e => chunks.push(e.data);
+  rec.onstop = async () => res(new Uint8Array(await new Blob(chunks, { type: 'video/webm' }).arrayBuffer()));
+  rec.start(); requestAnimationFrame(frame);
+});
+</script>

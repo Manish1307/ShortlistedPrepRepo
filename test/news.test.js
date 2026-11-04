@@ -173,7 +173,7 @@ B.Tech Computer Science, VIT Vellore, 2020. Certified in cloud fundamentals and 
 
 const site = f => fs.readFileSync(path.join(__dirname, '..', 'website', f), 'utf8');
 
-test('website: the News page, its menu links and the home section are in place, and the home section stays hidden until there are items', () => {
+test('website: the News page and its menu links are in place (it is not a section of the home page)', () => {
   const page = site('pages/news.html');
   assert.match(page, /^<!-- title: News and trainings \|/);
   assert.match(page, /id="nw-tab-you"/);
@@ -182,13 +182,11 @@ test('website: the News page, its menu links and the home section are in place, 
   const layout = site('layout.html');
   assert.ok((layout.match(/href="news\.html"/g) || []).length >= 2, 'the Resources menu and the footer');
   const home = site('pages/index.html');
-  assert.match(home, /<section class="hn" id="hn"[^>]*\bhidden>/);
-  assert.match(home, /assets\/home-news\.js/);
-  assert.match(site('assets/home-news.js'), /box\.hidden = false/);
+  assert.ok(!home.includes('id="hn"') && !home.includes('home-news'), 'the News section is not on the home page');
+  assert.ok(!home.includes('id="capabilities"'), 'nor the Everything you need section');
   const js = site('assets/news.js');
   assert.match(js, /\/api\/news\/for-you/);
-  assert.ok(!/innerHTML/.test(js + site('assets/home-news.js')), 'items are inserted as text');
-  assert.match(site('assets/polish.css'), /\.hn\[hidden\] \{ display: none; \}/);
+  assert.ok(!/innerHTML/.test(js), 'items are inserted as text');
 });
 
 test('admin: the News page is in the menu with its permission', () => {

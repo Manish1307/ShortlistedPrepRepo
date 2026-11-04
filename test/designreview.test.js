@@ -24,8 +24,7 @@ test('the orange button passes WCAG AA with white text (it was 3.7 : 1)', () => 
 
 test('home page: no invented percentages, no "coming soon" in the footer, a short hero paragraph', () => {
   const home = site('pages/index.html');
-  assert.ok(!/cap-pct">\d+%/.test(home) && !home.includes('cap-bar'), 'the 20 / 25 / 20 / 35 % cards are gone');
-  assert.deepEqual([...home.matchAll(/<div class="cap-pct">([^<]*)</g)].map(m => m[1]), ['01', '02', '03', '04'], 'the tools in the order they are used');
+  assert.ok(!/cap-pct">\d+%/.test(home) && !home.includes('cap-bar'), 'no invented percentages');
   assert.ok(!/how much of ShortlistPrep each/i.test(home));
   const lead = /<p class="lead">For freshers[^<]*<\/p>/.exec(home)[0];
   assert.ok(lead.length < 280, 'hero paragraph: ' + lead.length + ' characters');

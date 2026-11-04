@@ -86,6 +86,7 @@
   function paint(me, st, cr) {
     var c = (me && me.customer) || sess.customer || {};
     var name = c.name || (sess.customer && sess.customer.name) || 'Your profile';
+    if (me && me.customer && window.spAvatar) window.spAvatar.set({ name: c.name, email: c.email, photo: c.photo || '', verified: !!c.verified });   // the round photo in the page header
     var pct = st && typeof st.percent === 'number' ? st.percent : 0;
     card.replaceChildren();
 

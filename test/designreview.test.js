@@ -124,3 +124,16 @@ test('profile panel: the account page hero row is hidden, and the photo and Veri
   assert.match(js, /Add a photo \(paid members\)/, 'free members are pointed to the plans');
   assert.match(js, /toDataURL\('image\/jpeg'/, 'resized before upload');
 });
+
+test('header: signed-in members get one round photo button with a menu, not the three old controls', () => {
+  const js = site('assets/site.js');
+  assert.match(js, /nav-avatar/);
+  assert.match(js, /nav-tick/, 'the Verified tick');
+  assert.match(js, /\/api\/account\/me/, 'the photo comes from the account');
+  assert.match(js, /aria-haspopup/);
+  assert.match(js, /e\.key === 'Escape' && !pop\.hidden/, 'Escape closes the menu');
+  assert.ok(!/\['career\.html', 'career', 'Career toolkit', 'btn btn-sm'\]/.test(js), 'the Career toolkit button is gone from the header');
+  assert.match(js, /\/api\/account\/logout/);
+  assert.match(site('assets/profile-panel.js'), /window\.spAvatar\.set/, 'a new photo updates the header at once');
+  assert.match(site('assets/polish.css'), /\.nav-pop\[hidden\] \{ display: none; \}/);
+});

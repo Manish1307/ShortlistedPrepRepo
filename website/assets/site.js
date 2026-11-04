@@ -17,27 +17,69 @@
   // signed-in links are added here, not written in the page, so visitors (and search engines) never see them
   if (document.documentElement.getAttribute('data-auth') === 'member') {
     var menu = document.getElementById('menu');
-    if (menu) [['career.html', 'career', 'Career toolkit', 'btn btn-sm'], ['account.html', 'account', 'My account', 'btn btn-primary btn-sm']].forEach(function (l) {
-      var a = document.createElement('a');
-      a.href = l[0]; a.setAttribute('data-page', l[1]); a.className = l[3]; a.textContent = l[2];
-      menu.appendChild(a);
-    });
-    if (menu) {   // sign out: an icon on a computer, "Sign out" in the phone menu
+    // one round button with the member's photo (or initials) and the Verified tick; it opens a small menu
+    if (menu) {
+      var metaApi = document.querySelector('meta[name="api-url"]');
+      var apiBase = metaApi ? metaApi.getAttribute('content').replace(/\/+$/, '') : '';
+      var saved = function () {
+        for (var i = 0; i < 2; i++) { try { var v = JSON.parse((i ? localStorage : sessionStorage).getItem('sp_account') || 'null'); if (v && v.token) return v; } catch (e) { /* blocked */ } }
+        return null;
+      };
+      var who = saved() || {};
+      var cust = who.customer || {};
+      var ini = function (n) { var p = String(n || '').trim().split(/\s+/); return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); };
+      var wrap = document.createElement('div'); wrap.className = 'nav-me';
+      var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'nav-avatar';
+      btn.setAttribute('aria-haspopup', 'true'); btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-label', 'My profile menu');
+      var face = document.createElement('span'); face.className = 'nav-face';
+      var tick = document.createElement('span'); tick.className = 'nav-tick'; tick.hidden = true; tick.title = 'Verified member';
+      tick.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3 1 3-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3-1-3 2.6-1.9 1-3 3.2.1z"/><path d="M8 12.2l2.7 2.7L16.2 9.4" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      btn.appendChild(face); btn.appendChild(tick);
+      var pop = document.createElement('div'); pop.className = 'nav-pop'; pop.hidden = true;
+      var head = document.createElement('div'); head.className = 'nav-pop-head';
+      var nm = document.createElement('b'); var em = document.createElement('span');
+      head.appendChild(nm); head.appendChild(em); pop.appendChild(head);
+      [['account.html', 'My account'], ['career.html', 'Career toolkit']].forEach(function (l) {
+        var a = document.createElement('a'); a.href = l[0]; a.textContent = l[1]; pop.appendChild(a);
+      });
       var out = document.createElement('button');
-      out.type = 'button'; out.className = 'nav-logout'; out.setAttribute('aria-label', 'Sign out'); out.title = 'Sign out';
-      out.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/></svg><span class="lbl">Sign out</span>';   // (fixed markup, no user text)
+      out.type = 'button'; out.className = 'nav-logout'; out.textContent = 'Sign out';
       out.addEventListener('click', function () {
-        var s = null;
-        for (var i = 0; i < 2; i++) { try { var v = JSON.parse((i ? localStorage : sessionStorage).getItem('sp_account') || 'null'); if (v && v.token) { s = v; break; } } catch (e) { /* blocked */ } }
+        var s = saved();
         var done = function () {
-          try { sessionStorage.removeItem('sp_account'); } catch (e) { /* blocked */ }
+          try { sessionStorage.removeItem('sp_account'); sessionStorage.removeItem('sp_avatar'); } catch (e) { /* blocked */ }
           try { localStorage.removeItem('sp_account'); } catch (e) { /* blocked */ }
           location.href = 'index.html';
         };
-        if (!s || !API) return done();
-        fetch(API + '/api/account/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: '{}' }).catch(function () { /* signed out here anyway */ }).then(done);
+        if (!s || !apiBase) return done();
+        fetch(apiBase + '/api/account/logout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token }, body: '{}' }).catch(function () { /* signed out here anyway */ }).then(done);
       });
-      menu.appendChild(out);
+      pop.appendChild(out);
+      wrap.appendChild(btn); wrap.appendChild(pop); menu.appendChild(wrap);
+
+      // the photo and the tick; the profile panel calls this when a photo is added or removed
+      var paint = function (d) {
+        d = d || {};
+        var name = d.name || cust.name || '', email = d.email || cust.email || '';
+        face.replaceChildren();
+        if (d.photo) { var img = document.createElement('img'); img.src = d.photo; img.alt = ''; face.appendChild(img); } else face.textContent = ini(name || email);
+        tick.hidden = !(d.photo && d.verified);
+        nm.textContent = name || email; em.textContent = name ? email : '';
+      };
+      var cached = null;
+      try { cached = JSON.parse(sessionStorage.getItem('sp_avatar') || 'null'); } catch (e) { /* blocked */ }
+      paint(cached);
+      window.spAvatar = { set: function (d) { try { sessionStorage.setItem('sp_avatar', JSON.stringify(d)); } catch (e) { /* too big or blocked */ } paint(d); } };
+      if (apiBase && who.token) {
+        fetch(apiBase + '/api/account/me', { headers: { Authorization: 'Bearer ' + who.token } }).then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (me) { if (me && me.customer) window.spAvatar.set({ name: me.customer.name, email: me.customer.email, photo: me.customer.photo || '', verified: !!me.customer.verified }); })
+          .catch(function () { /* the initials stay */ });
+      }
+
+      var close = function () { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+      btn.addEventListener('click', function (e) { e.stopPropagation(); var open = pop.hidden; pop.hidden = !open; btn.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+      document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !pop.hidden) { close(); btn.focus(); } });
     }
   }
 

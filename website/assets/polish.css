@@ -79,3 +79,9 @@
   .nav-me { margin: 12px 0 0; }
   .nav-pop { position: static; width: auto; margin-top: 8px; box-shadow: none; }
 }
+
+/* introduction video on the home page */
+.hv { padding: 40px 0 8px; text-align: center; }
+.hv h2 { margin: 0 0 18px; }
+.hv-video { display: block; width: 100%; max-width: 860px; margin: 0 auto; aspect-ratio: 16 / 9; border-radius: 14px; background: #1b1740; box-shadow: 0 18px 40px -22px rgba(27, 23, 64, .5); }
+.hv-note { margin: 12px auto 0; max-width: 60ch; font-size: 14px; color: var(--muted, #5b5873); }

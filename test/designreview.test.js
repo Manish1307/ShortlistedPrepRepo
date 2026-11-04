@@ -137,3 +137,11 @@ test('header: signed-in members get one round photo button with a menu, not the 
   assert.match(site('assets/profile-panel.js'), /window\.spAvatar\.set/, 'a new photo updates the header at once');
   assert.match(site('assets/polish.css'), /\.nav-pop\[hidden\] \{ display: none; \}/);
 });
+
+test('home page: the introduction video plays from the page, with a poster and a text fallback', () => {
+  const home = site('pages/index.html');
+  assert.match(home, /<video class="hv-video" controls preload="metadata" playsinline poster="assets\/intro-poster\.jpg"/);
+  assert.match(home, /<source src="assets\/intro\.mp4" type="video\/mp4">/);
+  assert.ok(fs.statSync(path.join(__dirname, '..', 'website', 'assets', 'intro.mp4')).size > 100000);
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'website', 'assets', 'intro-poster.jpg')));
+});

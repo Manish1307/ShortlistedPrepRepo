@@ -249,3 +249,20 @@ test('the main menu: the key pages stay on top, the rest are grouped, and a sign
   assert.match(site, /\/api\/account\/logout/);
   assert.match(site, /removeItem\('sp_account'\)/);
 });
+
+test('the home page has a strong Jobs section: 100% Genuine, Live and Trusted with the trusted shield, right after the top banner', () => {
+  const home = fs.readFileSync(path.join(__dirname, '..', 'website', 'pages', 'index.html'), 'utf8');
+  const at = home.indexOf('<section class="hj" id="jobs"');
+  assert.ok(at > home.indexOf('<section class="dc-hero">') && at < home.indexOf('id="book-demo"'), 'right after the hero');
+  const section = home.slice(at, home.indexOf('</section>', at));
+  for (const word of ['100% Genuine', 'Live', 'Trusted']) assert.ok(section.includes(`<b>${word}</b>`), word);
+  assert.match(section, /<p class="hj-trustbar"><svg[^>]*><path d="M12 3l7 3v5c0 4\.5-3 8\.2-7 10-4-1\.8-7-5\.5-7-10V6l7-3z"\/>/, 'the shield-check (trusted) icon');
+  assert.match(section, /href="jobs\.html"/);
+  assert.match(section, /href="jobs\.html\?tab=live"/);
+  assert.ok(section.includes('id="hj-list"') && section.includes('id="hj-stats"'));
+  const script = fs.readFileSync(path.join(__dirname, '..', 'website', 'assets', 'home-jobs.js'), 'utf8');
+  assert.match(script, /\/api\/jobs\/filters/);
+  assert.match(script, /\/api\/jobs\?country=India&size=3/);
+  assert.ok(home.includes('assets/home-jobs.js') && home.includes('assets/home-jobs.css'));
+  assert.ok(!/innerHTML/.test(script), 'text only');
+});

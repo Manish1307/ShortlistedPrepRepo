@@ -1,0 +1,37 @@
+<!-- title: News and trainings | description: Recent highlights and free or paid trainings from top employers. Sign in to see the ones that match the skills in your resume and the companies you searched. -->
+<link rel="stylesheet" href="assets/jobs.css?v=5">
+<link rel="stylesheet" href="assets/news.css?v=1">
+<section class="page-head jb-head">
+  <div class="wrap">
+    <span class="eyebrow">News and trainings</span>
+    <h1>What employers are doing, and how to get ready</h1>
+    <p class="lead" id="nw-lead">Recent highlights and free or paid trainings from top employers. Every item opens on the company's own page.</p>
+  </div>
+</section>
+
+<section class="jb-section">
+  <div class="wrap">
+    <div class="jb-tabs" role="tablist" aria-label="News">
+      <button type="button" role="tab" id="nw-tab-you" aria-controls="nw-pane-you" aria-selected="false" tabindex="-1">⭐ For you</button>
+      <button type="button" role="tab" id="nw-tab-all" aria-controls="nw-pane-all" aria-selected="false" tabindex="-1">🕒 Latest</button>
+    </div>
+
+    <div role="tabpanel" id="nw-pane-you" aria-labelledby="nw-tab-you" hidden>
+      <div id="nw-for-you"></div>
+    </div>
+
+    <div role="tabpanel" id="nw-pane-all" aria-labelledby="nw-tab-all" hidden>
+      <form class="nw-filters" id="nw-form" autocomplete="off">
+        <label class="nw-f nw-q"><span>Search</span><input type="search" id="nw-q" placeholder="Company, skill or topic" maxlength="80"></label>
+        <label class="nw-f"><span>Type</span><select id="nw-kind"><option value="">All</option><option value="news">News</option><option value="training">Trainings</option><option value="highlight">Highlights</option></select></label>
+        <label class="nw-f"><span>Cost</span><select id="nw-cost"><option value="">Free and paid</option><option value="free">Free</option><option value="paid">Paid</option></select></label>
+        <label class="nw-f"><span>Company</span><select id="nw-company"><option value="">All companies</option></select></label>
+      </form>
+      <p class="muted" id="nw-count" aria-live="polite"></p>
+      <div id="nw-list"></div>
+      <p class="nw-pager" id="nw-pager"></p>
+    </div>
+  </div>
+</section>
+
+<script src="assets/news.js?v=1"></script>

@@ -19,7 +19,7 @@ const { ApiError, readJson, sendJson, parseCookies, SECURITY_HEADERS } = require
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
 
-function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false, aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget, logoSources, logoHome, googleClientId, googleVerify } = {}) {
+function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false, secureCookies = false, aiUpstream, proxyLimiters, jobSourceBase, newsAllowLocal, jobCatalogue, jobFetchBudget, logoSources, logoHome, googleClientId, googleVerify } = {}) {
   const db = open(path.join(dataDir, 'admin.db'));
   const signer = new Signer(dataDir);
   aikeys.setup(db);
@@ -37,7 +37,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), trustProxy = false,
     atsPdf: new auth.Limiter({ max: 4, windowMs: 60 * 60 * 1000 }),       // reading a PDF costs an AI call
     atsPdfAll: new auth.Limiter({ max: 300, windowMs: 24 * 60 * 60 * 1000 }),   // and so the whole site has a daily cap
   };
-  const routes = buildRoutes({ db, signer, vault, limiters, tokens, upstream: aiUpstream, proxyLimiters, jobSourceBase, jobCatalogue, jobFetchBudget, logoSources, logoHome, googleClientId, googleVerify });
+  const routes = buildRoutes({ db, signer, vault, limiters, tokens, upstream: aiUpstream, proxyLimiters, jobSourceBase, newsAllowLocal, jobCatalogue, jobFetchBudget, logoSources, logoHome, googleClientId, googleVerify });
   const compiled = routes.map(r => ({
     ...r,
     regex: new RegExp('^' + r.pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'),
@@ -132,6 +132,7 @@ if (require.main === module) {
     secureCookies: process.env.SECURE_COOKIES === '1',
   });
   const owners = app.db.prepare("SELECT COUNT(*) AS n FROM admins WHERE role = 'owner' AND disabled = 0").get().n;
+  require('./lib/news').scheduleFetch();   // News: read the listed feeds every NEWS_FETCH_HOURS (default 12) for new drafts
   require('./lib/jobs').scheduleSync(app.db);   // Live Search: refresh recently searched career sites every JOB_SYNC_HOURS (default 6)
   app.server.listen(port, host, () => {
     console.log(`Admin dashboard: http://${host === '127.0.0.1' ? 'localhost' : host}:${port}`);

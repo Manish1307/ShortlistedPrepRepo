@@ -62,7 +62,7 @@
   const dateTime = s => (s ? new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
   const moneyList = list => (list && list.some(r => r.cents) ? list.filter(r => r.cents).map(r => money(r.cents, r.currency)).join(' + ') : money(0, 'INR'));
   const can = permission => ({
-    'badminton.write': ['owner', 'admin'], 'badminton.score': ['owner', 'admin', 'support'],
+    'news.write': ['owner', 'admin'], 'badminton.write': ['owner', 'admin'], 'badminton.score': ['owner', 'admin', 'support'],
     'customers.write': ['owner', 'admin'], 'licence.major': ['owner', 'admin'], 'orders.write': ['owner', 'admin'],
     'releases.write': ['owner', 'admin'], 'aikeys.write': ['owner', 'admin'], 'conversations.delete': ['owner', 'admin'], 'profiles.write': ['owner', 'admin', 'support'], 'accounts.write': ['owner', 'admin'], 'jobs.write': ['owner', 'admin'], 'tokens.write': ['owner', 'admin'], 'pricing.write': ['owner', 'admin'], 'opportunities.write': ['owner', 'admin', 'support'], 'demos.write': ['owner', 'admin', 'support'], 'offers.write': ['owner', 'admin'], 'team': ['owner'],
   }[permission] || []).includes(me.role);
@@ -201,6 +201,7 @@
     { id: 'company', label: 'Company', items: [
       ['messages', 'Support', 'Support messages from customers.', 'mail'],
       ['releases', 'Releases', 'App versions and download links.', 'box'],
+      ['news', 'News', 'Highlights and free or paid trainings shown on the website and picked for each member.', 'bolt'],
       ['badminton', 'Badminton', 'Private tournaments: teams, fixtures, courts and live scores.', 'trophy'],
       ['audit', 'Audit log', 'Everything the admins changed.', 'shield'],
       ['team', 'Team', 'Admin accounts and their roles.', 'users']] },
@@ -1867,7 +1868,83 @@
     dialog('Announcement', f, [{ label: 'Save', kind: 'primary', run: async () => { const ok = await act(() => patch('/admin/api/badminton/' + t.id, { announcement: values(f).announcement }), 'Saved'); return !ok; } }]);
   }
 
-  const VIEWS = { overview, opportunities, atschecks: atsChecks, demos, offers, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, badminton, audit, team, account };
+  // ---------- News and trainings ----------
+  let newsTab = 'pending';
+  async function newsPage(el) {
+    const d = await get('/admin/api/news' + (newsTab === 'all' ? '' : '?status=' + newsTab));
+    const write = can('news.write'), c = d.counts || {};
+    const redo = () => newsPage(el);
+    const act = async (fn, ok) => { const r = await guard(fn); if (r !== undefined) { if (ok) toast(ok); redo(); } };
+    const tabs = [['pending', 'To review'], ['published', 'Published'], ['draft', 'Drafts'], ['rejected', 'Rejected'], ['all', 'All']];
+    const kindLabel = { news: 'News', training: 'Training', highlight: 'Highlight' }, costLabel = { free: 'Free', paid: 'Paid', unknown: 'Not set' };
+    el.replaceChildren(
+      head('News and trainings',
+        write ? h('button', { class: 'btn', onclick: () => newsFeedDialog(redo) }, '+ Add feed') : null,
+        write ? h('button', { class: 'btn', onclick: () => act(async () => { const r = await post('/admin/api/news-sources/fetch'); toast(`${r.added} new item${r.added === 1 ? '' : 's'} to review` + (r.failed ? `, ${r.failed} feed${r.failed === 1 ? '' : 's'} failed` : '')); return r; }) }, 'Check feeds now') : null,
+        write ? h('button', { class: 'btn primary', onclick: () => newsItemDialog(null, redo) }, '+ Add item') : null),
+      h('p', { class: 'muted' }, 'Highlights and free or paid trainings from employers, shown on the website under News, and picked for each member from their resume. Add items yourself, or list a company’s news or learning feed (RSS or Atom): new entries arrive under "To review" and show on the website only after you publish them.'),
+      h('div', { class: 'bd-tabs', role: 'tablist' }, tabs.map(([id, label]) => h('button', { class: 'btn' + (newsTab === id ? ' primary' : ''), role: 'tab', 'aria-selected': newsTab === id ? 'true' : 'false', onclick: () => { newsTab = id; redo(); } },
+        label + (id === 'all' ? '' : ` (${c[id] || 0})`)))),
+      table([
+        { label: 'Item', wrap: true, render: r => h('span', {}, h('a', { href: r.url, target: '_blank', rel: 'noopener' }, h('b', {}, r.title)), h('div', { class: 'muted small' }, [r.company, r.sourceName ? 'from ' + r.sourceName : 'added by hand', date(r.publishedAt)].filter(Boolean).join(' · '))) },
+        { label: 'Type', render: r => kindLabel[r.kind] },
+        { label: 'Cost', render: r => h('span', { class: 'pill ' + (r.cost === 'free' ? 'good' : r.cost === 'paid' ? 'warn' : '') }, costLabel[r.cost] + (r.priceNote ? ' · ' + r.priceNote : '')) },
+        { label: 'Status', render: r => pill(r.state) },
+        { label: '', render: r => (write ? h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
+          r.state !== 'published' ? h('button', { class: 'btn sm primary', onclick: () => newsItemDialog(r, redo, true) }, 'Review and publish') : h('button', { class: 'btn sm', onclick: () => newsItemDialog(r, redo) }, 'Edit'),
+          r.state === 'published' ? h('button', { class: 'btn sm', onclick: () => act(() => patch('/admin/api/news/' + r.id, { status: 'draft' }), 'Hidden from the website') }, 'Unpublish') : null,
+          r.state === 'pending' ? h('button', { class: 'btn sm', onclick: () => act(() => patch('/admin/api/news/' + r.id, { status: 'rejected' })) }, 'Reject') : null,
+          h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Delete "${r.title}"?`)) act(() => del('/admin/api/news/' + r.id)); } }, 'Delete')) : null) },
+      ], d.items, null, newsTab === 'pending' ? 'Nothing to review. Add a feed, or press "Check feeds now".' : 'No items here.'),
+      h('h2', { style: 'margin-top:28px' }, 'Feeds'),
+      table([
+        { label: 'Source', wrap: true, render: s => h('span', {}, h('b', {}, s.name), h('div', { class: 'muted small mono' }, s.feedUrl)) },
+        { label: 'Company', render: s => s.company },
+        { label: 'Items are', render: s => `${kindLabel[s.kind]} · ${costLabel[s.cost]}` },
+        { label: 'Last check', wrap: true, render: s => (s.lastFetchAt ? h('span', {}, dateTime(s.lastFetchAt), h('div', { class: 'small' }, s.lastError ? h('span', { class: 'pill bad' }, s.lastError) : `${s.lastAdded} new`)) : 'Not yet') },
+        { label: 'On', render: s => (write ? h('input', { type: 'checkbox', checked: s.enabled, 'aria-label': 'Read this feed', onchange: e => act(() => patch('/admin/api/news-sources/' + s.id, { enabled: e.target.checked })) }) : (s.enabled ? 'Yes' : 'No')) },
+        { label: '', render: s => (write ? h('button', { class: 'btn sm danger', onclick: () => { if (confirm(`Remove the feed "${s.name}"? Items it already added stay.`)) act(() => del('/admin/api/news-sources/' + s.id)); } }, 'Remove') : null) },
+      ], d.sources, null, 'No feeds yet. Add a company’s news or learning feed with "+ Add feed".'));
+  }
+
+  function newsItemDialog(item, done, review) {
+    const o = item || {};
+    const f = h('form', { onsubmit: e => e.preventDefault() },
+      field('Title', { name: 'title', value: o.title || '', maxlength: 200, required: true }),
+      field('Link', { name: 'url', value: o.url || '', placeholder: 'https://', required: true }, 'Where the reader goes. Must start with https://'),
+      field('Company', { name: 'company', value: o.company || '', maxlength: 80 }, 'Used to match the item to members who searched or know this company.'),
+      field('Type', { name: 'kind', type: 'select', value: o.kind || 'news', options: [{ value: 'news', label: 'News' }, { value: 'training', label: 'Training' }, { value: 'highlight', label: 'Highlight' }] }),
+      field('Cost', { name: 'cost', type: 'select', value: o.cost || 'unknown', options: [{ value: 'unknown', label: 'Not set' }, { value: 'free', label: 'Free' }, { value: 'paid', label: 'Paid' }] }, 'Check the page before you choose: members rely on this.'),
+      field('Price note', { name: 'priceNote', value: o.priceNote || '', maxlength: 80, placeholder: 'For example: Rs 4,999' }),
+      field('Tags', { name: 'tags', value: (o.tags || []).join(', '), placeholder: 'java, cloud, aws' }, 'Skills this is about, separated by commas. Members whose resume has these skills see the item first.'),
+      field('Summary', { name: 'summary', type: 'textarea', value: o.summary || '', maxlength: 500 }),
+      field('Date', { name: 'publishedAt', type: 'date', value: (o.publishedAt || new Date().toISOString()).slice(0, 10) }));
+    const body = v => ({ title: v.title, url: v.url, company: v.company, kind: v.kind, cost: v.cost, priceNote: v.priceNote, tags: v.tags, summary: v.summary, publishedAt: v.publishedAt ? new Date(v.publishedAt).toISOString() : undefined });
+    const save = (status, label) => ({ label, kind: status === 'published' ? 'primary' : '', run: async () => {
+      const v = values(f);
+      try {
+        if (item) await patch('/admin/api/news/' + item.id, { ...body(v), status });
+        else await post('/admin/api/news', { ...body(v), publish: status === 'published' });
+        toast(status === 'published' ? 'Published' : 'Saved'); done();
+      } catch (err) { toast(err.message, true); return true; }
+    } });
+    dialog(item ? (review ? 'Review item' : 'Edit item') : 'Add item', f, item && item.state === 'published' ? [save('published', 'Save')] : [save('draft', 'Save as draft'), save('published', 'Publish')]);
+  }
+
+  function newsFeedDialog(done) {
+    const f = h('form', { onsubmit: e => e.preventDefault() },
+      field('Name', { name: 'name', placeholder: 'Acme newsroom', maxlength: 80 }),
+      field('Company', { name: 'company', placeholder: 'Acme', maxlength: 80 }, 'Items from this feed are matched to members by this company name.'),
+      field('Feed address', { name: 'feedUrl', placeholder: 'https://example.com/news/feed.xml', required: true }, 'An RSS or Atom link. Many company news and learning pages offer one.'),
+      field('Items from this feed are', { name: 'kind', type: 'select', value: 'news', options: [{ value: 'news', label: 'News' }, { value: 'training', label: 'Training' }, { value: 'highlight', label: 'Highlight' }] }),
+      field('Usually', { name: 'cost', type: 'select', value: 'unknown', options: [{ value: 'unknown', label: 'Not set: I will check each' }, { value: 'free', label: 'Free' }, { value: 'paid', label: 'Paid' }] }));
+    dialog('Add a feed', f, [{ label: 'Add and check now', kind: 'primary', run: async () => {
+      try { await post('/admin/api/news-sources', values(f)); const r = await post('/admin/api/news-sources/fetch'); toast(`${r.added} new item${r.added === 1 ? '' : 's'} to review`); newsTab = 'pending'; done(); }
+      catch (err) { toast(err.message, true); return true; }
+    } }]);
+  }
+
+  const VIEWS = { overview, opportunities, atschecks: atsChecks, demos, offers, visitors, customers, candidates, licences, profiles, conversations, jobs, tokens, pricing: pricingPage, aikeys, orders, releases, messages, badminton, news: newsPage, audit, team, account };
 
   // ---------- start ----------
   (async function start() {

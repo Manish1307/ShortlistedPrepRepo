@@ -22,6 +22,7 @@ const demos = require('./demos');
 const atscheck = require('./atscheck');
 const strength = require('./strength');
 const badminton = require('./badminton');
+const news = require('./news');
 const recommended = require('./recommended');
 const jobboard = require('./jobboard');
 const { ApiError, text, email, integer, likeTerm } = require('./http');
@@ -96,6 +97,7 @@ function buildRoutes(ctx) {
   candidates.addRoutes({ ...ctx, add, audit, one, all });      // Candidates: progress, documents and activity in the Career toolkit
   jobboard.addRoutes({ ...ctx, add, one, all });                // the public Jobs page: browse the jobs the server holds, with filters
   recommended.addRoutes({ ...ctx, add, one, all });             // Recommended jobs: the best cached jobs for a resume, found without the AI
+  news.addRoutes({ ...ctx, add, audit, one, all });                 // News and trainings: public page, a member's 'For you', admin items and feeds
   badminton.addRoutes({ ...ctx, add, audit, one, all });        // Badminton tournaments: private; the team sees the live scores with a keyword
   aiTokens.addRoutes({ ...ctx, add, audit, one, all });
   pricing.addRoutes({ ...ctx, add, audit, one, all });          // Pricing: plans master, active plans, payment settings, plan orders          // AI tokens: daily allowance per customer, packs and requests for more

@@ -266,6 +266,20 @@ CREATE INDEX IF NOT EXISTS idx_audit_at ON audit(at);
 -- Live Search: company names no job board answered to, so the same unknown names are not looked up again on every search.
 CREATE TABLE IF NOT EXISTS job_lookup_misses (key TEXT PRIMARY KEY, at TEXT NOT NULL);
 
+-- News and trainings (see news.js): items the team wrote or that a feed suggested (status pending until a person publishes them).
+CREATE TABLE IF NOT EXISTS news_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, company TEXT NOT NULL DEFAULT '', feed_url TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL DEFAULT 'news', cost TEXT NOT NULL DEFAULT 'unknown', enabled INTEGER NOT NULL DEFAULT 1,
+  last_fetch_at TEXT NOT NULL DEFAULT '', last_error TEXT NOT NULL DEFAULT '', last_added INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS news_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', url TEXT NOT NULL UNIQUE,
+  company TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'news', cost TEXT NOT NULL DEFAULT 'unknown', price_note TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '', published_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft', source_id INTEGER,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_news_status ON news_items(status, published_at);
+
 -- Badminton tournaments (private; see badminton.js). keyword: what the team types on the live page, always lower case.
 CREATE TABLE IF NOT EXISTS bd_tournaments (
   id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, keyword TEXT NOT NULL UNIQUE, venue TEXT NOT NULL DEFAULT '',
